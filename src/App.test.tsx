@@ -242,7 +242,10 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByText("Golden Dragons"));
     fireEvent.click(screen.getByRole("button", { name: "Start game" }));
     fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirm 1 swap" }));
+    expect(
+      screen.getByRole("button", { name: "Confirm 4 swaps" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm 4 swaps" }));
 
     const summary = screen.getByRole("dialog", {
       name: "Substitution ready",
@@ -251,6 +254,19 @@ describe("Sideline app", () => {
     expect(summary).toHaveTextContent("#10 Simon");
     expect(summary).toHaveTextContent("IN");
     expect(summary).toHaveTextContent("#4 Dylan");
+  });
+
+  it("allows the coach to reduce the default full-bench rotation", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "1" }));
+
+    expect(
+      screen.getByRole("button", { name: "Confirm 1 swap" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the effective substitution after an on-field player becomes unavailable", () => {

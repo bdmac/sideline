@@ -1374,9 +1374,9 @@ function SubstitutionPlanner({
     game.benchIds.length,
     Object.keys(game.assignments).length,
   );
-  const [count, setCount] = useState(Math.min(1, maxCount));
+  const [count, setCount] = useState(maxCount);
   const [pairs, setPairs] = useState<SubstitutionPair[]>(() =>
-    suggestSubstitutions(game, Math.min(1, maxCount)),
+    suggestSubstitutions(game, maxCount),
   );
   const formation = getFormation(game.formationId);
 

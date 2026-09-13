@@ -19,7 +19,7 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 - The game clock can pause and resume. Persisted timestamps allow safe recovery after refresh or relaunch.
 - Player field and bench time accrue only while the game clock runs.
 - Fair substitution suggestions prioritize players with the most bench time coming in and players with the most field time going out.
-- Coaches control the number of swaps and may override every suggestion.
+- Substitution planning defaults to rotating the full available bench, capped by the number of players on the field. Coaches can reduce the number of swaps and may override every suggestion.
 - A confirmed substitution is atomic: no duplicate assignment, no player both on field and bench, and no accidental change in the valid field count.
 - After a planned substitution or an automatic replacement for an unavailable on-field player, a substitution-ready sheet shows the numbered OUT / IN pairs and affected positions so the coach can organize players before play resumes.
 - The latest confirmed substitution or unavailable-player event can be undone.
