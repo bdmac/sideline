@@ -39,7 +39,7 @@ describe("persistence migrations", () => {
       activeGame,
     });
 
-    expect(migrated.version).toBe(8);
+    expect(migrated.version).toBe(9);
     expect(migrated.teams.u8.name).toBe("Golden Dragons");
     expect(migrated.teams.u8.roster.map((player) => player.name)).toEqual([
       "Simon",
@@ -75,7 +75,7 @@ describe("persistence migrations", () => {
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(8);
+    expect(migrated.version).toBe(9);
     expect(migrated.teams.u12.name).toBe("Fireballers");
     expect(migrated.teams.u12.roster.map((player) => player.name)).toEqual([
       "Jackson",
@@ -155,9 +155,35 @@ describe("persistence migrations", () => {
       activeGame: game,
     });
 
-    expect(migrated.version).toBe(8);
+    expect(migrated.version).toBe(9);
     expect(migrated.activeGame?.unavailableIds).toEqual(
       team.roster.slice(7).map((player) => player.id),
     );
+  });
+
+  it("migrates version 8 rosters to the current jersey numbers", () => {
+    const oldTeams = structuredClone(INITIAL_STATE.teams);
+    oldTeams.u8.roster.forEach((player, index) => {
+      player.number = index + 1;
+    });
+    oldTeams.u12.roster.forEach((player, index) => {
+      player.number = index + 1;
+    });
+
+    const migrated = migrateStoredState({
+      version: 8,
+      teams: oldTeams,
+      activeGame: null,
+    });
+
+    expect(migrated.version).toBe(9);
+    expect(
+      migrated.teams.u8.roster.find((player) => player.name === "Ollie")
+        ?.number,
+    ).toBe(23);
+    expect(
+      migrated.teams.u12.roster.find((player) => player.name === "William")
+        ?.number,
+    ).toBe(78);
   });
 });

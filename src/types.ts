@@ -56,6 +56,7 @@ export type GameEvent = {
   type: "substitution" | "unavailable" | "available";
   atSeconds: number;
   pairs: SubstitutionPair[];
+  playerId?: string;
   note?: string;
   beforeAssignments: Record<string, string>;
   beforeBenchIds: string[];
@@ -80,7 +81,7 @@ export type ActiveGame = {
 };
 
 export type AppState = {
-  version: 8;
+  version: 9;
   teams: Record<TeamId, Team>;
   activeGame: ActiveGame | null;
 };

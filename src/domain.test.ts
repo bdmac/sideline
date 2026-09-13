@@ -31,6 +31,25 @@ describe("formations", () => {
   });
 });
 
+describe("team rosters", () => {
+  it("assigns unique provisional jersey numbers with confirmed exceptions", () => {
+    const players = [...INITIAL_TEAMS.u8.roster, ...INITIAL_TEAMS.u12.roster];
+    const numbers = players.map((player) => player.number);
+
+    expect(
+      numbers.every((number) => number && number >= 1 && number <= 99),
+    ).toBe(true);
+    expect(new Set(numbers).size).toBe(numbers.length);
+    expect(
+      INITIAL_TEAMS.u8.roster.find((player) => player.name === "Ollie")?.number,
+    ).toBe(23);
+    expect(
+      INITIAL_TEAMS.u12.roster.find((player) => player.name === "William")
+        ?.number,
+    ).toBe(78);
+  });
+});
+
 describe("time accounting", () => {
   it("accrues field and bench time deterministically", () => {
     const team = INITIAL_TEAMS.u8;
@@ -83,6 +102,7 @@ describe("player availability", () => {
     expect(available.presentIds).toContain(latePlayer.id);
     expect(available.unavailableIds).not.toContain(latePlayer.id);
     expect(available.benchIds).toContain(latePlayer.id);
+    expect(available.history.at(-1)?.playerId).toBe(latePlayer.id);
     expect(validateGame(available, team.sideSize)).toEqual([]);
 
     const undone = undoLastEvent(available, 3_000);

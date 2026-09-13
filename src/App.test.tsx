@@ -59,6 +59,12 @@ describe("Sideline app", () => {
       screen.queryByRole("button", { name: "Mark Evan available" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Evan")).toBeInTheDocument();
+
+    const gameLog = screen.getByText("Game log").closest("details");
+    expect(gameLog).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("Game log"));
+    expect(gameLog).toHaveAttribute("open");
+    expect(screen.getByText("Evan available")).toBeInTheDocument();
   });
 
   it("opens U12 setup directly without configurable duration or format", () => {
@@ -116,7 +122,125 @@ describe("Sideline app", () => {
       screen.getByRole("option", { name: "Simon (Goalkeeper)" }),
     ).toBeInTheDocument();
     expect(
+      screen.queryByRole("option", { name: "(Goalkeeper) Simon" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "(Center Back) Noah" }),
+    ).toBeInTheDocument();
+  });
+
+  it("updates position targets when the selected player changes", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    fireEvent.click(screen.getByRole("button", { name: "Positions" }));
+
+    fireEvent.change(screen.getByLabelText("Player"), {
+      target: { value: "u8-p3" },
+    });
+
+    expect(
+      screen.queryByRole("option", { name: "(Left Midfielder) Maddox" }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.getByRole("option", { name: "(Goalkeeper) Simon" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens position editing with the tapped pitch player selected", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Change Maddox's position" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Change positions" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Player")).toHaveDisplayValue(
+      "Maddox (Left Midfielder)",
+    );
+  });
+
+  it("shows a numbered substitution summary after confirmation", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm 1 swap" }));
+
+    const summary = screen.getByRole("dialog", {
+      name: "Substitution ready",
+    });
+    expect(summary).toHaveTextContent("OUT");
+    expect(summary).toHaveTextContent("#7 Simon");
+    expect(summary).toHaveTextContent("IN");
+    expect(summary).toHaveTextContent("#4 Dylan");
+  });
+
+  it("shows the effective substitution after an on-field player becomes unavailable", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Change Simon's position" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mark Simon unavailable" }),
+    );
+
+    const summary = screen.getByRole("dialog", {
+      name: "Substitution ready",
+    });
+    expect(summary).toHaveTextContent("OUT");
+    expect(summary).toHaveTextContent("#7 Simon");
+    expect(summary).toHaveTextContent("IN");
+    expect(summary).toHaveTextContent("#4 Dylan");
+    expect(screen.getByText("Simon unavailable")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Change positions" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the assigned position when an available player fills an open slot", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    ["Dylan", "Henry", "Haru", "Evan"].forEach((name) => {
+      fireEvent.click(
+        screen.getByRole("button", { name: new RegExp(`${name} Present`) }),
+      );
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Change Simon's position" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mark Simon unavailable" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mark Simon available" }),
+    );
+
+    const summary = screen.getByRole("dialog", { name: "Player ready" });
+    expect(summary).toHaveTextContent("IN");
+    expect(summary).toHaveTextContent("#7 Simon");
+    expect(summary).toHaveTextContent("POSITION");
+    expect(summary).toHaveTextContent("Goalkeeper");
+  });
+
+  it("keeps substitution direction styling out of the live toolbar", () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+
+    expect(
+      container.querySelector(".mobile-control-dock .swap-direction"),
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    expect(
+      container.querySelector(".swap-row .swap-direction"),
     ).toBeInTheDocument();
   });
 

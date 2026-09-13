@@ -55,6 +55,12 @@ interface BeforeInstallPromptEvent extends Event {
 const playerName = (team: Team, id: string) =>
   team.roster.find((player) => player.id === id)?.name ?? "Unknown player";
 
+const playerLabel = (team: Team, id: string) => {
+  const player = team.roster.find((item) => item.id === id);
+  if (!player) return "Unknown player";
+  return player.number ? `#${player.number} ${player.name}` : player.name;
+};
+
 const isStandalone = () =>
   window.matchMedia?.("(display-mode: standalone)").matches ||
   (navigator as Navigator & { standalone?: boolean }).standalone === true;
@@ -615,7 +621,16 @@ function LiveGameScreen({
 }) {
   const [now, setNow] = useState(Date.now());
   const [plannerOpen, setPlannerOpen] = useState(false);
-  const [moveOpen, setMoveOpen] = useState(false);
+  const [confirmedPairs, setConfirmedPairs] = useState<
+    SubstitutionPair[] | null
+  >(null);
+  const [confirmedEntry, setConfirmedEntry] = useState<{
+    playerId: string;
+    positionId: string;
+  } | null>(null);
+  const [positionEditorPlayerId, setPositionEditorPlayerId] = useState<
+    string | null
+  >(null);
   const [endConfirm, setEndConfirm] = useState(false);
   const [error, setError] = useState("");
   const formation = getFormation(game.formationId);
@@ -642,12 +657,65 @@ function LiveGameScreen({
     try {
       setError("");
       onChange(change());
+      return true;
     } catch (changeError) {
       setError(
         changeError instanceof Error
           ? changeError.message
           : "Could not update game",
       );
+      return false;
+    }
+  };
+
+  const handleUnavailable = (playerId: string) => {
+    let replacementPairs: SubstitutionPair[] = [];
+    if (
+      !safeChange(() => {
+        const nextGame = markUnavailable(
+          game,
+          playerId,
+          team.sideSize,
+          Date.now(),
+        );
+        const event = nextGame.history.at(-1);
+        if (event?.type === "unavailable") {
+          replacementPairs = event.pairs.map((pair) => ({ ...pair }));
+        }
+        return nextGame;
+      })
+    ) {
+      return false;
+    }
+
+    if (replacementPairs.length > 0) {
+      setConfirmedPairs(replacementPairs);
+    }
+    return true;
+  };
+
+  const handleAvailable = (playerId: string) => {
+    let entryPositionId: string | null = null;
+    if (
+      !safeChange(() => {
+        const nextGame = markAvailable(
+          game,
+          playerId,
+          team.sideSize,
+          Date.now(),
+        );
+        entryPositionId =
+          Object.entries(nextGame.assignments).find(
+            ([, assignedPlayerId]) => assignedPlayerId === playerId,
+          )?.[0] ?? null;
+        return nextGame;
+      })
+    ) {
+      return;
+    }
+
+    if (entryPositionId) {
+      setConfirmedEntry({ playerId, positionId: entryPositionId });
     }
   };
 
@@ -732,6 +800,7 @@ function LiveGameScreen({
             assignments={game.assignments}
             team={team}
             totals={displayed.totals}
+            onEditPlayer={setPositionEditorPlayerId}
           />
         </section>
 
@@ -750,11 +819,7 @@ function LiveGameScreen({
                   primaryLabel="bench"
                   secondaryTime={displayed.totals[id]?.fieldSeconds ?? 0}
                   secondaryLabel="played"
-                  onUnavailable={() =>
-                    safeChange(() =>
-                      markUnavailable(game, id, team.sideSize, Date.now()),
-                    )
-                  }
+                  onUnavailable={() => handleUnavailable(id)}
                 />
               ))}
             </div>
@@ -779,11 +844,7 @@ function LiveGameScreen({
                       className="secondary-action"
                       type="button"
                       aria-label={`Mark ${playerName(team, id)} available`}
-                      onClick={() =>
-                        safeChange(() =>
-                          markAvailable(game, id, team.sideSize, Date.now()),
-                        )
-                      }
+                      onClick={() => handleAvailable(id)}
                     >
                       Mark available
                     </button>
@@ -797,42 +858,52 @@ function LiveGameScreen({
         </aside>
       </div>
 
-      <section className="game-log">
-        <div className="section-title">
-          <h2>Game log</h2>
+      <details className="game-log">
+        <summary className="game-log-summary">
+          <span>
+            <strong>Game log</strong>
+            <small>Review confirmed game changes</small>
+          </span>
           <span>{game.history.length} events</span>
+        </summary>
+        <div className="game-log-content">
+          {game.history.length ? (
+            <ol>
+              {[...game.history].reverse().map((event) => {
+                const eventPlayer = event.playerId
+                  ? playerName(team, event.playerId)
+                  : null;
+                return (
+                  <li key={event.id}>
+                    <time>{formatDuration(event.atSeconds)}</time>
+                    <span>
+                      <strong>
+                        {event.type === "substitution"
+                          ? `${event.pairs.length} substitution${event.pairs.length === 1 ? "" : "s"}`
+                          : event.type === "available"
+                            ? `${eventPlayer ?? "Player"} available`
+                            : `${eventPlayer ?? "Player"} unavailable`}
+                      </strong>
+                      <small>
+                        {event.pairs.length
+                          ? event.pairs
+                              .map(
+                                (pair) =>
+                                  `${playerName(team, pair.outPlayerId)} → ${playerName(team, pair.inPlayerId)}`,
+                              )
+                              .join(" · ")
+                          : event.note}
+                      </small>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
+            <p className="empty-copy">Confirmed changes will appear here.</p>
+          )}
         </div>
-        {game.history.length ? (
-          <ol>
-            {[...game.history].reverse().map((event) => (
-              <li key={event.id}>
-                <time>{formatDuration(event.atSeconds)}</time>
-                <span>
-                  <strong>
-                    {event.type === "substitution"
-                      ? `${event.pairs.length} substitution${event.pairs.length === 1 ? "" : "s"}`
-                      : event.type === "available"
-                        ? "Player available"
-                        : "Player unavailable"}
-                  </strong>
-                  <small>
-                    {event.pairs.length
-                      ? event.pairs
-                          .map(
-                            (pair) =>
-                              `${playerName(team, pair.outPlayerId)} → ${playerName(team, pair.inPlayerId)}`,
-                          )
-                          .join(" · ")
-                      : event.note}
-                  </small>
-                </span>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="empty-copy">Confirmed changes will appear here.</p>
-        )}
-      </section>
+      </details>
 
       <div className="mobile-control-dock" aria-label="Game controls">
         <button
@@ -855,16 +926,12 @@ function LiveGameScreen({
           disabled={game.benchIds.length === 0}
           onClick={() => setPlannerOpen(true)}
         >
-          <ArrowRightLeft
-            className="swap-direction"
-            size={22}
-            aria-hidden="true"
-          />
+          <ArrowRightLeft size={22} aria-hidden="true" />
           Plan subs
         </button>
         <button
           type="button"
-          onClick={() => setMoveOpen(true)}
+          onClick={() => setPositionEditorPlayerId(fieldIds[0])}
           disabled={fieldIds.length < 2}
         >
           <Pencil size={21} aria-hidden="true" />
@@ -886,27 +953,47 @@ function LiveGameScreen({
           team={team}
           onClose={() => setPlannerOpen(false)}
           onConfirm={(pairs) => {
-            safeChange(() =>
-              applySubstitutions(game, pairs, team.sideSize, Date.now()),
-            );
-            setPlannerOpen(false);
+            if (
+              safeChange(() =>
+                applySubstitutions(game, pairs, team.sideSize, Date.now()),
+              )
+            ) {
+              setPlannerOpen(false);
+              setConfirmedPairs(pairs.map((pair) => ({ ...pair })));
+            }
           }}
         />
       )}
-      {moveOpen && (
+      {confirmedPairs && (
+        <SubstitutionSummary
+          pairs={confirmedPairs}
+          formation={formation}
+          team={team}
+          onClose={() => setConfirmedPairs(null)}
+        />
+      )}
+      {confirmedEntry && (
+        <PlayerEntrySummary
+          entry={confirmedEntry}
+          formation={formation}
+          team={team}
+          onClose={() => setConfirmedEntry(null)}
+        />
+      )}
+      {positionEditorPlayerId && (
         <PositionEditor
           game={displayed}
           team={team}
-          onClose={() => setMoveOpen(false)}
+          initialPlayerId={positionEditorPlayerId}
+          onClose={() => setPositionEditorPlayerId(null)}
           onConfirm={(playerId, positionId) => {
             safeChange(() => movePlayer(game, playerId, positionId));
-            setMoveOpen(false);
+            setPositionEditorPlayerId(null);
           }}
           onUnavailable={(playerId) => {
-            safeChange(() =>
-              markUnavailable(game, playerId, team.sideSize, Date.now()),
-            );
-            setMoveOpen(false);
+            if (handleUnavailable(playerId)) {
+              setPositionEditorPlayerId(null);
+            }
           }}
         />
       )}
@@ -928,11 +1015,13 @@ function Pitch({
   assignments,
   team,
   totals,
+  onEditPlayer,
 }: {
   formation: ReturnType<typeof getFormation>;
   assignments: Record<string, string>;
   team: Team;
   totals: ActiveGame["totals"];
+  onEditPlayer: (playerId: string) => void;
 }) {
   return (
     <div className="pitch" aria-label={`${formation.name} formation`}>
@@ -943,12 +1032,8 @@ function Pitch({
       {formation.positions.map((position) => {
         const playerId = assignments[position.id];
         const player = team.roster.find((item) => item.id === playerId);
-        return (
-          <div
-            className={`pitch-player ${player ? "" : "empty"}`}
-            key={position.id}
-            style={{ left: `${position.x}%`, top: `${position.y}%` }}
-          >
+        const content = (
+          <>
             <span className="position-label">{position.shortLabel}</span>
             <strong>{player?.name ?? "Open"}</strong>
             <small>
@@ -963,6 +1048,31 @@ function Pitch({
                 position.label
               )}
             </small>
+          </>
+        );
+        const style = {
+          left: `${position.x}%`,
+          top: `${position.y}%`,
+        };
+
+        return player ? (
+          <button
+            type="button"
+            className="pitch-player"
+            key={position.id}
+            style={style}
+            aria-label={`Change ${player.name}'s position`}
+            onClick={() => onEditPlayer(player.id)}
+          >
+            {content}
+          </button>
+        ) : (
+          <div
+            className={`pitch-player ${player ? "" : "empty"}`}
+            key={position.id}
+            style={style}
+          >
+            {content}
           </div>
         );
       })}
@@ -1144,7 +1254,11 @@ function SubstitutionPlanner({
                   ))}
                 </select>
               </label>
-              <ArrowRightLeft size={22} aria-hidden="true" />
+              <ArrowRightLeft
+                className="swap-direction"
+                size={22}
+                aria-hidden="true"
+              />
               <label>
                 <span>IN</span>
                 <select
@@ -1207,27 +1321,159 @@ function SubstitutionPlanner({
   );
 }
 
+function SubstitutionSummary({
+  pairs,
+  formation,
+  team,
+  onClose,
+}: {
+  pairs: SubstitutionPair[];
+  formation: ReturnType<typeof getFormation>;
+  team: Team;
+  onClose: () => void;
+}) {
+  return (
+    <div className="sheet-backdrop" role="presentation">
+      <section
+        className="bottom-sheet substitution-ready-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="substitution-ready-title"
+      >
+        <header className="sheet-header">
+          <div>
+            <h2 id="substitution-ready-title">Substitution ready</h2>
+            <p>The game is updated. Organize these players together.</p>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={22} />
+          </button>
+        </header>
+
+        <div className="ready-swap-list">
+          {pairs.map((pair, index) => {
+            const position = formation.positions.find(
+              (item) => item.id === pair.positionId,
+            );
+            return (
+              <div className="ready-swap" key={index}>
+                <span className="ready-player out">
+                  <small>OUT</small>
+                  <strong>{playerLabel(team, pair.outPlayerId)}</strong>
+                </span>
+                <span className="ready-direction">
+                  <ArrowRightLeft size={24} aria-hidden="true" />
+                  <small>{position?.shortLabel}</small>
+                </span>
+                <span className="ready-player in">
+                  <small>IN</small>
+                  <strong>{playerLabel(team, pair.inPlayerId)}</strong>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <button className="primary-action" type="button" onClick={onClose}>
+          Done
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function PlayerEntrySummary({
+  entry,
+  formation,
+  team,
+  onClose,
+}: {
+  entry: { playerId: string; positionId: string };
+  formation: ReturnType<typeof getFormation>;
+  team: Team;
+  onClose: () => void;
+}) {
+  const position = formation.positions.find(
+    (item) => item.id === entry.positionId,
+  );
+
+  return (
+    <div className="sheet-backdrop" role="presentation">
+      <section
+        className="bottom-sheet substitution-ready-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="player-ready-title"
+      >
+        <header className="sheet-header">
+          <div>
+            <h2 id="player-ready-title">Player ready</h2>
+            <p>The game is updated. Send this player onto the field.</p>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={22} />
+          </button>
+        </header>
+
+        <div className="ready-entry">
+          <span className="ready-player in">
+            <small>IN</small>
+            <strong>{playerLabel(team, entry.playerId)}</strong>
+          </span>
+          <span className="ready-position">
+            <small>POSITION</small>
+            <strong>{position?.label ?? "Open position"}</strong>
+          </span>
+        </div>
+
+        <button className="primary-action" type="button" onClick={onClose}>
+          Done
+        </button>
+      </section>
+    </div>
+  );
+}
+
 function PositionEditor({
   game,
   team,
+  initialPlayerId,
   onClose,
   onConfirm,
   onUnavailable,
 }: {
   game: ActiveGame;
   team: Team;
+  initialPlayerId: string;
   onClose: () => void;
   onConfirm: (playerId: string, positionId: string) => void;
   onUnavailable: (playerId: string) => void;
 }) {
   const formation = getFormation(game.formationId);
-  const [playerId, setPlayerId] = useState(Object.values(game.assignments)[0]);
-  const currentPosition =
-    Object.entries(game.assignments).find(([, id]) => id === playerId)?.[0] ??
-    formation.positions[0].id;
-  const [positionId, setPositionId] = useState(currentPosition);
-
-  useEffect(() => setPositionId(currentPosition), [playerId, currentPosition]);
+  const initialSelectedPlayerId = Object.values(game.assignments).includes(
+    initialPlayerId,
+  )
+    ? initialPlayerId
+    : Object.values(game.assignments)[0];
+  const [playerId, setPlayerId] = useState(initialSelectedPlayerId);
+  const targetPositions = formation.positions.filter(
+    (position) => game.assignments[position.id] !== playerId,
+  );
+  const [positionId, setPositionId] = useState(
+    formation.positions.find(
+      (position) => game.assignments[position.id] !== initialSelectedPlayerId,
+    )?.id ?? "",
+  );
 
   return (
     <div className="sheet-backdrop" role="presentation">
@@ -1255,7 +1501,14 @@ function PositionEditor({
           <span>Player</span>
           <select
             value={playerId}
-            onChange={(event) => setPlayerId(event.target.value)}
+            onChange={(event) => {
+              const nextPlayerId = event.target.value;
+              const firstTarget = formation.positions.find(
+                (position) => game.assignments[position.id] !== nextPlayerId,
+              );
+              setPlayerId(nextPlayerId);
+              setPositionId(firstTarget?.id ?? "");
+            }}
           >
             {Object.entries(game.assignments).map(
               ([assignedPositionId, id]) => {
@@ -1277,7 +1530,7 @@ function PositionEditor({
             value={positionId}
             onChange={(event) => setPositionId(event.target.value)}
           >
-            {formation.positions.map((position) => {
+            {targetPositions.map((position) => {
               const occupant = game.assignments[position.id];
               return (
                 <option value={position.id} key={position.id}>

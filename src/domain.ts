@@ -152,11 +152,16 @@ const sampleNames = {
   ],
 };
 
+const rosterNumbers: Record<TeamId, number[]> = {
+  u8: [7, 10, 14, 23, 9, 4, 16, 11, 2],
+  u12: [12, 5, 17, 8, 19, 78, 6, 15, 21, 3, 13, 18, 22, 24, 30],
+};
+
 const makeRoster = (teamId: TeamId, names: string[]): Player[] =>
   names.map((name, index) => ({
     id: `${teamId}-p${index + 1}`,
     name,
-    number: index + 1,
+    number: rosterNumbers[teamId][index],
     active: true,
   }));
 
@@ -184,7 +189,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 8,
+  version: 9,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
@@ -571,6 +576,7 @@ export const markUnavailable = (
         type: "unavailable",
         atSeconds: current.clock.elapsedSeconds,
         pairs,
+        playerId,
         note,
         beforeAssignments,
         beforeBenchIds,
@@ -636,6 +642,7 @@ export const markAvailable = (
         type: "available",
         atSeconds: current.clock.elapsedSeconds,
         pairs: [],
+        playerId,
         note,
         beforeAssignments,
         beforeBenchIds,
