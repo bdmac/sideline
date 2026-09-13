@@ -1087,6 +1087,12 @@ function LiveGameScreen({
 
   const displayed = materializeGame(game, now);
   const fieldIds = Object.values(game.assignments);
+  const goalkeeperPositionId = formation.positions.find(
+    (position) => position.role === "goalkeeper",
+  )?.id;
+  const scorerIds = fieldIds.filter(
+    (playerId) => game.assignments[goalkeeperPositionId ?? ""] !== playerId,
+  );
   const remaining = Math.max(
     0,
     game.durationSeconds - displayed.clock.elapsedSeconds,
@@ -1618,7 +1624,7 @@ function LiveGameScreen({
       )}
       {goalScorerOpen && (
         <GoalScorerPicker
-          playerIds={fieldIds}
+          playerIds={scorerIds}
           team={team}
           score={score}
           onClose={() => setGoalScorerOpen(false)}

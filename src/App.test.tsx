@@ -738,13 +738,16 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByRole("button", { name: "Score" }));
     const scorerDialog = screen.getByRole("dialog", { name: "Record a goal" });
     expect(
-      within(scorerDialog).getByRole("button", { name: "#10 Simon" }),
+      within(scorerDialog).queryByRole("button", { name: "#10 Simon" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(scorerDialog).getByRole("button", { name: "#7 Noah" }),
     ).toBeInTheDocument();
     expect(
       within(scorerDialog).queryByRole("button", { name: "#4 Dylan" }),
     ).not.toBeInTheDocument();
     fireEvent.click(
-      within(scorerDialog).getByRole("button", { name: "#10 Simon" }),
+      within(scorerDialog).getByRole("button", { name: "#7 Noah" }),
     );
     const expandedStatus = document.querySelector(".live-match-status");
     expect(
@@ -758,10 +761,10 @@ describe("Sideline app", () => {
     ).toHaveTextContent("Us1–Opponent1");
 
     fireEvent.click(screen.getByText("Game log"));
-    expect(screen.getByText("Simon scored")).toBeInTheDocument();
+    expect(screen.getByText("Noah scored")).toBeInTheDocument();
     expect(
-      screen.getByText("Goal for Golden Dragons · Goalkeeper"),
-    ).toBeInTheDocument();
+      screen.getByText(/^Goal for Golden Dragons · /),
+    ).not.toHaveTextContent("Goalkeeper");
     expect(screen.getByText("Opponent scored")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Undo last change" }),
@@ -777,11 +780,9 @@ describe("Sideline app", () => {
       "Golden Dragons1 – 1Opponent",
     );
     expect(
-      screen.getByLabelText("Simon scored 1 goal").querySelectorAll("svg"),
+      screen.getByLabelText("Noah scored 1 goal").querySelectorAll("svg"),
     ).toHaveLength(1);
-    expect(
-      screen.queryByLabelText("1 goal scored as Goalkeeper"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/1 goal scored as/)).not.toBeInTheDocument();
   });
 
   it("compacts the match status header after scrolling", async () => {
