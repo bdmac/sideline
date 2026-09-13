@@ -1,0 +1,49 @@
+# Sideline product truth
+
+## Purpose
+
+Sideline is a mobile-first, installable game-day clipboard for youth recreational soccer coaches. It reduces attention cost during a match: the coach should be able to understand who is playing, who is waiting, how long each player has participated, and what the next fair substitution should be with a glance and a few large taps.
+
+## Users and setting
+
+- A volunteer or recreational coach standing outdoors in bright light, often using one hand.
+- The same coach may manage two independent squads: U8 playing 5v5 and U12 playing 9v9.
+- Connectivity is not assumed. There is no account, backend, or cross-device sync.
+
+## Durable behavior
+
+- Team choice is explicit and team state never mixes.
+- Team names, rosters, and game durations are fixed product data.
+- Game setup covers attendance, formation, U8 period format, starters, and bench.
+- Formations include an explicit goalkeeper plus the correct number of field positions.
+- The game clock can pause and resume. Persisted timestamps allow safe recovery after refresh or relaunch.
+- Player field and bench time accrue only while the game clock runs.
+- Fair substitution suggestions prioritize players with the most bench time coming in and players with the most field time going out.
+- Coaches control the number of swaps and may override every suggestion.
+- A confirmed substitution is atomic: no duplicate assignment, no player both on field and bench, and no accidental change in the valid field count.
+- The latest confirmed substitution or unavailable-player event can be undone.
+- Position changes do not count as substitutions.
+- Marking an on-field player unavailable uses the fairest available bench replacement; if none exists, the open position is explicit.
+- Ending an active game requires confirmation.
+
+## Initial team defaults
+
+| Team           | Format | Default duration                    | Formations                   |
+| -------------- | ------ | ----------------------------------- | ---------------------------- |
+| Golden Dragons | 5v5    | 40 minutes · 4 × 10-minute quarters | 1-2-1, 2-2, 1-1-2            |
+| Fireballers    | 9v9    | 60 minutes · 2 × 30-minute halves   | 3-3-2, 3-2-3, 2-3-3, 3-1-3-1 |
+
+Game durations are fixed. Golden Dragons games can be switched from the default four quarters to two halves while starting a game. Fireballers always play two halves, so that format is not shown as a configuration step.
+Fireballers default to the 3-1-3-1 formation; coaches can still select another listed U12 formation during game setup.
+
+The fixed U8 roster is Simon, Noah, Maddox, Ollie, Malik, Dylan, Henry, Haru, and Evan.
+
+The fixed U12 roster is Jackson, Lazar, Nikola, Kai, Elliott, William, Obasi, Andrew, Matt, John, Eli, Aaron, Rayek, Jack, and Ryan.
+
+## Data and privacy
+
+All data is stored in browser `localStorage` under a versioned key. Sideline does not transmit names or game data. Clearing browser site data removes the data.
+
+## MVP boundaries
+
+The MVP does not include authentication, a backend, cloud sync, messaging, league scheduling, score tracking, opponent management, or long-term game reports. The active game log exists to support confident live operation and undo.
