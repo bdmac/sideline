@@ -248,7 +248,7 @@ describe("Sideline app", () => {
       name: "Substitution ready",
     });
     expect(summary).toHaveTextContent("OUT");
-    expect(summary).toHaveTextContent("#7 Simon");
+    expect(summary).toHaveTextContent("#10 Simon");
     expect(summary).toHaveTextContent("IN");
     expect(summary).toHaveTextContent("#4 Dylan");
   });
@@ -268,7 +268,7 @@ describe("Sideline app", () => {
       name: "Substitution ready",
     });
     expect(summary).toHaveTextContent("OUT");
-    expect(summary).toHaveTextContent("#7 Simon");
+    expect(summary).toHaveTextContent("#10 Simon");
     expect(summary).toHaveTextContent("IN");
     expect(summary).toHaveTextContent("#4 Dylan");
     expect(screen.getByText("Simon unavailable")).toBeInTheDocument();
@@ -298,7 +298,7 @@ describe("Sideline app", () => {
 
     const summary = screen.getByRole("dialog", { name: "Player ready" });
     expect(summary).toHaveTextContent("IN");
-    expect(summary).toHaveTextContent("#7 Simon");
+    expect(summary).toHaveTextContent("#10 Simon");
     expect(summary).toHaveTextContent("POSITION");
     expect(summary).toHaveTextContent("Goalkeeper");
   });

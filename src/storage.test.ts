@@ -39,7 +39,7 @@ describe("persistence migrations", () => {
       activeGame,
     });
 
-    expect(migrated.version).toBe(9);
+    expect(migrated.version).toBe(10);
     expect(migrated.teams.u8.name).toBe("Golden Dragons");
     expect(migrated.teams.u8.roster.map((player) => player.name)).toEqual([
       "Simon",
@@ -75,7 +75,7 @@ describe("persistence migrations", () => {
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(9);
+    expect(migrated.version).toBe(10);
     expect(migrated.teams.u12.name).toBe("Fireballers");
     expect(migrated.teams.u12.roster.map((player) => player.name)).toEqual([
       "Jackson",
@@ -155,35 +155,39 @@ describe("persistence migrations", () => {
       activeGame: game,
     });
 
-    expect(migrated.version).toBe(9);
+    expect(migrated.version).toBe(10);
     expect(migrated.activeGame?.unavailableIds).toEqual(
       team.roster.slice(7).map((player) => player.id),
     );
   });
 
-  it("migrates version 8 rosters to the current jersey numbers", () => {
+  it("migrates version 9 rosters to the current jersey numbers", () => {
     const oldTeams = structuredClone(INITIAL_STATE.teams);
+    const oldNumbers = {
+      u8: [7, 10, 14, 23, 9, 4, 16, 11, 2],
+      u12: [12, 5, 17, 8, 19, 78, 6, 15, 21, 3, 13, 18, 22, 24, 30],
+    };
     oldTeams.u8.roster.forEach((player, index) => {
-      player.number = index + 1;
+      player.number = oldNumbers.u8[index];
     });
     oldTeams.u12.roster.forEach((player, index) => {
-      player.number = index + 1;
+      player.number = oldNumbers.u12[index];
     });
 
     const migrated = migrateStoredState({
-      version: 8,
+      version: 9,
       teams: oldTeams,
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(9);
+    expect(migrated.version).toBe(10);
     expect(
-      migrated.teams.u8.roster.find((player) => player.name === "Ollie")
+      migrated.teams.u8.roster.find((player) => player.name === "Simon")
         ?.number,
-    ).toBe(23);
+    ).toBe(10);
     expect(
-      migrated.teams.u12.roster.find((player) => player.name === "William")
+      migrated.teams.u12.roster.find((player) => player.name === "Jackson")
         ?.number,
-    ).toBe(78);
+    ).toBe(82);
   });
 });

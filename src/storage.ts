@@ -48,10 +48,11 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     parsed.version === 5 ||
     parsed.version === 6 ||
     parsed.version === 7 ||
-    parsed.version === 8
+    parsed.version === 8 ||
+    parsed.version === 9
   ) {
     return {
-      version: 9,
+      version: 10,
       teams: structuredClone(INITIAL_STATE.teams),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -59,7 +60,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     };
   }
 
-  if (parsed.version === 9) {
+  if (parsed.version === 10) {
     return parsed as AppState;
   }
 

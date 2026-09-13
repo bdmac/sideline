@@ -33,21 +33,34 @@ describe("formations", () => {
 });
 
 describe("team rosters", () => {
-  it("assigns unique provisional jersey numbers with confirmed exceptions", () => {
+  it("assigns unique jersey numbers including confirmed team metadata", () => {
     const players = [...INITIAL_TEAMS.u8.roster, ...INITIAL_TEAMS.u12.roster];
     const numbers = players.map((player) => player.number);
+    const u8Numbers = Object.fromEntries(
+      INITIAL_TEAMS.u8.roster.map((player) => [player.name, player.number]),
+    );
+    const u12Numbers = Object.fromEntries(
+      INITIAL_TEAMS.u12.roster.map((player) => [player.name, player.number]),
+    );
 
     expect(
       numbers.every((number) => number && number >= 1 && number <= 99),
     ).toBe(true);
     expect(new Set(numbers).size).toBe(numbers.length);
-    expect(
-      INITIAL_TEAMS.u8.roster.find((player) => player.name === "Ollie")?.number,
-    ).toBe(23);
-    expect(
-      INITIAL_TEAMS.u12.roster.find((player) => player.name === "William")
-        ?.number,
-    ).toBe(78);
+    expect(u8Numbers).toMatchObject({
+      Simon: 10,
+      Ollie: 23,
+      Henry: 12,
+      Haru: 49,
+    });
+    expect(u12Numbers).toMatchObject({
+      Jackson: 82,
+      William: 78,
+      Andrew: 11,
+      Matt: 18,
+      John: 90,
+      Jack: 5,
+    });
   });
 });
 

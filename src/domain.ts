@@ -153,8 +153,8 @@ const sampleNames = {
 };
 
 const rosterNumbers: Record<TeamId, number[]> = {
-  u8: [7, 10, 14, 23, 9, 4, 16, 11, 2],
-  u12: [12, 5, 17, 8, 19, 78, 6, 15, 21, 3, 13, 18, 22, 24, 30],
+  u8: [10, 7, 14, 23, 9, 4, 12, 49, 2],
+  u12: [82, 15, 17, 8, 19, 78, 6, 11, 18, 90, 13, 21, 22, 5, 30],
 };
 
 const makeRoster = (teamId: TeamId, names: string[]): Player[] =>
@@ -189,7 +189,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 9,
+  version: 10,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
