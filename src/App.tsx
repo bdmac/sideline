@@ -4,6 +4,7 @@ import {
   Check,
   ChevronRight,
   CircleAlert,
+  CirclePlus,
   Clock3,
   Download,
   Pause,
@@ -27,20 +28,27 @@ import {
 import {
   applySubstitutions,
   assignPlayerToPosition,
+  assignPlayersByPreference,
+  cancelQueuedSubstitutions,
   createGame,
   formatDuration,
   getDisplayedSeconds,
   getFormation,
   getFormationsForTeam,
   getPeriodStatus,
+  getScore,
   markAvailable,
   markUnavailable,
   materializeGame,
   movePlayer,
+  queueSubstitutions,
+  recordGoal,
   setClockRunning,
   suggestSubstitutions,
+  summarizePlayerPositions,
   undoLastEvent,
   validateGame,
+  validateSubstitutionPairs,
 } from "./domain";
 import { loadState, saveState } from "./storage";
 import type {
@@ -69,6 +77,15 @@ const playerLabel = (team: Team, id: string) => {
   if (!player) return "Unknown player";
   return player.number ? `#${player.number} ${player.name}` : player.name;
 };
+
+const preferredRoleLabel = (role: Player["preferredRoles"][number]) =>
+  role === "goalkeeper"
+    ? "Goalkeeper"
+    : role === "defender"
+      ? "Defense"
+      : role === "midfielder"
+        ? "Midfield"
+        : "Forward";
 
 let modalLockCount = 0;
 let modalScrollY = 0;
@@ -448,13 +465,16 @@ function SetupScreen({
   const [periodCount, setPeriodCount] = useState<2 | 4>(
     team.defaultPeriodCount,
   );
+  const [setupStep, setSetupStep] = useState<0 | 1 | 2>(0);
+  const [starterPositionId, setStarterPositionId] = useState<string | null>(
+    null,
+  );
   const formation = getFormation(formationId);
   const [assignments, setAssignments] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      formation.positions.map((position, index) => [
-        position.id,
-        activePlayers[index]?.id ?? "",
-      ]),
+    assignPlayersByPreference(
+      formation,
+      activePlayers.map((player) => player.id),
+      team.roster,
     ),
   );
 
@@ -465,11 +485,10 @@ function SetupScreen({
     );
     setFormationId(nextFormationId);
     setAssignments(
-      Object.fromEntries(
-        nextFormation.positions.map((position, index) => [
-          position.id,
-          present[index]?.id ?? "",
-        ]),
+      assignPlayersByPreference(
+        nextFormation,
+        present.map((player) => player.id),
+        team.roster,
       ),
     );
   };
@@ -478,8 +497,38 @@ function SetupScreen({
   const expectedOnField = team.sideSize;
   const assignmentCount = selectedIds.length;
   const benchIds = presentIds.filter((id) => !selectedIds.includes(id));
+  const attendanceShortfall = Math.max(0, team.sideSize - presentIds.length);
   const canStart =
     presentIds.length >= team.sideSize && assignmentCount === expectedOnField;
+  const setupSteps = [
+    { label: "Attendance", detail: `${presentIds.length} here` },
+    { label: "Formation", detail: formation.name },
+    {
+      label: "Starters",
+      detail: `${assignmentCount}/${expectedOnField}`,
+    },
+  ] as const;
+
+  const goToStep = (step: 0 | 1 | 2) => {
+    setSetupStep(step);
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  };
+
+  const autoFillStarters = () => {
+    const availableIds = activePlayers
+      .filter((player) => presentIds.includes(player.id))
+      .map((player) => player.id);
+    setAssignments(
+      assignPlayersByPreference(formation, availableIds, team.roster),
+    );
+  };
+
+  const resetStarters = () =>
+    setAssignments(
+      Object.fromEntries(
+        formation.positions.map((position) => [position.id, ""]),
+      ),
+    );
 
   const toggleAttendance = (playerId: string) => {
     setPresentIds((current) => {
@@ -534,160 +583,238 @@ function SetupScreen({
       <section className="page-heading">
         <div>
           <h1>Prepare game</h1>
-          <p>Attendance first, then formation and starting positions.</p>
+          <p>Set the squad, shape, and starters in three quick steps.</p>
         </div>
       </section>
 
-      <section className="setup-section">
-        <div className="section-title">
-          <h2>1. Who is here?</h2>
-          <span>{presentIds.length} present</span>
-        </div>
-        <div className="attendance-grid">
-          {activePlayers.map((player) => {
-            const present = presentIds.includes(player.id);
-            return (
-              <button
-                className={`attendance-button ${present ? "selected" : ""}`}
-                type="button"
-                key={player.id}
-                aria-pressed={present}
-                onClick={() => toggleAttendance(player.id)}
-              >
-                <span className="attendance-check" aria-hidden="true">
-                  {present ? <Check size={17} /> : <X size={17} />}
-                </span>
-                <span>
-                  <strong>{player.name}</strong>
-                  <small>{present ? "Present" : "Absent"}</small>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        {presentIds.length < team.sideSize && (
-          <p className="inline-warning">
-            <CircleAlert size={18} aria-hidden="true" />
-            {team.sideSize - presentIds.length} more{" "}
-            {team.sideSize - presentIds.length === 1
-              ? "player is"
-              : "players are"}{" "}
-            needed to start this {team.sideSize}v{team.sideSize} game.
-          </p>
-        )}
-      </section>
-
-      <section className="setup-section">
-        <div className="section-title">
-          <h2>2. Choose the formation</h2>
-          <span>Goalkeeper is explicit</span>
-        </div>
-        <div
-          className={`formation-picker side-${team.sideSize}`}
-          aria-label="Formation"
+      <div
+        className="setup-progress"
+        role="status"
+        aria-label={`Step ${setupStep + 1} of 3: ${setupSteps[setupStep].label}`}
+      >
+        <span className="setup-progress-copy">
+          <small>Step {setupStep + 1} of 3</small>
+          <strong>{setupSteps[setupStep].label}</strong>
+        </span>
+        <span
+          className={`setup-progress-detail ${
+            setupStep === 0 && attendanceShortfall > 0 ? "danger" : ""
+          }`}
         >
-          {formations.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              className={formationId === item.id ? "active" : ""}
-              aria-pressed={formationId === item.id}
-              aria-label={`${item.name} formation`}
-              onClick={() => changeFormation(item.id)}
-            >
-              <FormationDiagram formation={item} />
-              <strong>{item.name}</strong>
-            </button>
-          ))}
-        </div>
-      </section>
+          {setupSteps[setupStep].detail}
+        </span>
+        <span className="setup-progress-track" aria-hidden="true">
+          <span style={{ width: `${((setupStep + 1) / 3) * 100}%` }} />
+        </span>
+      </div>
 
-      <section className="setup-section">
-        <div className="section-title">
-          <h2>3. Assign starters</h2>
-          <span>
-            {assignmentCount}/{expectedOnField} assigned
-          </span>
-        </div>
-        <div className="assignment-list">
-          {formation.positions.map((position) => (
-            <label className="assignment-row" key={position.id}>
-              <span className="position-code">{position.shortLabel}</span>
-              <span>{position.label}</span>
+      {setupStep === 0 && (
+        <section className="setup-section setup-step-panel">
+          <div className="section-title">
+            <h2>Who is here?</h2>
+            <span
+              className={`attendance-count ${
+                attendanceShortfall > 0 ? "short" : ""
+              }`}
+              aria-live="polite"
+            >
+              {presentIds.length} present
+            </span>
+          </div>
+          {attendanceShortfall > 0 && (
+            <p className="inline-warning attendance-warning" role="alert">
+              <CircleAlert size={18} aria-hidden="true" />
+              Short {attendanceShortfall}{" "}
+              {attendanceShortfall === 1 ? "player" : "players"}:{" "}
+              {presentIds.length} present, {team.sideSize} required to start
+              this {team.sideSize}v{team.sideSize} game.
+            </p>
+          )}
+          <div className="attendance-grid">
+            {activePlayers.map((player) => {
+              const present = presentIds.includes(player.id);
+              return (
+                <button
+                  className={`attendance-button ${present ? "selected" : ""}`}
+                  type="button"
+                  key={player.id}
+                  aria-pressed={present}
+                  onClick={() => toggleAttendance(player.id)}
+                >
+                  <span className="attendance-check" aria-hidden="true">
+                    {present ? <Check size={17} /> : <X size={17} />}
+                  </span>
+                  <span>
+                    <strong>{player.name}</strong>
+                    <small>{present ? "Present" : "Absent"}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {setupStep === 1 && (
+        <section className="setup-section setup-step-panel">
+          <div className="section-title">
+            <h2>Choose the formation</h2>
+            <span>Goalkeeper is explicit</span>
+          </div>
+          <div
+            className={`formation-picker side-${team.sideSize}`}
+            aria-label="Formation"
+          >
+            {formations.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={formationId === item.id ? "active" : ""}
+                aria-pressed={formationId === item.id}
+                aria-label={`${item.name} formation`}
+                onClick={() => changeFormation(item.id)}
+              >
+                <FormationDiagram formation={item} />
+                <strong>{item.name}</strong>
+              </button>
+            ))}
+          </div>
+          {team.id === "u8" && (
+            <label className="field setup-format">
+              <span>Game format</span>
               <select
-                value={assignments[position.id] ?? ""}
+                value={periodCount}
                 onChange={(event) =>
-                  setAssignments((current) =>
-                    assignPlayerToPosition(
-                      current,
-                      position.id,
-                      event.target.value,
-                    ),
-                  )
+                  setPeriodCount(Number(event.target.value) as 2 | 4)
                 }
               >
-                {!assignments[position.id] && (
-                  <option value="" disabled>
-                    Select player
-                  </option>
-                )}
-                {activePlayers
-                  .filter((player) => presentIds.includes(player.id))
-                  .map((player) => (
-                    <option value={player.id} key={player.id}>
-                      {player.name}
-                    </option>
-                  ))}
+                <option value={4}>
+                  4 quarters ·{" "}
+                  {formatDuration((team.defaultDurationMinutes * 60) / 4)} each
+                </option>
+                <option value={2}>
+                  2 halves ·{" "}
+                  {formatDuration((team.defaultDurationMinutes * 60) / 2)} each
+                </option>
               </select>
             </label>
-          ))}
-        </div>
-        <div className="bench-preview">
-          <strong>Starting bench</strong>
-          <span>
-            {benchIds.length
-              ? benchIds.map((id) => playerName(team, id)).join(", ")
-              : "No bench — exactly enough players"}
-          </span>
-        </div>
-      </section>
+          )}
+        </section>
+      )}
 
-      {team.id === "u8" && (
-        <section className="setup-section compact">
-          <label className="field">
-            <span>Game format</span>
-            <select
-              value={periodCount}
-              onChange={(event) =>
-                setPeriodCount(Number(event.target.value) as 2 | 4)
-              }
+      {setupStep === 2 && (
+        <section className="setup-section setup-step-panel">
+          <div className="section-title">
+            <div>
+              <h2>Assign starters</h2>
+              <p className="section-hint">
+                Tap a position to change its player.
+              </p>
+            </div>
+            <span>
+              {assignmentCount}/{expectedOnField} assigned
+            </span>
+          </div>
+          <div className="starter-tools">
+            <button
+              className="secondary-action"
+              type="button"
+              disabled={assignmentCount === expectedOnField}
+              onClick={autoFillStarters}
             >
-              <option value={4}>
-                4 quarters ·{" "}
-                {formatDuration((team.defaultDurationMinutes * 60) / 4)} each
-              </option>
-              <option value={2}>
-                2 halves ·{" "}
-                {formatDuration((team.defaultDurationMinutes * 60) / 2)} each
-              </option>
-            </select>
-          </label>
+              Auto-fill
+            </button>
+            <button
+              className="quiet-button"
+              type="button"
+              onClick={resetStarters}
+            >
+              Reset
+            </button>
+          </div>
+          <StarterPitch
+            formation={formation}
+            assignments={assignments}
+            team={team}
+            onChoosePosition={setStarterPositionId}
+          />
+          <div className="bench-preview">
+            <strong>Starting bench</strong>
+            {benchIds.length ? (
+              <ul className="starter-bench-list">
+                {benchIds.map((id) => (
+                  <li key={id}>{playerName(team, id)}</li>
+                ))}
+              </ul>
+            ) : (
+              <span>No bench — exactly enough players</span>
+            )}
+          </div>
         </section>
       )}
 
       <div className="setup-submit">
-        <button
-          className="primary-action"
-          type="button"
-          disabled={!canStart}
-          onClick={start}
-        >
-          <Play size={22} aria-hidden="true" /> Start game
-        </button>
-        {!canStart && presentIds.length > 0 && (
-          <span>All {team.sideSize} positions must be filled.</span>
+        {setupStep > 0 && (
+          <button
+            className="secondary-action setup-back"
+            type="button"
+            onClick={() => goToStep((setupStep - 1) as 0 | 1)}
+          >
+            <ArrowLeft size={20} aria-hidden="true" />{" "}
+            {setupSteps[setupStep - 1].label}
+          </button>
         )}
+        {setupStep < 2 ? (
+          <button
+            className="primary-action"
+            type="button"
+            onClick={() => goToStep((setupStep + 1) as 1 | 2)}
+          >
+            {setupSteps[setupStep + 1].label}
+            <ChevronRight size={22} aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            className="primary-action"
+            type="button"
+            disabled={!canStart}
+            onClick={start}
+          >
+            <Play size={22} aria-hidden="true" /> Start game
+          </button>
+        )}
+        <span>
+          Step {setupStep + 1} of 3
+          {setupStep === 2 && !canStart && presentIds.length > 0
+            ? ` · Fill all ${team.sideSize} positions`
+            : ""}
+        </span>
       </div>
+
+      {starterPositionId && (
+        <StarterPicker
+          positionId={starterPositionId}
+          formation={formation}
+          assignments={assignments}
+          presentPlayers={activePlayers.filter((player) =>
+            presentIds.includes(player.id),
+          )}
+          onClose={() => setStarterPositionId(null)}
+          onSelect={(playerId) => {
+            setAssignments((current) =>
+              assignPlayerToPosition(current, starterPositionId, playerId),
+            );
+            setStarterPositionId(null);
+          }}
+          onClear={() => {
+            setAssignments((current) => ({
+              ...current,
+              [starterPositionId]: "",
+            }));
+            setStarterPositionId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -704,7 +831,10 @@ function LiveGameScreen({
   onEnd: () => void;
 }) {
   const [now, setNow] = useState(Date.now());
+  const [headerCollapseProgress, setHeaderCollapseProgress] = useState(0);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [queuedPlanOpen, setQueuedPlanOpen] = useState(false);
+  const [goalScorerOpen, setGoalScorerOpen] = useState(false);
   const [confirmedPairs, setConfirmedPairs] = useState<
     SubstitutionPair[] | null
   >(null);
@@ -716,12 +846,23 @@ function LiveGameScreen({
     string | null
   >(null);
   const [endConfirm, setEndConfirm] = useState(false);
+  const [endedGame, setEndedGame] = useState<ActiveGame | null>(null);
   const [error, setError] = useState("");
   const formation = getFormation(game.formationId);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const updateHeader = () =>
+      setHeaderCollapseProgress(
+        Math.min(1, Math.max(0, (window.scrollY - 32) / 96)),
+      );
+    updateHeader();
+    window.addEventListener("scroll", updateHeader, { passive: true });
+    return () => window.removeEventListener("scroll", updateHeader);
   }, []);
 
   const displayed = materializeGame(game, now);
@@ -735,7 +876,18 @@ function LiveGameScreen({
     displayed.clock.elapsedSeconds,
     game.periodCount,
   );
+  const score = getScore(game);
   const validationErrors = validateGame(game, team.sideSize);
+  const queuedPairs = game.queuedSubstitutions ?? [];
+  const queuedPlanErrors = validateSubstitutionPairs(game, queuedPairs);
+  const compactHeaderInteractive = headerCollapseProgress > 0.8;
+  const periodBreak = displayed.periodBreak;
+
+  useEffect(() => {
+    if (game.clock.running && !displayed.clock.running && periodBreak) {
+      onChange(displayed);
+    }
+  }, [displayed, game.clock.running, onChange, periodBreak]);
 
   const safeChange = (change: () => ActiveGame) => {
     try {
@@ -803,49 +955,188 @@ function LiveGameScreen({
     }
   };
 
+  const executeQueuedSubstitutions = () => {
+    if (
+      queuedPairs.length > 0 &&
+      safeChange(() =>
+        applySubstitutions(game, queuedPairs, team.sideSize, Date.now()),
+      )
+    ) {
+      setQueuedPlanOpen(false);
+    }
+  };
+
+  if (endedGame) {
+    return (
+      <GameSummary
+        game={endedGame}
+        team={team}
+        onClose={() => {
+          setEndedGame(null);
+          onEnd();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="live-page">
-      <header className="match-header">
-        <div>
-          <TeamCrest teamId={team.id} compact />
-          <span>
-            <strong>{team.name}</strong>
-            <small>
-              {formation.name} · {team.sideSize}v{team.sideSize}
-            </small>
-          </span>
-        </div>
+      <div className="live-match-status" aria-hidden={compactHeaderInteractive}>
+        <header className="match-header">
+          <div>
+            <TeamCrest teamId={team.id} compact />
+            <span>
+              <strong>{team.name}</strong>
+              <small>
+                {formation.name} · {team.sideSize}v{team.sideSize}
+              </small>
+            </span>
+          </div>
+          <button
+            className="danger-action end-game-button"
+            type="button"
+            onClick={() => setEndConfirm(true)}
+          >
+            <Square size={18} aria-hidden="true" />
+            <span>End game</span>
+          </button>
+        </header>
+
+        <section className="match-metrics" aria-label="Match status">
+          <div className="game-clock" aria-label="Game clock">
+            <span
+              className={`clock-state ${game.clock.running ? "running" : ""}`}
+            >
+              {game.clock.running ? "Clock running" : "Clock paused"}
+            </span>
+            <strong>{formatDuration(displayed.clock.elapsedSeconds)}</strong>
+          </div>
+
+          <div className="scoreboard" aria-label="Score">
+            <div className="scoreboard-score" aria-live="polite">
+              <span>
+                <small>Us</small>
+                <strong>{score.us}</strong>
+              </span>
+              <span className="score-divider" aria-hidden="true">
+                –
+              </span>
+              <span>
+                <small>Opponent</small>
+                <strong>{score.opponent}</strong>
+              </span>
+            </div>
+          </div>
+
+          <div className="clock-secondary">
+            <span>
+              <small>
+                {period.label} {period.current} of {period.count}
+              </small>
+              <strong>
+                {remaining > 0
+                  ? `${formatDuration(remaining)} left`
+                  : "Duration reached"}
+              </strong>
+            </span>
+            <span>
+              {formatDuration(period.remainingSeconds)} left in{" "}
+              {period.label.toLowerCase()}
+            </span>
+          </div>
+        </section>
+      </div>
+
+      <div
+        className={`compact-match-header ${
+          compactHeaderInteractive ? "interactive" : ""
+        }`}
+        style={{
+          opacity: headerCollapseProgress,
+          transform: `translateY(${(1 - headerCollapseProgress) * -14}px)`,
+        }}
+        aria-hidden={!compactHeaderInteractive}
+      >
+        <strong className="compact-match-team">{team.name}</strong>
+        <span className="compact-match-clock">
+          <strong>{formatDuration(displayed.clock.elapsedSeconds)}</strong>
+          <small>{formatDuration(remaining)} left</small>
+        </span>
+        <span className="compact-match-score" aria-label="Score">
+          {score.us} – {score.opponent}
+        </span>
         <button
           className="danger-action end-game-button"
           type="button"
+          tabIndex={compactHeaderInteractive ? 0 : -1}
           onClick={() => setEndConfirm(true)}
         >
           <Square size={18} aria-hidden="true" />
-          End game
+          <span>End game</span>
         </button>
-      </header>
+      </div>
 
-      <section className="game-clock" aria-label="Game clock">
-        <div>
-          <span
-            className={`clock-state ${game.clock.running ? "running" : ""}`}
-          >
-            {game.clock.running ? "Clock running" : "Clock paused"}
-          </span>
-          <strong>{formatDuration(displayed.clock.elapsedSeconds)}</strong>
-        </div>
-        <div className="clock-secondary">
+      {periodBreak && (
+        <section
+          className={`period-break-banner ${periodBreak.final ? "final" : ""}`}
+          aria-label={
+            periodBreak.final
+              ? "Regulation time complete"
+              : `End of ${period.label} ${periodBreak.completedPeriod}`
+          }
+        >
           <span>
-            {period.label} {period.current} of {period.count} ·{" "}
-            {formatDuration(period.remainingSeconds)} left
+            <strong>
+              {periodBreak.final
+                ? "Regulation time complete"
+                : `End of ${period.label} ${periodBreak.completedPeriod}`}
+            </strong>
+            <small>
+              Clock paused at {formatDuration(displayed.clock.elapsedSeconds)}
+            </small>
           </span>
-          <span>
-            {remaining > 0
-              ? `${formatDuration(remaining)} remaining`
-              : "Duration reached"}
-          </span>
-        </div>
-      </section>
+          <div>
+            {!periodBreak.final &&
+              (queuedPairs.length > 0 ? (
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => setQueuedPlanOpen(true)}
+                >
+                  <ArrowRightLeft size={18} aria-hidden="true" />
+                  Review queued subs
+                </button>
+              ) : game.benchIds.length > 0 ? (
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => setPlannerOpen(true)}
+                >
+                  <ArrowRightLeft size={18} aria-hidden="true" />
+                  Plan rotation
+                </button>
+              ) : null)}
+            <button
+              className={periodBreak.final ? "danger-action" : "primary-action"}
+              type="button"
+              onClick={() =>
+                periodBreak.final
+                  ? setEndConfirm(true)
+                  : safeChange(() => setClockRunning(game, true, Date.now()))
+              }
+            >
+              {periodBreak.final ? (
+                <Square size={18} aria-hidden="true" />
+              ) : (
+                <Play size={18} aria-hidden="true" />
+              )}
+              {periodBreak.final
+                ? "End game"
+                : `Start ${period.label} ${periodBreak.completedPeriod + 1}`}
+            </button>
+          </div>
+        </section>
+      )}
 
       {error && (
         <div className="error-banner" role="alert">
@@ -865,6 +1156,45 @@ function LiveGameScreen({
           <CircleAlert size={19} aria-hidden="true" />
           {validationErrors.join(". ")}
         </div>
+      )}
+      {queuedPairs.length > 0 && (
+        <section
+          className={`queued-substitution-banner ${
+            queuedPlanErrors.length ? "invalid" : ""
+          }`}
+          aria-label="Queued substitutions"
+        >
+          <span>
+            <strong>
+              {queuedPairs.length} substitution
+              {queuedPairs.length === 1 ? "" : "s"} queued
+            </strong>
+            <small>
+              {queuedPlanErrors.length
+                ? "Plan needs attention before execution"
+                : "Lineup and timers have not changed"}
+            </small>
+          </span>
+          <div>
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={() => setQueuedPlanOpen(true)}
+            >
+              <ArrowRightLeft size={18} aria-hidden="true" />
+              Review
+            </button>
+            <button
+              className="sub-confirm"
+              type="button"
+              disabled={queuedPlanErrors.length > 0}
+              onClick={executeQueuedSubstitutions}
+            >
+              <Check size={18} aria-hidden="true" />
+              Execute
+            </button>
+          </div>
+        </section>
       )}
 
       <div className="live-layout">
@@ -947,56 +1277,12 @@ function LiveGameScreen({
         </aside>
       </div>
 
-      <details className="game-log">
-        <summary className="game-log-summary">
-          <span>
-            <strong>Game log</strong>
-            <small>Review confirmed game changes</small>
-          </span>
-          <span>{game.history.length} events</span>
-        </summary>
-        <div className="game-log-content">
-          {game.history.length ? (
-            <ol>
-              {[...game.history].reverse().map((event) => {
-                const eventPlayer = event.playerId
-                  ? playerName(team, event.playerId)
-                  : null;
-                return (
-                  <li key={event.id}>
-                    <time>{formatDuration(event.atSeconds)}</time>
-                    <span>
-                      <strong>
-                        {event.type === "substitution"
-                          ? `${event.pairs.length} substitution${event.pairs.length === 1 ? "" : "s"}`
-                          : event.type === "position-change"
-                            ? "Position change"
-                            : event.type === "available"
-                              ? `${eventPlayer ?? "Player"} available`
-                              : `${eventPlayer ?? "Player"} unavailable`}
-                      </strong>
-                      <small>
-                        {event.type === "position-change"
-                          ? formatPositionChange(event, formation, team)
-                          : event.pairs.length
-                            ? event.pairs
-                                .map(
-                                  (pair) =>
-                                    `${playerName(team, pair.outPlayerId)} → ${playerName(team, pair.inPlayerId)}`,
-                                )
-                                .join(" · ")
-                            : event.note}
-                      </small>
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-          ) : (
-            <p className="empty-copy">Confirmed changes will appear here.</p>
-          )}
-        </div>
-      </details>
+      <GameLog
+        game={game}
+        formation={formation}
+        team={team}
+        onUndo={() => safeChange(() => undoLastEvent(game))}
+      />
 
       <div className="mobile-control-dock" aria-label="Game controls">
         <button
@@ -1011,16 +1297,24 @@ function LiveGameScreen({
           ) : (
             <Play size={22} aria-hidden="true" />
           )}
-          {game.clock.running ? "Pause" : "Start clock"}
+          {game.clock.running
+            ? "Pause"
+            : periodBreak && !periodBreak.final
+              ? `Start ${period.label} ${periodBreak.completedPeriod + 1}`
+              : periodBreak?.final
+                ? "Continue clock"
+                : "Start clock"}
         </button>
         <button
-          className="sub-button"
+          className={`sub-button ${queuedPairs.length ? "queued" : ""}`}
           type="button"
-          disabled={game.benchIds.length === 0}
-          onClick={() => setPlannerOpen(true)}
+          disabled={game.benchIds.length === 0 && queuedPairs.length === 0}
+          onClick={() =>
+            queuedPairs.length ? setQueuedPlanOpen(true) : setPlannerOpen(true)
+          }
         >
           <ArrowRightLeft size={22} aria-hidden="true" />
-          Plan subs
+          {queuedPairs.length ? "Queued subs" : "Plan subs"}
         </button>
         <button
           type="button"
@@ -1031,12 +1325,12 @@ function LiveGameScreen({
           Positions
         </button>
         <button
+          className="score-button"
           type="button"
-          disabled={game.history.length === 0}
-          onClick={() => safeChange(() => undoLastEvent(game))}
+          onClick={() => setGoalScorerOpen(true)}
         >
-          <RotateCcw size={21} aria-hidden="true" />
-          Undo
+          <CirclePlus size={21} aria-hidden="true" />
+          Score
         </button>
       </div>
 
@@ -1044,15 +1338,54 @@ function LiveGameScreen({
         <SubstitutionPlanner
           game={displayed}
           team={team}
+          initialPairs={game.queuedSubstitutions}
           onClose={() => setPlannerOpen(false)}
           onConfirm={(pairs) => {
+            if (safeChange(() => queueSubstitutions(game, pairs))) {
+              setPlannerOpen(false);
+              setQueuedPlanOpen(true);
+            }
+          }}
+        />
+      )}
+      {queuedPlanOpen && queuedPairs.length > 0 && (
+        <QueuedSubstitutionSummary
+          pairs={queuedPairs}
+          formation={formation}
+          team={team}
+          errors={queuedPlanErrors}
+          onClose={() => setQueuedPlanOpen(false)}
+          onEdit={() => {
+            setQueuedPlanOpen(false);
+            setPlannerOpen(true);
+          }}
+          onCancel={() => {
+            safeChange(() => cancelQueuedSubstitutions(game));
+            setQueuedPlanOpen(false);
+          }}
+          onExecute={executeQueuedSubstitutions}
+        />
+      )}
+      {goalScorerOpen && (
+        <GoalScorerPicker
+          playerIds={fieldIds}
+          team={team}
+          score={score}
+          onClose={() => setGoalScorerOpen(false)}
+          onSelect={(playerId) => {
+            if (
+              safeChange(() => recordGoal(game, "us", playerId, Date.now()))
+            ) {
+              setGoalScorerOpen(false);
+            }
+          }}
+          onOpponentGoal={() => {
             if (
               safeChange(() =>
-                applySubstitutions(game, pairs, team.sideSize, Date.now()),
+                recordGoal(game, "opponent", undefined, Date.now()),
               )
             ) {
-              setPlannerOpen(false);
-              setConfirmedPairs(pairs.map((pair) => ({ ...pair })));
+              setGoalScorerOpen(false);
             }
           }}
         />
@@ -1093,10 +1426,17 @@ function LiveGameScreen({
       {endConfirm && (
         <ConfirmSheet
           title="End this game?"
-          body="The active game and its live clock will be closed. Your team roster and defaults stay saved."
+          body="The clock will stop and you’ll see a player summary before returning to team selection."
           confirmLabel="End game"
           onCancel={() => setEndConfirm(false)}
-          onConfirm={onEnd}
+          onConfirm={() => {
+            const finalGame = cancelQueuedSubstitutions(
+              setClockRunning(game, false, Date.now()),
+            );
+            onChange(finalGame);
+            setEndConfirm(false);
+            setEndedGame(finalGame);
+          }}
         />
       )}
     </div>
@@ -1318,6 +1658,226 @@ function FormationDiagram({
   );
 }
 
+function StarterPitch({
+  formation,
+  assignments,
+  team,
+  onChoosePosition,
+}: {
+  formation: ReturnType<typeof getFormation>;
+  assignments: Record<string, string>;
+  team: Team;
+  onChoosePosition: (positionId: string) => void;
+}) {
+  return (
+    <div
+      className="pitch starter-pitch"
+      aria-label={`${formation.name} starter assignments`}
+    >
+      <div className="pitch-halfway" aria-hidden="true" />
+      <div className="pitch-circle" aria-hidden="true" />
+      <div className="pitch-box top" aria-hidden="true" />
+      <div className="pitch-box bottom" aria-hidden="true" />
+      {formation.positions.map((position) => {
+        const playerId = assignments[position.id];
+        const player = team.roster.find((item) => item.id === playerId);
+        return (
+          <button
+            type="button"
+            className={`pitch-player starter-slot ${player ? "" : "empty"}`}
+            key={position.id}
+            style={{ left: `${position.x}%`, top: `${position.y}%` }}
+            aria-label={`${player ? `Change ${player.name}` : "Assign player"} at ${position.label}`}
+            onClick={() => onChoosePosition(position.id)}
+          >
+            <span className="position-label">{position.shortLabel}</span>
+            <strong>{player?.name ?? "Open"}</strong>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function StarterPicker({
+  positionId,
+  formation,
+  assignments,
+  presentPlayers,
+  onClose,
+  onSelect,
+  onClear,
+}: {
+  positionId: string;
+  formation: ReturnType<typeof getFormation>;
+  assignments: Record<string, string>;
+  presentPlayers: Player[];
+  onClose: () => void;
+  onSelect: (playerId: string) => void;
+  onClear: () => void;
+}) {
+  const position = formation.positions.find((item) => item.id === positionId);
+  const currentPlayerId = assignments[positionId];
+  const choices = presentPlayers.filter(
+    (player) => player.id !== currentPlayerId,
+  );
+
+  return (
+    <ModalBackdrop>
+      <section
+        className="bottom-sheet compact-sheet starter-picker"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="starter-picker-title"
+      >
+        <header className="sheet-header">
+          <div>
+            <h2 id="starter-picker-title">
+              Choose {position?.label ?? "position"}
+            </h2>
+            <p>Choosing another starter swaps their positions.</p>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={22} />
+          </button>
+        </header>
+
+        <div className="starter-choice-list">
+          {choices.map((player) => {
+            const assignedPosition = Object.entries(assignments).find(
+              ([, assignedPlayerId]) => assignedPlayerId === player.id,
+            )?.[0];
+            const assignedLabel = assignedPosition
+              ? formation.positions.find((item) => item.id === assignedPosition)
+                  ?.label
+              : null;
+            const assignedShortLabel = assignedPosition
+              ? formation.positions.find((item) => item.id === assignedPosition)
+                  ?.shortLabel
+              : null;
+            return (
+              <button
+                type="button"
+                key={player.id}
+                onClick={() => onSelect(player.id)}
+              >
+                <span className="starter-choice-player">
+                  <strong>{player.name}</strong>
+                  <span className="starter-preferences">
+                    <small>Prefers</small>
+                    <span>
+                      {player.preferredRoles
+                        .map(preferredRoleLabel)
+                        .join(" · ")}
+                    </span>
+                  </span>
+                </span>
+                <span
+                  className={`starter-current-assignment ${
+                    assignedPosition ? "" : "bench"
+                  }`}
+                  aria-label={
+                    assignedLabel
+                      ? `Currently ${assignedLabel}`
+                      : "Currently on starting bench"
+                  }
+                >
+                  <small>Current</small>
+                  <strong>{assignedShortLabel ?? "Bench"}</strong>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="sheet-actions">
+          <button className="secondary-action" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          {currentPlayerId && (
+            <button className="quiet-button" type="button" onClick={onClear}>
+              Leave open
+            </button>
+          )}
+        </div>
+      </section>
+    </ModalBackdrop>
+  );
+}
+
+function GoalScorerPicker({
+  playerIds,
+  team,
+  score,
+  onClose,
+  onSelect,
+  onOpponentGoal,
+}: {
+  playerIds: string[];
+  team: Team;
+  score: { us: number; opponent: number };
+  onClose: () => void;
+  onSelect: (playerId: string) => void;
+  onOpponentGoal: () => void;
+}) {
+  return (
+    <ModalBackdrop>
+      <section
+        className="bottom-sheet compact-sheet scorekeeper-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="scorekeeper-title"
+      >
+        <header className="sheet-header">
+          <div>
+            <h2 id="scorekeeper-title">Record a goal</h2>
+            <p>
+              {team.name} {score.us} – {score.opponent} Opponent
+            </p>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={22} />
+          </button>
+        </header>
+
+        <h3>Who scored for us?</h3>
+        <div className="goal-scorer-grid">
+          {playerIds.map((playerId) => (
+            <button
+              className="secondary-action"
+              type="button"
+              key={playerId}
+              onClick={() => onSelect(playerId)}
+            >
+              <CirclePlus size={18} aria-hidden="true" />
+              {playerLabel(team, playerId)}
+            </button>
+          ))}
+        </div>
+
+        <button
+          className="secondary-action opponent-goal-action"
+          type="button"
+          onClick={onOpponentGoal}
+        >
+          <CirclePlus size={19} aria-hidden="true" />
+          Opponent scored
+        </button>
+      </section>
+    </ModalBackdrop>
+  );
+}
+
 function PlayerTimeRow({
   player,
   primaryTime,
@@ -1362,11 +1922,13 @@ function PlayerTimeRow({
 function SubstitutionPlanner({
   game,
   team,
+  initialPairs,
   onClose,
   onConfirm,
 }: {
   game: ActiveGame;
   team: Team;
+  initialPairs?: SubstitutionPair[];
   onClose: () => void;
   onConfirm: (pairs: SubstitutionPair[]) => void;
 }) {
@@ -1374,15 +1936,18 @@ function SubstitutionPlanner({
     game.benchIds.length,
     Object.keys(game.assignments).length,
   );
-  const [count, setCount] = useState(maxCount);
-  const [pairs, setPairs] = useState<SubstitutionPair[]>(() =>
-    suggestSubstitutions(game, maxCount),
+  const initialCount = initialPairs?.length ?? maxCount;
+  const [count, setCount] = useState(initialCount);
+  const [pairs, setPairs] = useState<SubstitutionPair[]>(
+    () =>
+      initialPairs?.map((pair) => ({ ...pair })) ??
+      suggestSubstitutions(game, maxCount, team),
   );
   const formation = getFormation(game.formationId);
 
   const changeCount = (nextCount: number) => {
     setCount(nextCount);
-    setPairs(suggestSubstitutions(game, nextCount));
+    setPairs(suggestSubstitutions(game, nextCount, team));
   };
   const updatePair = (index: number, patch: Partial<SubstitutionPair>) =>
     setPairs((current) =>
@@ -1394,7 +1959,12 @@ function SubstitutionPlanner({
     new Set(pairs.map((pair) => pair.outPlayerId)).size !== pairs.length;
   const duplicateIns =
     new Set(pairs.map((pair) => pair.inPlayerId)).size !== pairs.length;
-  const valid = pairs.length === count && !duplicateOuts && !duplicateIns;
+  const pairErrors = validateSubstitutionPairs(game, pairs);
+  const valid =
+    pairs.length === count &&
+    !duplicateOuts &&
+    !duplicateIns &&
+    pairErrors.length === 0;
 
   return (
     <ModalBackdrop>
@@ -1408,7 +1978,8 @@ function SubstitutionPlanner({
           <div>
             <h2 id="substitution-title">Plan substitutions</h2>
             <p>
-              Suggested for fairness. Override any player before confirming.
+              Suggested for fairness. Queue the plan now, then execute it when
+              the players enter.
             </p>
           </div>
           <button
@@ -1497,7 +2068,8 @@ function SubstitutionPlanner({
 
         {!valid && (
           <p className="error-message">
-            Choose a different outgoing and incoming player for every swap.
+            {pairErrors[0] ??
+              "Choose a different outgoing and incoming player for every swap."}
           </p>
         )}
 
@@ -1529,7 +2101,128 @@ function SubstitutionPlanner({
             onClick={() => onConfirm(pairs)}
           >
             <Check size={21} aria-hidden="true" />
-            Confirm {count} swap{count === 1 ? "" : "s"}
+            Queue {count} swap{count === 1 ? "" : "s"}
+          </button>
+        </div>
+      </section>
+    </ModalBackdrop>
+  );
+}
+
+function ReadySwapList({
+  pairs,
+  formation,
+  team,
+}: {
+  pairs: SubstitutionPair[];
+  formation: ReturnType<typeof getFormation>;
+  team: Team;
+}) {
+  return (
+    <div className="ready-swap-list">
+      {pairs.map((pair, index) => {
+        const position = formation.positions.find(
+          (item) => item.id === pair.positionId,
+        );
+        return (
+          <div className="ready-swap" key={index}>
+            <span className="ready-player out">
+              <small>OUT</small>
+              <strong>{playerLabel(team, pair.outPlayerId)}</strong>
+            </span>
+            <span className="ready-direction">
+              <ArrowRightLeft size={24} aria-hidden="true" />
+              <small>{position?.shortLabel}</small>
+            </span>
+            <span className="ready-player in">
+              <small>IN</small>
+              <strong>{playerLabel(team, pair.inPlayerId)}</strong>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function QueuedSubstitutionSummary({
+  pairs,
+  formation,
+  team,
+  errors,
+  onClose,
+  onEdit,
+  onCancel,
+  onExecute,
+}: {
+  pairs: SubstitutionPair[];
+  formation: ReturnType<typeof getFormation>;
+  team: Team;
+  errors: string[];
+  onClose: () => void;
+  onEdit: () => void;
+  onCancel: () => void;
+  onExecute: () => void;
+}) {
+  return (
+    <ModalBackdrop>
+      <section
+        className="bottom-sheet substitution-ready-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="queued-substitution-title"
+      >
+        <header className="sheet-header">
+          <div>
+            <h2 id="queued-substitution-title">Substitutions queued</h2>
+            <p>
+              Get these players ready. Timers and positions change only when you
+              execute.
+            </p>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={22} />
+          </button>
+        </header>
+
+        <ReadySwapList pairs={pairs} formation={formation} team={team} />
+
+        {errors.length > 0 && (
+          <div className="queued-plan-error" role="alert">
+            <CircleAlert size={20} aria-hidden="true" />
+            <span>
+              <strong>Plan needs attention</strong>
+              <small>{errors.join(". ")}</small>
+            </span>
+          </div>
+        )}
+
+        <div className="queued-plan-actions">
+          <button className="secondary-action" type="button" onClick={onEdit}>
+            <Pencil size={18} aria-hidden="true" />
+            Edit plan
+          </button>
+          <button
+            className="secondary-action cancel-plan-action"
+            type="button"
+            onClick={onCancel}
+          >
+            <X size={18} aria-hidden="true" />
+            Cancel plan
+          </button>
+          <button
+            className="sub-confirm"
+            type="button"
+            disabled={errors.length > 0}
+            onClick={onExecute}
+          >
+            <Check size={21} aria-hidden="true" />
+            Execute subs
           </button>
         </div>
       </section>
@@ -1571,29 +2264,7 @@ function SubstitutionSummary({
           </button>
         </header>
 
-        <div className="ready-swap-list">
-          {pairs.map((pair, index) => {
-            const position = formation.positions.find(
-              (item) => item.id === pair.positionId,
-            );
-            return (
-              <div className="ready-swap" key={index}>
-                <span className="ready-player out">
-                  <small>OUT</small>
-                  <strong>{playerLabel(team, pair.outPlayerId)}</strong>
-                </span>
-                <span className="ready-direction">
-                  <ArrowRightLeft size={24} aria-hidden="true" />
-                  <small>{position?.shortLabel}</small>
-                </span>
-                <span className="ready-player in">
-                  <small>IN</small>
-                  <strong>{playerLabel(team, pair.inPlayerId)}</strong>
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <ReadySwapList pairs={pairs} formation={formation} team={team} />
 
         <button className="primary-action" type="button" onClick={onClose}>
           Done
@@ -1657,6 +2328,178 @@ function PlayerEntrySummary({
         </button>
       </section>
     </ModalBackdrop>
+  );
+}
+
+function GameSummary({
+  game,
+  team,
+  onClose,
+}: {
+  game: ActiveGame;
+  team: Team;
+  onClose: () => void;
+}) {
+  const formation = getFormation(game.formationId);
+  const summaries = summarizePlayerPositions(game);
+
+  return (
+    <div className="game-summary-page">
+      <header className="match-header game-summary-header">
+        <div>
+          <TeamCrest teamId={team.id} compact />
+          <span>
+            <strong>{team.name}</strong>
+            <small>Match complete</small>
+          </span>
+        </div>
+      </header>
+
+      <main
+        className="game-summary-content"
+        aria-labelledby="game-summary-title"
+      >
+        <header className="game-summary-intro">
+          <span className="eyebrow">Final report</span>
+          <h1 id="game-summary-title">Game summary</h1>
+          <p>
+            {formation.name} formation ·{" "}
+            {formatDuration(game.clock.elapsedSeconds)} played
+          </p>
+          <div className="final-score" aria-label="Final score">
+            <span>{team.name}</span>
+            <strong>
+              {getScore(game).us} – {getScore(game).opponent}
+            </strong>
+            <span>Opponent</span>
+          </div>
+        </header>
+
+        <ol className="player-game-summaries">
+          {summaries.map((summary) => {
+            const player = team.roster.find(
+              (item) => item.id === summary.playerId,
+            );
+            return (
+              <li key={summary.playerId}>
+                <div className="player-summary-heading">
+                  <strong>{player?.name ?? "Unknown player"}</strong>
+                  <span>{formatDuration(summary.totalSeconds)} total</span>
+                </div>
+                {summary.positions.length ? (
+                  <ul>
+                    {summary.positions.map((positionTime) => (
+                      <li key={positionTime.positionId}>
+                        <span>
+                          {formation.positions.find(
+                            (position) =>
+                              position.id === positionTime.positionId,
+                          )?.label ?? positionTime.positionId}
+                        </span>
+                        <strong>{formatDuration(positionTime.seconds)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <small>Did not enter the field</small>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+
+        <GameLog game={game} formation={formation} team={team} />
+      </main>
+
+      <footer className="game-summary-actions">
+        <button className="primary-action" type="button" onClick={onClose}>
+          Return to teams
+        </button>
+      </footer>
+    </div>
+  );
+}
+
+function GameLog({
+  game,
+  formation,
+  team,
+  onUndo,
+}: {
+  game: ActiveGame;
+  formation: ReturnType<typeof getFormation>;
+  team: Team;
+  onUndo?: () => void;
+}) {
+  return (
+    <details className="game-log">
+      <summary className="game-log-summary">
+        <span>
+          <strong>Game log</strong>
+          <small>Review confirmed game changes</small>
+        </span>
+        <span>{game.history.length} events</span>
+      </summary>
+      <div className="game-log-content">
+        {game.history.length ? (
+          <ol>
+            {[...game.history].reverse().map((event) => {
+              const eventPlayer = event.playerId
+                ? playerName(team, event.playerId)
+                : null;
+              const eventTitle =
+                event.type === "goal-for"
+                  ? `${eventPlayer ?? "Player"} scored`
+                  : event.type === "goal-against"
+                    ? "Opponent scored"
+                    : event.type === "substitution"
+                      ? `${event.pairs.length} substitution${event.pairs.length === 1 ? "" : "s"}`
+                      : event.type === "position-change"
+                        ? "Position change"
+                        : event.type === "available"
+                          ? `${eventPlayer ?? "Player"} available`
+                          : `${eventPlayer ?? "Player"} unavailable`;
+              const eventDetail =
+                event.type === "goal-for"
+                  ? `Goal for ${team.name}`
+                  : event.type === "goal-against"
+                    ? "Opponent goal"
+                    : event.type === "position-change"
+                      ? formatPositionChange(event, formation, team)
+                      : event.pairs.length
+                        ? event.pairs
+                            .map(
+                              (pair) =>
+                                `${playerName(team, pair.outPlayerId)} → ${playerName(team, pair.inPlayerId)}`,
+                            )
+                            .join(" · ")
+                        : event.note;
+              return (
+                <li key={event.id}>
+                  <time>{formatDuration(event.atSeconds)}</time>
+                  <span>
+                    <strong>{eventTitle}</strong>
+                    <small>{eventDetail}</small>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          <p className="empty-copy">Confirmed changes will appear here.</p>
+        )}
+        {onUndo && game.history.length > 0 && (
+          <button
+            className="secondary-action game-log-undo"
+            type="button"
+            onClick={onUndo}
+          >
+            <RotateCcw size={18} aria-hidden="true" />
+            Undo last change
+          </button>
+        )}
+      </div>
+    </details>
   );
 }
 

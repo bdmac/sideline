@@ -2,18 +2,26 @@ import { describe, expect, it } from "vitest";
 import {
   applySubstitutions,
   assignPlayerToPosition,
+  assignPlayersByPreference,
+  cancelQueuedSubstitutions,
   createGame,
   FORMATIONS,
   getFormationsForTeam,
   getPeriodStatus,
+  getScore,
   INITIAL_TEAMS,
   markAvailable,
   materializeGame,
   movePlayer,
+  queueSubstitutions,
+  recordGoal,
+  setClockRunning,
   suggestSubstitutions,
+  summarizePlayerPositions,
   undoLastEvent,
   validateFormation,
   validateGame,
+  validateSubstitutionPairs,
 } from "./domain";
 
 describe("formations", () => {
@@ -47,6 +55,12 @@ describe("team rosters", () => {
       numbers.every((number) => number && number >= 1 && number <= 99),
     ).toBe(true);
     expect(new Set(numbers).size).toBe(numbers.length);
+    expect(players.every((player) => player.preferredRoles.length >= 2)).toBe(
+      true,
+    );
+    expect(players.every((player) => player.preferredRoles.length <= 3)).toBe(
+      true,
+    );
     expect(u8Numbers).toMatchObject({
       Simon: 10,
       Ollie: 23,
@@ -61,6 +75,28 @@ describe("team rosters", () => {
       John: 90,
       Jack: 5,
     });
+  });
+});
+
+describe("preference-aware assignments", () => {
+  it("places starters into their strongest available roles", () => {
+    const team = INITIAL_TEAMS.u8;
+    const formation = FORMATIONS.find((item) => item.id === "5-1-2-1")!;
+    const assignments = assignPlayersByPreference(
+      formation,
+      team.roster.slice(0, 5).map((player) => player.id),
+      team.roster,
+    );
+
+    expect(assignments.gk).toBe(
+      team.roster.find((player) => player.name === "Simon")?.id,
+    );
+    expect(assignments.dl).toBe(
+      team.roster.find((player) => player.name === "Noah")?.id,
+    );
+    expect(assignments.f).toBe(
+      team.roster.find((player) => player.name === "Malik")?.id,
+    );
   });
 });
 
@@ -164,6 +200,63 @@ describe("period accounting", () => {
       remainingSeconds: 25 * 60,
     });
   });
+
+  it("pauses exactly at period boundaries and resumes into the next period", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = {
+      elapsedSeconds: 9 * 60 + 59,
+      running: true,
+      lastStartedAt: 1_000,
+    };
+    const paused = materializeGame(game, 6_000);
+
+    expect(paused.clock).toEqual({
+      elapsedSeconds: 10 * 60,
+      running: false,
+      lastStartedAt: null,
+    });
+    expect(paused.periodBreak).toEqual({ completedPeriod: 1, final: false });
+    Object.values(game.assignments).forEach((playerId) => {
+      expect(paused.totals[playerId].fieldSeconds).toBe(1);
+    });
+
+    const resumed = setClockRunning(paused, true, 7_000);
+    expect(resumed.periodBreak).toBeUndefined();
+    const nextBreak = materializeGame(resumed, 607_000);
+    expect(nextBreak.clock.elapsedSeconds).toBe(20 * 60);
+    expect(nextBreak.periodBreak).toEqual({
+      completedPeriod: 2,
+      final: false,
+    });
+  });
+
+  it("pauses at the end of regulation", () => {
+    const team = INITIAL_TEAMS.u12;
+    const game = createGame(
+      team,
+      "9-3-1-3-1",
+      team.roster.map((player) => player.id),
+      60,
+      1_000,
+    );
+    game.clock = {
+      elapsedSeconds: 59 * 60 + 58,
+      running: true,
+      lastStartedAt: 1_000,
+    };
+
+    const completed = materializeGame(game, 11_000);
+    expect(completed.clock.elapsedSeconds).toBe(60 * 60);
+    expect(completed.clock.running).toBe(false);
+    expect(completed.periodBreak).toEqual({ completedPeriod: 2, final: true });
+  });
 });
 
 describe("starter assignment", () => {
@@ -240,7 +333,130 @@ describe("position changes", () => {
   });
 });
 
+describe("game summaries", () => {
+  it("attributes playing time to each position across a position swap", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 5).map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    const movedPlayerId = game.assignments.dr;
+    const changed = movePlayer(game, movedPlayerId, "m", 11_000);
+    const ended = setClockRunning(changed, false, 21_000);
+    const summary = summarizePlayerPositions(ended).find(
+      (playerSummary) => playerSummary.playerId === movedPlayerId,
+    );
+
+    expect(summary).toEqual({
+      playerId: movedPlayerId,
+      totalSeconds: 20,
+      positions: [
+        { positionId: "dr", seconds: 10 },
+        { positionId: "m", seconds: 10 },
+      ],
+    });
+  });
+});
+
+describe("scorekeeping", () => {
+  it("records scorers on the field, opponent goals, and supports undo", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    const scorerId = game.assignments.gk;
+    const withOurGoal = recordGoal(game, "us", scorerId, 11_000);
+    const level = recordGoal(withOurGoal, "opponent", undefined, 16_000);
+
+    expect(getScore(level)).toEqual({ us: 1, opponent: 1 });
+    expect(level.history[0]).toMatchObject({
+      type: "goal-for",
+      playerId: scorerId,
+      atSeconds: 10,
+    });
+    expect(level.history[1]).toMatchObject({
+      type: "goal-against",
+      atSeconds: 15,
+    });
+    expect(getScore(undoLastEvent(level, 16_000))).toEqual({
+      us: 1,
+      opponent: 0,
+    });
+    expect(() => recordGoal(game, "us", game.benchIds[0], 2_000)).toThrow(
+      "The scorer must be on the field",
+    );
+  });
+});
+
 describe("substitutions", () => {
+  it("queues substitutions without changing the lineup or time totals", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    const pairs = suggestSubstitutions(game, 2, team);
+    const queued = queueSubstitutions(game, pairs);
+
+    expect(queued.assignments).toEqual(game.assignments);
+    expect(queued.benchIds).toEqual(game.benchIds);
+    expect(queued.totals).toEqual(game.totals);
+    expect(queued.history).toEqual([]);
+    expect(queued.queuedSubstitutions).toEqual(pairs);
+
+    const executed = applySubstitutions(queued, pairs, team.sideSize, 11_000);
+    expect(executed.queuedSubstitutions).toBeUndefined();
+    expect(executed.history).toHaveLength(1);
+    expect(executed.history[0].atSeconds).toBe(10);
+    expect(executed.totals[pairs[0].outPlayerId].fieldSeconds).toBe(10);
+    expect(executed.totals[pairs[0].inPlayerId].benchSeconds).toBe(10);
+
+    const fiveSecondsLater = materializeGame(executed, 16_000);
+    expect(fiveSecondsLater.totals[pairs[0].outPlayerId].benchSeconds).toBe(5);
+    expect(fiveSecondsLater.totals[pairs[0].inPlayerId].fieldSeconds).toBe(5);
+  });
+
+  it("keeps stale queued substitutions visible but blocks execution", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const pairs = suggestSubstitutions(game, 1, team);
+    const queued = queueSubstitutions(game, pairs);
+    const changed = movePlayer(
+      queued,
+      pairs[0].outPlayerId,
+      pairs[0].positionId === "m" ? "f" : "m",
+      2_000,
+    );
+
+    expect(validateSubstitutionPairs(changed, pairs)).toContain(
+      "An outgoing player no longer occupies the planned position",
+    );
+    expect(() =>
+      applySubstitutions(changed, pairs, team.sideSize, 3_000),
+    ).toThrow("An outgoing player no longer occupies the planned position");
+    expect(
+      cancelQueuedSubstitutions(changed).queuedSubstitutions,
+    ).toBeUndefined();
+  });
   it("suggests the longest-benched players and confirms swaps atomically", () => {
     const team = INITIAL_TEAMS.u8;
     const game = createGame(
@@ -253,14 +469,37 @@ describe("substitutions", () => {
     const [firstBench, secondBench] = game.benchIds;
     game.totals[firstBench].benchSeconds = 120;
     game.totals[secondBench].benchSeconds = 240;
-    const pairs = suggestSubstitutions(game, 2);
+    const pairs = suggestSubstitutions(game, 2, team);
 
-    expect(pairs[0].inPlayerId).toBe(secondBench);
+    expect(pairs.map((pair) => pair.inPlayerId)).toContain(secondBench);
     const next = applySubstitutions(game, pairs, team.sideSize, 2_000);
     expect(validateGame(next, team.sideSize)).toEqual([]);
     expect(Object.values(next.assignments)).toContain(firstBench);
     expect(Object.values(next.assignments)).toContain(secondBench);
     expect(next.history).toHaveLength(1);
+  });
+
+  it("keeps bench time ahead of position preference", () => {
+    const team = structuredClone(INITIAL_TEAMS.u8);
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const [longestBenched, preferredBenchPlayer] = game.benchIds;
+    game.totals[longestBenched].benchSeconds = 300;
+    game.totals[preferredBenchPlayer].benchSeconds = 100;
+    team.roster.find((player) => player.id === longestBenched)!.preferredRoles =
+      ["forward"];
+    team.roster.find(
+      (player) => player.id === preferredBenchPlayer,
+    )!.preferredRoles = ["goalkeeper"];
+
+    const [pair] = suggestSubstitutions(game, 1, team);
+
+    expect(pair.inPlayerId).toBe(longestBenched);
   });
 
   it("undoes the most recent confirmed substitution", () => {
@@ -276,7 +515,7 @@ describe("substitutions", () => {
     const beforeBench = [...game.benchIds];
     const changed = applySubstitutions(
       game,
-      suggestSubstitutions(game, 1),
+      suggestSubstitutions(game, 1, team),
       team.sideSize,
       2_000,
     );
@@ -296,11 +535,11 @@ describe("substitutions", () => {
       40,
       1_000,
     );
-    const pairs = suggestSubstitutions(game, 2);
+    const pairs = suggestSubstitutions(game, 2, team);
     pairs[1].inPlayerId = pairs[0].inPlayerId;
 
     expect(() => applySubstitutions(game, pairs, team.sideSize, 2_000)).toThrow(
-      "Each player can only appear in one swap",
+      "Each incoming player can only appear once",
     );
   });
 });

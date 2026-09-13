@@ -1,12 +1,29 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { createGame, INITIAL_STATE } from "./domain";
 import { STORAGE_KEY } from "./storage";
+
+const startGame = () => {
+  fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+  fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+  fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+};
 
 describe("Sideline app", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      value: 0,
+    });
   });
 
   it("keeps teams visibly separate from the first screen", () => {
@@ -31,6 +48,116 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
+  it("moves through focused setup steps while preserving selections", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+
+    expect(
+      screen.getByRole("heading", { name: "Who is here?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("status", { name: "Step 1 of 3: Attendance" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Choose the formation" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Evan Present/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    expect(
+      screen.getByRole("heading", { name: "Choose the formation" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Game format")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "2-2 formation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+    expect(
+      screen.getByRole("heading", { name: "Assign starters" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    expect(
+      screen.getByRole("button", {
+        name: "2-2 formation",
+        pressed: true,
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Attendance" }));
+    expect(
+      screen.getByRole("button", { name: /Evan Absent/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("warns when attendance drops below the required side size", () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+
+    ["Simon", "Noah", "Maddox", "Ollie", "Malik"].forEach((name) => {
+      fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
+    });
+
+    expect(
+      container.querySelector(".attendance-count.short"),
+    ).toHaveTextContent("4 present");
+    expect(
+      container.querySelector(".setup-progress-detail.danger"),
+    ).toHaveTextContent("4 here");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Short 1 player: 4 present, 5 required",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Simon Absent" }));
+    expect(container.querySelector(".attendance-count.short")).toBeNull();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("assigns starters from the tactics board and swaps occupied positions", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+
+    expect(screen.getByRole("button", { name: "Auto-fill" })).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Change Maddox at Left Midfielder",
+      }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Choose Left Midfielder" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Ollie.*Currently Right Midfielder/,
+      }),
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Change Ollie at Left Midfielder",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Change Maddox at Right Midfielder",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    const goalkeeperSlot = screen.getByRole("button", {
+      name: "Assign player at Goalkeeper",
+    });
+    expect(goalkeeperSlot).toBeInTheDocument();
+    expect(goalkeeperSlot).toHaveTextContent("GKOpen");
+    expect(goalkeeperSlot).not.toHaveTextContent("Goalkeeper");
+    expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Auto-fill" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Auto-fill" }));
+    expect(screen.getByRole("button", { name: "Auto-fill" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Start game" })).toBeEnabled();
+  });
+
   it("labels setup navigation by its team-selection destination", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -47,7 +174,7 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     fireEvent.click(screen.getByRole("button", { name: /Evan Present/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
 
     const markAvailable = screen.getByRole("button", {
       name: "Mark Evan available",
@@ -75,6 +202,7 @@ describe("Sideline app", () => {
       screen.getByRole("heading", { name: "Prepare game" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Game duration")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     expect(screen.queryByText("Game format")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", {
@@ -82,6 +210,7 @@ describe("Sideline app", () => {
         pressed: true,
       }),
     ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Attendance" }));
     expect(
       screen.getByRole("button", { name: /Jackson Present/i }),
     ).toBeInTheDocument();
@@ -90,7 +219,7 @@ describe("Sideline app", () => {
   it("restores an active game immediately after a reload", () => {
     const firstRender = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
     fireEvent.click(screen.getByRole("button", { name: "Start clock" }));
 
     const savedGame = JSON.parse(
@@ -112,10 +241,50 @@ describe("Sideline app", () => {
     expect(screen.getByText("Clock running")).toBeInTheDocument();
   });
 
+  it("shows each player's position time before closing an ended game", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 5).map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock.elapsedSeconds = 120;
+    Object.values(game.assignments).forEach((playerId) => {
+      game.totals[playerId].fieldSeconds = 120;
+    });
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    const confirmation = screen.getByRole("alertdialog", {
+      name: "End this game?",
+    });
+    fireEvent.click(
+      within(confirmation).getByRole("button", { name: "End game" }),
+    );
+
+    const summary = screen.getByRole("main", { name: "Game summary" });
+    expect(summary).toHaveTextContent("Simon");
+    expect(summary).toHaveTextContent("Goalkeeper");
+    expect(summary).toHaveTextContent("2:00 total");
+    const gameLog = within(summary).getByText("Game log").closest("details");
+    expect(gameLog).toBeInTheDocument();
+    expect(gameLog).not.toHaveAttribute("open");
+    expect(gameLog).toHaveTextContent("0 events");
+    fireEvent.click(screen.getByRole("button", { name: "Return to teams" }));
+    expect(
+      screen.getByRole("heading", { name: "Which team are you coaching?" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows current assignments in both position-change selectors", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
     fireEvent.click(screen.getByRole("button", { name: "Positions" }));
 
     expect(
@@ -132,7 +301,7 @@ describe("Sideline app", () => {
   it("updates position targets when the selected player changes", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
     fireEvent.click(screen.getByRole("button", { name: "Positions" }));
 
     fireEvent.change(screen.getByLabelText("Player"), {
@@ -150,7 +319,7 @@ describe("Sideline app", () => {
   it("opens position editing with the tapped pitch player selected", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
     fireEvent.click(
       screen.getByRole("button", { name: "Change Maddox's position" }),
     );
@@ -166,7 +335,7 @@ describe("Sideline app", () => {
   it("logs position changes made in the editor", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
     fireEvent.click(
       screen.getByRole("button", { name: "Change Maddox's position" }),
     );
@@ -186,7 +355,7 @@ describe("Sideline app", () => {
   it("drags an on-field player onto another position", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
 
     const pitch = container.querySelector(".pitch")!;
     vi.spyOn(pitch, "getBoundingClientRect").mockReturnValue({
@@ -237,42 +406,185 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows a numbered substitution summary after confirmation", () => {
+  it("queues substitutions without changing the lineup, then executes them", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
     fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
     expect(
-      screen.getByRole("button", { name: "Confirm 4 swaps" }),
+      screen.getByRole("button", { name: "Queue 4 swaps" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Confirm 4 swaps" }));
+    fireEvent.click(screen.getByRole("button", { name: "Queue 4 swaps" }));
 
     const summary = screen.getByRole("dialog", {
-      name: "Substitution ready",
+      name: "Substitutions queued",
     });
     expect(summary).toHaveTextContent("OUT");
     expect(summary).toHaveTextContent("#10 Simon");
     expect(summary).toHaveTextContent("IN");
     expect(summary).toHaveTextContent("#4 Dylan");
+    expect(
+      screen.getByRole("button", { name: "Change Simon's position" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Execute subs" }));
+    expect(
+      screen.getByRole("button", { name: "Change Dylan's position" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Substitutions queued" }),
+    ).not.toBeInTheDocument();
   });
 
   it("allows the coach to reduce the default full-bench rotation", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
     fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
 
     fireEvent.click(screen.getByRole("button", { name: "1" }));
 
     expect(
-      screen.getByRole("button", { name: "Confirm 1 swap" }),
+      screen.getByRole("button", { name: "Queue 1 swap" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps a queued plan accessible from the live game until cancelled", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Queue 4 swaps" }));
+    fireEvent.click(
+      within(
+        screen.getByRole("dialog", { name: "Substitutions queued" }),
+      ).getByRole("button", { name: "Close" }),
+    );
+
+    expect(screen.getByText("4 substitutions queued")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Queued subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel plan" }));
+
+    expect(
+      screen.queryByText("4 substitutions queued"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Plan subs" }),
+    ).toBeInTheDocument();
+  });
+
+  it("tracks our scorer, opponent goals, and the final score", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+
+    fireEvent.click(screen.getByRole("button", { name: "Score" }));
+    const scorerDialog = screen.getByRole("dialog", { name: "Record a goal" });
+    expect(
+      within(scorerDialog).getByRole("button", { name: "#10 Simon" }),
+    ).toBeInTheDocument();
+    expect(
+      within(scorerDialog).queryByRole("button", { name: "#4 Dylan" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(scorerDialog).getByRole("button", { name: "#10 Simon" }),
+    );
+    const expandedStatus = document.querySelector(".live-match-status");
+    expect(
+      within(expandedStatus as HTMLElement).getByLabelText("Score"),
+    ).toHaveTextContent("Us1–Opponent0");
+
+    fireEvent.click(screen.getByRole("button", { name: "Score" }));
+    fireEvent.click(screen.getByRole("button", { name: "Opponent scored" }));
+    expect(
+      within(expandedStatus as HTMLElement).getByLabelText("Score"),
+    ).toHaveTextContent("Us1–Opponent1");
+
+    fireEvent.click(screen.getByText("Game log"));
+    expect(screen.getByText("Simon scored")).toBeInTheDocument();
+    expect(screen.getByText("Opponent scored")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Undo last change" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", { name: "End this game?" }),
+      ).getByRole("button", { name: "End game" }),
+    );
+    expect(screen.getByLabelText("Final score")).toHaveTextContent(
+      "Golden Dragons1 – 1Opponent",
+    );
+  });
+
+  it("compacts the match status header after scrolling", async () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+    const compactHeader = container.querySelector(".compact-match-header");
+
+    expect(
+      within(screen.getByLabelText("Match status")).getByText("40:00 left"),
+    ).toBeInTheDocument();
+    expect(compactHeader).toHaveAttribute("aria-hidden", "true");
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      value: 140,
+    });
+    fireEvent.scroll(window);
+
+    await waitFor(() => expect(compactHeader).toHaveClass("interactive"));
+    expect(
+      within(compactHeader as HTMLElement).getByLabelText("Score"),
+    ).toBeInTheDocument();
+    expect(
+      within(compactHeader as HTMLElement).getByText("40:00 left"),
+    ).toBeInTheDocument();
+    expect(
+      within(compactHeader as HTMLElement).getByRole("button", {
+        name: "End game",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a persisted period break with rotation and resume actions", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = {
+      elapsedSeconds: 10 * 60,
+      running: false,
+      lastStartedAt: null,
+    };
+    game.periodBreak = { completedPeriod: 1, final: false };
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    const breakBanner = screen.getByLabelText("End of Quarter 1");
+    expect(breakBanner).toHaveTextContent("Clock paused at 10:00");
+    expect(
+      within(breakBanner).getByRole("button", { name: "Plan rotation" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(breakBanner).getByRole("button", { name: "Start Quarter 2" }),
+    );
+
+    expect(screen.queryByLabelText("End of Quarter 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Clock running")).toBeInTheDocument();
   });
 
   it("shows the effective substitution after an on-field player becomes unavailable", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
     fireEvent.click(
       screen.getByRole("button", { name: "Change Simon's position" }),
     );
@@ -301,7 +613,7 @@ describe("Sideline app", () => {
         screen.getByRole("button", { name: new RegExp(`${name} Present`) }),
       );
     });
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
     fireEvent.click(
       screen.getByRole("button", { name: "Change Simon's position" }),
     );
@@ -322,7 +634,7 @@ describe("Sideline app", () => {
   it("keeps substitution direction styling out of the live toolbar", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
 
     expect(
       container.querySelector(".mobile-control-dock .swap-direction"),
@@ -346,7 +658,7 @@ describe("Sideline app", () => {
     });
 
     vi.mocked(window.scrollTo).mockClear();
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    startGame();
     expect(window.scrollTo).toHaveBeenLastCalledWith({
       top: 0,
       left: 0,

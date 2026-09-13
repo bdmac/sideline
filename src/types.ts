@@ -1,9 +1,12 @@
 export type TeamId = "u8" | "u12";
 
+export type PositionRole = "goalkeeper" | "defender" | "midfielder" | "forward";
+
 export type Player = {
   id: string;
   name: string;
   number?: number;
+  preferredRoles: PositionRole[];
   active: boolean;
 };
 
@@ -24,7 +27,7 @@ export type Position = {
   shortLabel: string;
   x: number;
   y: number;
-  role: "goalkeeper" | "defender" | "midfielder" | "forward";
+  role: PositionRole;
 };
 
 export type Formation = {
@@ -37,6 +40,15 @@ export type Formation = {
 export type PlayerTotals = {
   fieldSeconds: number;
   benchSeconds: number;
+};
+
+export type PlayerGameSummary = {
+  playerId: string;
+  totalSeconds: number;
+  positions: Array<{
+    positionId: string;
+    seconds: number;
+  }>;
 };
 
 export type ClockState = {
@@ -53,7 +65,13 @@ export type SubstitutionPair = {
 
 export type GameEvent = {
   id: string;
-  type: "substitution" | "position-change" | "unavailable" | "available";
+  type:
+    | "substitution"
+    | "position-change"
+    | "unavailable"
+    | "available"
+    | "goal-for"
+    | "goal-against";
   atSeconds: number;
   pairs: SubstitutionPair[];
   playerId?: string;
@@ -78,12 +96,17 @@ export type ActiveGame = {
   assignments: Record<string, string>;
   benchIds: string[];
   clock: ClockState;
+  periodBreak?: {
+    completedPeriod: number;
+    final: boolean;
+  };
   totals: Record<string, PlayerTotals>;
   history: GameEvent[];
+  queuedSubstitutions?: SubstitutionPair[];
 };
 
 export type AppState = {
-  version: 10;
+  version: 11;
   teams: Record<TeamId, Team>;
   activeGame: ActiveGame | null;
 };

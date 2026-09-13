@@ -3,7 +3,9 @@ import type {
   AppState,
   Formation,
   Player,
+  PlayerGameSummary,
   PlayerTotals,
+  PositionRole,
   SubstitutionPair,
   Team,
   TeamId,
@@ -157,11 +159,43 @@ const rosterNumbers: Record<TeamId, number[]> = {
   u12: [82, 15, 17, 8, 19, 78, 6, 11, 18, 90, 13, 21, 22, 5, 30],
 };
 
+const rosterPreferences: Record<TeamId, PositionRole[][]> = {
+  u8: [
+    ["goalkeeper", "defender", "midfielder"],
+    ["defender", "midfielder"],
+    ["midfielder", "forward"],
+    ["midfielder", "forward"],
+    ["forward", "midfielder"],
+    ["defender", "goalkeeper"],
+    ["defender", "midfielder"],
+    ["midfielder", "forward"],
+    ["goalkeeper", "defender", "midfielder"],
+  ],
+  u12: [
+    ["goalkeeper", "defender"],
+    ["defender", "midfielder"],
+    ["defender", "midfielder"],
+    ["midfielder", "forward"],
+    ["midfielder", "defender"],
+    ["forward", "midfielder"],
+    ["defender", "midfielder"],
+    ["midfielder", "forward"],
+    ["defender", "midfielder"],
+    ["goalkeeper", "defender"],
+    ["midfielder", "forward"],
+    ["forward", "midfielder"],
+    ["defender", "midfielder"],
+    ["forward", "midfielder"],
+    ["goalkeeper", "defender", "midfielder"],
+  ],
+};
+
 const makeRoster = (teamId: TeamId, names: string[]): Player[] =>
   names.map((name, index) => ({
     id: `${teamId}-p${index + 1}`,
     name,
     number: rosterNumbers[teamId][index],
+    preferredRoles: rosterPreferences[teamId][index],
     active: true,
   }));
 
@@ -189,7 +223,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 10,
+  version: 11,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
@@ -301,16 +335,37 @@ export const materializeGame = (
     Math.floor((now - game.clock.lastStartedAt) / 1000),
   );
   if (delta === 0) return game;
+  const periodLength = game.durationSeconds / game.periodCount;
+  const nextBoundary =
+    (Math.floor(game.clock.elapsedSeconds / periodLength) + 1) * periodLength;
+  const crossesBoundary =
+    game.clock.elapsedSeconds < game.durationSeconds &&
+    game.clock.elapsedSeconds + delta >= nextBoundary;
+  const creditedSeconds = crossesBoundary
+    ? nextBoundary - game.clock.elapsedSeconds
+    : delta;
   const totals = structuredClone(game.totals);
-  addSeconds(totals, Object.values(game.assignments), "fieldSeconds", delta);
-  addSeconds(totals, game.benchIds, "benchSeconds", delta);
+  addSeconds(
+    totals,
+    Object.values(game.assignments),
+    "fieldSeconds",
+    creditedSeconds,
+  );
+  addSeconds(totals, game.benchIds, "benchSeconds", creditedSeconds);
   return {
     ...game,
     totals,
+    periodBreak: crossesBoundary
+      ? {
+          completedPeriod: Math.round(nextBoundary / periodLength),
+          final: nextBoundary >= game.durationSeconds,
+        }
+      : game.periodBreak,
     clock: {
       ...game.clock,
-      elapsedSeconds: game.clock.elapsedSeconds + delta,
-      lastStartedAt: now,
+      elapsedSeconds: game.clock.elapsedSeconds + creditedSeconds,
+      running: crossesBoundary ? false : game.clock.running,
+      lastStartedAt: crossesBoundary ? null : now,
     },
   };
 };
@@ -323,6 +378,7 @@ export const setClockRunning = (
   const current = materializeGame(game, now);
   return {
     ...current,
+    periodBreak: running ? undefined : current.periodBreak,
     clock: {
       ...current.clock,
       running,
@@ -333,6 +389,49 @@ export const setClockRunning = (
 
 export const getDisplayedSeconds = (game: ActiveGame, now = Date.now()) =>
   materializeGame(game, now).clock.elapsedSeconds;
+
+export const getScore = (game: ActiveGame) =>
+  game.history.reduce(
+    (score, event) => {
+      if (event.type === "goal-for") score.us += 1;
+      if (event.type === "goal-against") score.opponent += 1;
+      return score;
+    },
+    { us: 0, opponent: 0 },
+  );
+
+export const recordGoal = (
+  game: ActiveGame,
+  side: "us" | "opponent",
+  playerId?: string,
+  now = Date.now(),
+): ActiveGame => {
+  const current = materializeGame(game, now);
+  if (side === "us") {
+    if (!playerId) throw new Error("Choose the player who scored");
+    if (!Object.values(current.assignments).includes(playerId)) {
+      throw new Error("The scorer must be on the field");
+    }
+  }
+  return {
+    ...current,
+    history: [
+      ...current.history,
+      {
+        id: `goal-${side}-${now}`,
+        type: side === "us" ? "goal-for" : "goal-against",
+        atSeconds: current.clock.elapsedSeconds,
+        pairs: [],
+        playerId: side === "us" ? playerId : undefined,
+        note: side === "us" ? "Goal scored" : "Opponent scored",
+        beforeAssignments: current.assignments,
+        beforeBenchIds: current.benchIds,
+        beforeUnavailableIds: current.unavailableIds,
+        beforePresentIds: current.presentIds,
+      },
+    ],
+  };
+};
 
 export const getPeriodStatus = (
   durationSeconds: number,
@@ -376,17 +475,78 @@ export const assignPlayerToPosition = (
   return next;
 };
 
+const preferenceScore = (player: Player, role: PositionRole) => {
+  const preferenceIndex = player.preferredRoles.indexOf(role);
+  return preferenceIndex === -1 ? 0 : (4 - preferenceIndex) * 1_000;
+};
+
+export const assignPlayersByPreference = (
+  formation: Formation,
+  playerIds: string[],
+  roster: Player[],
+) => {
+  const playerById = new Map(roster.map((player) => [player.id, player]));
+  const players = playerIds
+    .map((id) => playerById.get(id))
+    .filter((player): player is Player => Boolean(player));
+  const positions = formation.positions.slice(
+    0,
+    Math.min(formation.positions.length, players.length),
+  );
+  const memo = new Map<string, { score: number; playerIndexes: number[] }>();
+
+  const solve = (
+    positionIndex: number,
+    usedMask: number,
+  ): { score: number; playerIndexes: number[] } => {
+    if (positionIndex === positions.length) {
+      return { score: 0, playerIndexes: [] };
+    }
+    const key = `${positionIndex}:${usedMask}`;
+    const cached = memo.get(key);
+    if (cached) return cached;
+
+    let best: { score: number; playerIndexes: number[] } | null = null;
+    players.forEach((player, playerIndex) => {
+      const playerBit = 1 << playerIndex;
+      if (usedMask & playerBit) return;
+      const rest = solve(positionIndex + 1, usedMask | playerBit);
+      const candidate = {
+        score:
+          preferenceScore(player, positions[positionIndex].role) +
+          (players.length - playerIndex) +
+          rest.score,
+        playerIndexes: [playerIndex, ...rest.playerIndexes],
+      };
+      if (
+        !best ||
+        candidate.score > best.score ||
+        (candidate.score === best.score &&
+          candidate.playerIndexes.join(",") < best.playerIndexes.join(","))
+      ) {
+        best = candidate;
+      }
+    });
+
+    const result = best ?? { score: 0, playerIndexes: [] };
+    memo.set(key, result);
+    return result;
+  };
+
+  const result = solve(0, 0);
+  return Object.fromEntries(
+    positions.map((positionItem, index) => [
+      positionItem.id,
+      players[result.playerIndexes[index]]?.id ?? "",
+    ]),
+  );
+};
+
 export const suggestSubstitutions = (
   game: ActiveGame,
   count: number,
+  team: Team,
 ): SubstitutionPair[] => {
-  const onField = Object.entries(game.assignments)
-    .filter(([, playerId]) => !game.unavailableIds.includes(playerId))
-    .sort(
-      ([, a], [, b]) =>
-        (game.totals[b]?.fieldSeconds ?? 0) -
-          (game.totals[a]?.fieldSeconds ?? 0) || a.localeCompare(b),
-    );
   const bench = game.benchIds
     .filter((id) => !game.unavailableIds.includes(id))
     .sort(
@@ -397,14 +557,65 @@ export const suggestSubstitutions = (
           (game.totals[b]?.fieldSeconds ?? 0) ||
         a.localeCompare(b),
     );
-  return Array.from(
-    { length: Math.min(Math.max(0, count), onField.length, bench.length) },
-    (_, index) => ({
-      positionId: onField[index][0],
-      outPlayerId: onField[index][1],
-      inPlayerId: bench[index],
-    }),
+  const substitutionCount = Math.min(
+    Math.max(0, count),
+    Object.keys(game.assignments).length,
+    bench.length,
   );
+  const incomingIds = bench.slice(0, substitutionCount);
+  const formation = getFormation(game.formationId);
+  const roleByPosition = new Map(
+    formation.positions.map((positionItem) => [
+      positionItem.id,
+      positionItem.role,
+    ]),
+  );
+  const incomingPlayers = incomingIds
+    .map((id) => team.roster.find((player) => player.id === id))
+    .filter((player): player is Player => Boolean(player));
+  const onField = Object.entries(game.assignments)
+    .filter(([, playerId]) => !game.unavailableIds.includes(playerId))
+    .sort(([positionA, playerA], [positionB, playerB]) => {
+      const timeDifference =
+        (game.totals[playerB]?.fieldSeconds ?? 0) -
+        (game.totals[playerA]?.fieldSeconds ?? 0);
+      if (timeDifference) return timeDifference;
+      const fitA = Math.max(
+        ...incomingPlayers.map((player) =>
+          preferenceScore(player, roleByPosition.get(positionA)!),
+        ),
+        0,
+      );
+      const fitB = Math.max(
+        ...incomingPlayers.map((player) =>
+          preferenceScore(player, roleByPosition.get(positionB)!),
+        ),
+        0,
+      );
+      return fitB - fitA || playerA.localeCompare(playerB);
+    })
+    .slice(0, substitutionCount);
+  const selectedPositions: Formation = {
+    ...formation,
+    positions: onField
+      .map(([positionId]) =>
+        formation.positions.find((item) => item.id === positionId),
+      )
+      .filter((positionItem): positionItem is Formation["positions"][number] =>
+        Boolean(positionItem),
+      ),
+  };
+  const incomingAssignments = assignPlayersByPreference(
+    selectedPositions,
+    incomingIds,
+    team.roster,
+  );
+
+  return onField.map(([positionId, outPlayerId]) => ({
+    positionId,
+    outPlayerId,
+    inPlayerId: incomingAssignments[positionId],
+  }));
 };
 
 export const validateGame = (game: ActiveGame, sideSize: number): string[] => {
@@ -434,6 +645,50 @@ export const validateGame = (game: ActiveGame, sideSize: number): string[] => {
   return errors;
 };
 
+export const validateSubstitutionPairs = (
+  game: ActiveGame,
+  pairs: SubstitutionPair[],
+): string[] => {
+  const errors: string[] = [];
+  if (pairs.length === 0) {
+    errors.push("Choose at least one substitution");
+    return errors;
+  }
+  const outIds = pairs.map((pair) => pair.outPlayerId);
+  const inIds = pairs.map((pair) => pair.inPlayerId);
+  if (new Set(outIds).size !== outIds.length) {
+    errors.push("Each outgoing player can only appear once");
+  }
+  if (new Set(inIds).size !== inIds.length) {
+    errors.push("Each incoming player can only appear once");
+  }
+  pairs.forEach((pair) => {
+    if (game.assignments[pair.positionId] !== pair.outPlayerId) {
+      errors.push("An outgoing player no longer occupies the planned position");
+    }
+    if (!game.benchIds.includes(pair.inPlayerId)) {
+      errors.push("An incoming player is no longer available on the bench");
+    }
+  });
+  return [...new Set(errors)];
+};
+
+export const queueSubstitutions = (
+  game: ActiveGame,
+  pairs: SubstitutionPair[],
+): ActiveGame => {
+  const errors = validateSubstitutionPairs(game, pairs);
+  if (errors.length) throw new Error(errors.join(". "));
+  return {
+    ...game,
+    queuedSubstitutions: pairs.map((pair) => ({ ...pair })),
+  };
+};
+
+export const cancelQueuedSubstitutions = (game: ActiveGame): ActiveGame => {
+  return { ...game, queuedSubstitutions: undefined };
+};
+
 export const applySubstitutions = (
   game: ActiveGame,
   pairs: SubstitutionPair[],
@@ -441,23 +696,10 @@ export const applySubstitutions = (
   now = Date.now(),
 ): ActiveGame => {
   const current = materializeGame(game, now);
-  if (pairs.length === 0) throw new Error("Choose at least one substitution");
+  const pairErrors = validateSubstitutionPairs(current, pairs);
+  if (pairErrors.length) throw new Error(pairErrors.join(". "));
   const outIds = pairs.map((pair) => pair.outPlayerId);
   const inIds = pairs.map((pair) => pair.inPlayerId);
-  if (
-    new Set(outIds).size !== outIds.length ||
-    new Set(inIds).size !== inIds.length
-  ) {
-    throw new Error("Each player can only appear in one swap");
-  }
-  pairs.forEach((pair) => {
-    if (current.assignments[pair.positionId] !== pair.outPlayerId) {
-      throw new Error("Outgoing player no longer occupies that position");
-    }
-    if (!current.benchIds.includes(pair.inPlayerId)) {
-      throw new Error("Incoming player is not available on the bench");
-    }
-  });
   const assignments = { ...current.assignments };
   pairs.forEach((pair) => {
     assignments[pair.positionId] = pair.inPlayerId;
@@ -469,6 +711,7 @@ export const applySubstitutions = (
     ...current,
     assignments,
     benchIds,
+    queuedSubstitutions: undefined,
     history: [
       ...current.history,
       {
@@ -503,6 +746,52 @@ export const undoLastEvent = (
     presentIds: event.beforePresentIds ?? current.presentIds,
     history: current.history.slice(0, -1),
   };
+};
+
+export const summarizePlayerPositions = (
+  game: ActiveGame,
+): PlayerGameSummary[] => {
+  const formation = getFormation(game.formationId);
+  const secondsByPlayer = new Map<string, Map<string, number>>();
+  const addInterval = (
+    assignments: Record<string, string>,
+    durationSeconds: number,
+  ) => {
+    if (durationSeconds <= 0) return;
+    Object.entries(assignments).forEach(([positionId, playerId]) => {
+      const positions = secondsByPlayer.get(playerId) ?? new Map();
+      positions.set(
+        positionId,
+        (positions.get(positionId) ?? 0) + durationSeconds,
+      );
+      secondsByPlayer.set(playerId, positions);
+    });
+  };
+
+  let previousSeconds = 0;
+  game.history.forEach((event) => {
+    const eventSeconds = Math.min(
+      game.clock.elapsedSeconds,
+      Math.max(previousSeconds, event.atSeconds),
+    );
+    addInterval(event.beforeAssignments, eventSeconds - previousSeconds);
+    previousSeconds = eventSeconds;
+  });
+  addInterval(game.assignments, game.clock.elapsedSeconds - previousSeconds);
+
+  return game.presentIds.map((playerId) => {
+    const positionSeconds = secondsByPlayer.get(playerId) ?? new Map();
+    return {
+      playerId,
+      totalSeconds: game.totals[playerId]?.fieldSeconds ?? 0,
+      positions: formation.positions
+        .map((positionItem) => ({
+          positionId: positionItem.id,
+          seconds: positionSeconds.get(positionItem.id) ?? 0,
+        }))
+        .filter((positionItem) => positionItem.seconds > 0),
+    };
+  });
 };
 
 export const movePlayer = (
