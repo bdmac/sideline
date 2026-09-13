@@ -11,10 +11,13 @@ import {
   getScore,
   INITIAL_TEAMS,
   markAvailable,
+  markUnavailable,
   materializeGame,
   movePlayer,
+  queueBenchSubstitution,
   queueSubstitutions,
   recordGoal,
+  removeQueuedSubstitution,
   setClockRunning,
   suggestSubstitutions,
   summarizePlayerPositions,
@@ -37,6 +40,37 @@ describe("formations", () => {
         (formation) => formation.name,
       ),
     ).toEqual(["3-1-3-1", "3-3-2", "3-2-3", "2-3-3"]);
+  });
+
+  it("keeps attacking lines clear of the goal area and in tactical order", () => {
+    FORMATIONS.forEach((formation) => {
+      const goalkeeper = formation.positions.find(
+        (position) => position.role === "goalkeeper",
+      )!;
+      const forwards = formation.positions.filter(
+        (position) => position.role === "forward",
+      );
+      const defenders = formation.positions.filter(
+        (position) => position.role === "defender",
+      );
+      const midfielders = formation.positions.filter(
+        (position) => position.role === "midfielder",
+      );
+
+      expect(goalkeeper.y).toBeGreaterThanOrEqual(88);
+      forwards.forEach((forward) => {
+        expect(forward.y).toBeGreaterThanOrEqual(18);
+        expect(forward.y).toBeLessThanOrEqual(25);
+      });
+      if (midfielders.length) {
+        expect(
+          Math.max(...forwards.map((position) => position.y)),
+        ).toBeLessThan(Math.min(...midfielders.map((position) => position.y)));
+        expect(
+          Math.max(...midfielders.map((position) => position.y)),
+        ).toBeLessThan(Math.min(...defenders.map((position) => position.y)));
+      }
+    });
   });
 });
 
@@ -398,6 +432,79 @@ describe("scorekeeping", () => {
 });
 
 describe("substitutions", () => {
+  it("adds or updates one bench player inside the queued batch", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const initialPairs = suggestSubstitutions(game, 2, team);
+    const queued = queueSubstitutions(game, initialPairs);
+    const incomingPlayerId = game.benchIds[2];
+    const replacementOutId = initialPairs[0].outPlayerId;
+    const updated = queueBenchSubstitution(
+      queued,
+      incomingPlayerId,
+      replacementOutId,
+    );
+
+    expect(updated.assignments).toEqual(game.assignments);
+    expect(updated.queuedSubstitutions).toHaveLength(2);
+    expect(updated.queuedSubstitutions).toContainEqual(initialPairs[1]);
+    expect(updated.queuedSubstitutions).toContainEqual({
+      inPlayerId: incomingPlayerId,
+      outPlayerId: replacementOutId,
+      positionId: initialPairs[0].positionId,
+    });
+  });
+
+  it("removes one bench player without clearing the rest of the queued batch", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const pairs = suggestSubstitutions(game, 2, team);
+    const queued = queueSubstitutions(game, pairs);
+    const updated = removeQueuedSubstitution(queued, pairs[0].inPlayerId);
+
+    expect(updated.queuedSubstitutions).toEqual([pairs[1]]);
+    expect(
+      removeQueuedSubstitution(updated, pairs[1].inPlayerId)
+        .queuedSubstitutions,
+    ).toBeUndefined();
+  });
+
+  it("removes an unavailable bench player from the queued batch", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const pairs = suggestSubstitutions(game, 2, team);
+    const queued = queueSubstitutions(game, pairs);
+    const unavailable = markUnavailable(
+      queued,
+      pairs[0].inPlayerId,
+      team.sideSize,
+      2_000,
+    );
+
+    expect(unavailable.queuedSubstitutions).toEqual([pairs[1]]);
+    expect(undoLastEvent(unavailable, 3_000).queuedSubstitutions).toEqual(
+      pairs,
+    );
+  });
+
   it("queues substitutions without changing the lineup or time totals", () => {
     const team = INITIAL_TEAMS.u8;
     const game = createGame(

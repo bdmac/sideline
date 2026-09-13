@@ -82,6 +82,7 @@ export type GameEvent = {
   beforeBenchIds: string[];
   beforeUnavailableIds: string[];
   beforePresentIds?: string[];
+  beforeQueuedSubstitutions?: SubstitutionPair[];
 };
 
 export type ActiveGame = {

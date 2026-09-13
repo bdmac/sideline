@@ -7,7 +7,12 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { createGame, INITIAL_STATE } from "./domain";
+import {
+  createGame,
+  INITIAL_STATE,
+  queueSubstitutions,
+  suggestSubstitutions,
+} from "./domain";
 import { STORAGE_KEY } from "./storage";
 
 const startGame = () => {
@@ -449,6 +454,37 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
+  it("re-optimizes untouched suggestions when the swap count decreases", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const [firstLongBench, secondLongBench, ...shortBench] = game.benchIds;
+    game.totals[firstLongBench].benchSeconds = 30 * 60;
+    game.totals[secondLongBench].benchSeconds = 30 * 60;
+    shortBench.forEach((playerId) => {
+      game.totals[playerId].benchSeconds = 60;
+    });
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    fireEvent.click(within(planner).getByRole("button", { name: "2" }));
+
+    expect(
+      within(planner)
+        .getAllByLabelText("IN")
+        .map((select) => (select as HTMLSelectElement).value),
+    ).toEqual(expect.arrayContaining([firstLongBench, secondLongBench]));
+  });
+
   it("keeps a queued plan accessible from the live game until cancelled", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -463,7 +499,15 @@ describe("Sideline app", () => {
 
     expect(screen.getByText("4 substitutions queued")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Queued subs" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete plan" }));
+
+    const confirmation = screen.getByRole("alertdialog", {
+      name: "Delete queued plan?",
+    });
+    expect(screen.getByText("4 substitutions queued")).toBeInTheDocument();
+    fireEvent.click(
+      within(confirmation).getByRole("button", { name: "Delete plan" }),
+    );
 
     expect(
       screen.queryByText("4 substitutions queued"),
@@ -471,6 +515,109 @@ describe("Sideline app", () => {
     expect(
       screen.getByRole("button", { name: "Plan subs" }),
     ).toBeInTheDocument();
+  });
+
+  it("queues and edits one substitution directly from a bench player", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+
+    fireEvent.click(screen.getByRole("button", { name: "Queue Dylan" }));
+    const firstPicker = screen.getByRole("dialog", { name: "Queue #4 Dylan" });
+    expect(firstPicker).toHaveTextContent(
+      "Preferred rolesDefense · Goalkeeper",
+    );
+    fireEvent.click(
+      within(firstPicker).getByRole("button", {
+        name: /#10 Simon.*Goalkeeper/,
+      }),
+    );
+
+    expect(screen.getByText("1 substitution queued")).toBeInTheDocument();
+    expect(screen.getByText("Queued for GK")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Substitutions queued" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Queued subs" }));
+
+    let queued = screen.getByRole("dialog", {
+      name: "Substitutions queued",
+    });
+    expect(queued).toHaveTextContent("#10 Simon");
+    expect(queued).toHaveTextContent("#4 Dylan");
+    fireEvent.click(within(queued).getByRole("button", { name: "Edit plan" }));
+
+    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    expect(within(planner).getByLabelText("OUT")).toHaveDisplayValue(
+      /Simon · GK/,
+    );
+    expect(within(planner).getByLabelText("IN")).toHaveDisplayValue(/Dylan ·/);
+    fireEvent.click(within(planner).getByRole("button", { name: "2" }));
+    fireEvent.click(within(planner).getByRole("button", { name: "1" }));
+    expect(within(planner).getByLabelText("OUT")).toHaveDisplayValue(
+      /Simon · GK/,
+    );
+    expect(within(planner).getByLabelText("IN")).toHaveDisplayValue(/Dylan ·/);
+    fireEvent.click(within(planner).getByRole("button", { name: "Close" }));
+
+    expect(screen.getByText("Queued for GK")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Edit queued substitution for Dylan",
+      }),
+    );
+    const editPicker = screen.getByRole("dialog", { name: "Queue #4 Dylan" });
+    fireEvent.click(
+      within(editPicker).getByRole("button", {
+        name: /#7 Noah.*Center Back/,
+      }),
+    );
+
+    expect(
+      screen.queryByRole("dialog", { name: "Substitutions queued" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Queued for CB")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Queued subs" }));
+    queued = screen.getByRole("dialog", { name: "Substitutions queued" });
+    expect(queued).toHaveTextContent("#7 Noah");
+    expect(queued).toHaveTextContent("#4 Dylan");
+    expect(screen.getByText("1 substitution queued")).toBeInTheDocument();
+    fireEvent.click(within(queued).getByRole("button", { name: "Close" }));
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Edit queued substitution for Dylan",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove from queue" }));
+
+    expect(screen.queryByText(/Queued for/)).not.toBeInTheDocument();
+    expect(screen.queryByText("1 substitution queued")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Queue Dylan" }),
+    ).toBeInTheDocument();
+  });
+
+  it("removes a queued bench player when they become unavailable", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+
+    fireEvent.click(screen.getByRole("button", { name: "Queue Dylan" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Queue #4 Dylan" })).getByRole(
+        "button",
+        { name: /#10 Simon.*Goalkeeper/ },
+      ),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mark Dylan unavailable" }),
+    );
+
+    expect(screen.getByText("Dylan unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/Queued for/)).not.toBeInTheDocument();
+    expect(screen.queryByText("1 substitution queued")).not.toBeInTheDocument();
   });
 
   it("tracks our scorer, opponent goals, and the final score", () => {
@@ -571,7 +718,7 @@ describe("Sideline app", () => {
     const breakBanner = screen.getByLabelText("End of Quarter 1");
     expect(breakBanner).toHaveTextContent("Clock paused at 10:00");
     expect(
-      within(breakBanner).getByRole("button", { name: "Plan rotation" }),
+      within(breakBanner).getByRole("button", { name: "Plan subs" }),
     ).toBeInTheDocument();
     fireEvent.click(
       within(breakBanner).getByRole("button", { name: "Start Quarter 2" }),
@@ -579,6 +726,42 @@ describe("Sideline app", () => {
 
     expect(screen.queryByLabelText("End of Quarter 1")).not.toBeInTheDocument();
     expect(screen.getByText("Clock running")).toBeInTheDocument();
+  });
+
+  it("consolidates queued substitutions into the period-break banner", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = {
+      elapsedSeconds: 10 * 60,
+      running: false,
+      lastStartedAt: null,
+    };
+    game.periodBreak = { completedPeriod: 1, final: false };
+    game = queueSubstitutions(game, suggestSubstitutions(game, 2, team));
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    const breakBanner = screen.getByLabelText("End of Quarter 1");
+    expect(breakBanner).toHaveTextContent("2 substitutions queued");
+    expect(
+      within(breakBanner).getByRole("button", { name: "Review & execute" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Queued substitutions"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      within(breakBanner).getByRole("button", { name: "Start Quarter 2" }),
+    );
+    expect(screen.getByLabelText("Queued substitutions")).toBeInTheDocument();
   });
 
   it("shows the effective substitution after an on-field player becomes unavailable", () => {

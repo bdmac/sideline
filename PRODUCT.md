@@ -21,6 +21,7 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 - Player field and bench time accrue only while the game clock runs.
 - Fair substitution suggestions prioritize players with the most bench time coming in and players with the most field time going out.
 - Substitution planning defaults to rotating the full available bench, capped by the number of players on the field. Coaches can reduce the number of swaps and may override every suggestion.
+- Changing the requested swap count re-optimizes untouched suggestions so the longest-benched eligible players remain first. Once the coach has selected or queued specific pairs, count changes preserve those choices and add or trim only the surrounding suggestions.
 - A confirmed substitution is atomic: no duplicate assignment, no player both on field and bench, and no accidental change in the valid field count.
 - After a planned substitution or an automatic replacement for an unavailable on-field player, a substitution-ready sheet shows the numbered OUT / IN pairs and affected positions so the coach can organize players before play resumes.
 - The latest confirmed substitution or unavailable-player event can be undone.
@@ -30,12 +31,14 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 - The live game tracks a simple score. A coach records an own-team goal by choosing only from players currently on the field, or records an opponent goal without additional details. Goals carry the live timestamp, appear in the game log, participate in undo, persist with the active game, and produce the final score on the game summary.
 - The mobile control dock prioritizes Clock, Substitutions, Positions, and Score. Undo remains available inside the expanded game log.
 - On phones, the expanded team, clock, and score header compacts into one sticky match-status row while scrolling, preserving the team, elapsed time, score, and End Game action.
-- The clock automatically pauses exactly at quarter and halftime boundaries, persists the break across refreshes, and presents rotation planning (or queued-plan review) plus an explicit start-next-period action. Regulation time also pauses automatically and prompts the coach to end the game; the coach may continue the clock when needed.
+- The clock automatically pauses exactly at quarter and halftime boundaries, persists the break across refreshes, and presents substitution planning (or queued-plan review) plus an explicit start-next-period action. Regulation time also pauses automatically and prompts the coach to end the game; the coach may continue the clock when needed.
 - Marking an on-field player unavailable uses the fairest available bench replacement; if none exists, the open position is explicit.
 - Players not marked as attending begin the game as unavailable rather than disappearing. A late arrival can be marked available and joins the bench, or fills an open position automatically when the team is short-sided.
 - When a newly available player fills an open position, a player-ready sheet identifies the numbered player and their assigned position before play continues.
 - Ending a game pauses and materializes the clock, then shows a per-player summary of every position played, time at each position, and total playing time before the active game is cleared. The same confirmed-event game log appears below the player summary in a collapsed disclosure.
 - Substitution planning is a persistent two-phase workflow. Queueing a plan does not change the lineup or timers; the live screen keeps the plan visible and editable until the coach executes every swap atomically at the actual substitution time. Stale plans remain visible but cannot execute until repaired or cancelled.
+- Each available bench player has a direct queue action. It shows that player’s preferred roles and lets the coach choose one current on-field player to replace; the resulting single swap starts a queue or updates that player within the existing queued batch without rebuilding unrelated swaps. Completing this focused action returns directly to the live game so the coach can continue working down the bench; full queued-plan review opens only on explicit request.
+- Marking a queued bench player unavailable automatically removes that player’s swap while preserving every unaffected pair in the plan. Undoing the availability change restores the prior queued plan.
 - Ending an active game requires confirmation.
 - The home screen offers installation whenever Sideline is running in a browser. Supported browsers open their native install prompt; iPhone and iPad users receive concise Add to Home Screen instructions.
 

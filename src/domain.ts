@@ -30,7 +30,7 @@ export const FORMATIONS: Formation[] = [
       position("dl", "Center Back", "CB", 50, 66, "defender"),
       position("dr", "Left Midfielder", "LM", 30, 42, "midfielder"),
       position("m", "Right Midfielder", "RM", 70, 42, "midfielder"),
-      position("f", "Striker", "ST", 50, 16, "forward"),
+      position("f", "Striker", "ST", 50, 22, "forward"),
     ],
   },
   {
@@ -41,8 +41,8 @@ export const FORMATIONS: Formation[] = [
       position("gk", "Goalkeeper", "GK", 50, 90, "goalkeeper"),
       position("dl", "Left Back", "LB", 30, 64, "defender"),
       position("dr", "Right Back", "RB", 70, 64, "defender"),
-      position("fl", "Left Striker", "LS", 30, 25, "forward"),
-      position("fr", "Right Striker", "RS", 70, 25, "forward"),
+      position("fl", "Left Striker", "LS", 30, 24, "forward"),
+      position("fr", "Right Striker", "RS", 70, 24, "forward"),
     ],
   },
   {
@@ -53,8 +53,8 @@ export const FORMATIONS: Formation[] = [
       position("gk", "Goalkeeper", "GK", 50, 90, "goalkeeper"),
       position("d", "Center Back", "CB", 50, 66, "defender"),
       position("m", "Center Midfielder", "CM", 50, 46, "midfielder"),
-      position("fl", "Left Striker", "LS", 30, 20, "forward"),
-      position("fr", "Right Striker", "RS", 70, 20, "forward"),
+      position("fl", "Left Striker", "LS", 30, 24, "forward"),
+      position("fr", "Right Striker", "RS", 70, 24, "forward"),
     ],
   },
   {
@@ -69,8 +69,8 @@ export const FORMATIONS: Formation[] = [
       position("ml", "Left Midfielder", "LM", 20, 48, "midfielder"),
       position("mc", "Center Midfielder", "CM", 50, 50, "midfielder"),
       position("mr", "Right Midfielder", "RM", 80, 48, "midfielder"),
-      position("fl", "Left Striker", "LS", 36, 20, "forward"),
-      position("fr", "Right Striker", "RS", 64, 20, "forward"),
+      position("fl", "Left Striker", "LS", 36, 23, "forward"),
+      position("fr", "Right Striker", "RS", 64, 23, "forward"),
     ],
   },
   {
@@ -84,9 +84,9 @@ export const FORMATIONS: Formation[] = [
       position("dr", "Right Back", "RB", 80, 74, "defender"),
       position("ml", "Left Center Midfielder", "LCM", 35, 49, "midfielder"),
       position("mr", "Right Center Midfielder", "RCM", 65, 49, "midfielder"),
-      position("fl", "Left Winger", "LW", 18, 20, "forward"),
-      position("fc", "Striker", "ST", 50, 16, "forward"),
-      position("fr", "Right Winger", "RW", 82, 20, "forward"),
+      position("fl", "Left Winger", "LW", 18, 23, "forward"),
+      position("fc", "Striker", "ST", 50, 19, "forward"),
+      position("fr", "Right Winger", "RW", 82, 23, "forward"),
     ],
   },
   {
@@ -100,9 +100,9 @@ export const FORMATIONS: Formation[] = [
       position("ml", "Left Midfielder", "LM", 20, 49, "midfielder"),
       position("mc", "Center Midfielder", "CM", 50, 52, "midfielder"),
       position("mr", "Right Midfielder", "RM", 80, 49, "midfielder"),
-      position("fl", "Left Winger", "LW", 18, 20, "forward"),
-      position("fc", "Striker", "ST", 50, 16, "forward"),
-      position("fr", "Right Winger", "RW", 82, 20, "forward"),
+      position("fl", "Left Winger", "LW", 18, 23, "forward"),
+      position("fc", "Striker", "ST", 50, 19, "forward"),
+      position("fr", "Right Winger", "RW", 82, 23, "forward"),
     ],
   },
   {
@@ -118,7 +118,7 @@ export const FORMATIONS: Formation[] = [
       position("ml", "Left Midfielder", "LM", 20, 42, "midfielder"),
       position("mc", "Center Midfielder", "CM", 50, 44, "midfielder"),
       position("mr", "Right Midfielder", "RM", 80, 42, "midfielder"),
-      position("f", "Striker", "ST", 50, 15, "forward"),
+      position("f", "Striker", "ST", 50, 20, "forward"),
     ],
   },
 ];
@@ -685,6 +685,48 @@ export const queueSubstitutions = (
   };
 };
 
+export const queueBenchSubstitution = (
+  game: ActiveGame,
+  inPlayerId: string,
+  outPlayerId: string,
+): ActiveGame => {
+  if (!game.benchIds.includes(inPlayerId)) {
+    throw new Error("Incoming player is no longer available on the bench");
+  }
+  const positionId = Object.entries(game.assignments).find(
+    ([, playerId]) => playerId === outPlayerId,
+  )?.[0];
+  if (!positionId) {
+    throw new Error("Outgoing player is no longer on the field");
+  }
+  const existingPairs = game.queuedSubstitutions ?? [];
+  const nextPairs = existingPairs.filter(
+    (pair) =>
+      pair.inPlayerId !== inPlayerId &&
+      pair.outPlayerId !== outPlayerId &&
+      pair.positionId !== positionId,
+  );
+  nextPairs.push({ inPlayerId, outPlayerId, positionId });
+  return queueSubstitutions(game, nextPairs);
+};
+
+export const removeQueuedSubstitution = (
+  game: ActiveGame,
+  inPlayerId: string,
+): ActiveGame => {
+  const existingPairs = game.queuedSubstitutions ?? [];
+  const nextPairs = existingPairs.filter(
+    (pair) => pair.inPlayerId !== inPlayerId,
+  );
+  if (nextPairs.length === existingPairs.length) {
+    throw new Error("Player is not in the queued substitution plan");
+  }
+  return {
+    ...game,
+    queuedSubstitutions: nextPairs.length ? nextPairs : undefined,
+  };
+};
+
 export const cancelQueuedSubstitutions = (game: ActiveGame): ActiveGame => {
   return { ...game, queuedSubstitutions: undefined };
 };
@@ -744,6 +786,8 @@ export const undoLastEvent = (
     benchIds: event.beforeBenchIds,
     unavailableIds: event.beforeUnavailableIds,
     presentIds: event.beforePresentIds ?? current.presentIds,
+    queuedSubstitutions:
+      event.beforeQueuedSubstitutions ?? current.queuedSubstitutions,
     history: current.history.slice(0, -1),
   };
 };
@@ -881,11 +925,21 @@ export const markUnavailable = (
       note = "Player unavailable; no replacement available";
     }
   }
+  const queuedSubstitutions = current.queuedSubstitutions
+    ?.filter(
+      (pair) =>
+        benchIds.includes(pair.inPlayerId) &&
+        assignments[pair.positionId] === pair.outPlayerId,
+    )
+    .map((pair) => ({ ...pair }));
   const next: ActiveGame = {
     ...current,
     assignments,
     benchIds,
     unavailableIds: [...current.unavailableIds, playerId],
+    queuedSubstitutions: queuedSubstitutions?.length
+      ? queuedSubstitutions
+      : undefined,
     history: [
       ...current.history,
       {
@@ -899,6 +953,9 @@ export const markUnavailable = (
         beforeBenchIds,
         beforeUnavailableIds,
         beforePresentIds: current.presentIds,
+        beforeQueuedSubstitutions: current.queuedSubstitutions?.map((pair) => ({
+          ...pair,
+        })),
       },
     ],
   };

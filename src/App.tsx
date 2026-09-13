@@ -13,6 +13,7 @@ import {
   RotateCcw,
   ShieldCheck,
   Square,
+  Trash2,
   UserRoundX,
   X,
 } from "lucide-react";
@@ -41,8 +42,10 @@ import {
   markUnavailable,
   materializeGame,
   movePlayer,
+  queueBenchSubstitution,
   queueSubstitutions,
   recordGoal,
+  removeQueuedSubstitution,
   setClockRunning,
   suggestSubstitutions,
   summarizePlayerPositions,
@@ -835,6 +838,9 @@ function LiveGameScreen({
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [queuedPlanOpen, setQueuedPlanOpen] = useState(false);
   const [goalScorerOpen, setGoalScorerOpen] = useState(false);
+  const [benchQueuePlayerId, setBenchQueuePlayerId] = useState<string | null>(
+    null,
+  );
   const [confirmedPairs, setConfirmedPairs] = useState<
     SubstitutionPair[] | null
   >(null);
@@ -1094,6 +1100,12 @@ function LiveGameScreen({
             <small>
               Clock paused at {formatDuration(displayed.clock.elapsedSeconds)}
             </small>
+            {!periodBreak.final && queuedPairs.length > 0 && (
+              <small className="period-break-queue-status">
+                {queuedPairs.length} substitution
+                {queuedPairs.length === 1 ? "" : "s"} queued
+              </small>
+            )}
           </span>
           <div>
             {!periodBreak.final &&
@@ -1104,7 +1116,7 @@ function LiveGameScreen({
                   onClick={() => setQueuedPlanOpen(true)}
                 >
                   <ArrowRightLeft size={18} aria-hidden="true" />
-                  Review queued subs
+                  {queuedPlanErrors.length ? "Review plan" : "Review & execute"}
                 </button>
               ) : game.benchIds.length > 0 ? (
                 <button
@@ -1113,7 +1125,7 @@ function LiveGameScreen({
                   onClick={() => setPlannerOpen(true)}
                 >
                   <ArrowRightLeft size={18} aria-hidden="true" />
-                  Plan rotation
+                  Plan subs
                 </button>
               ) : null)}
             <button
@@ -1157,7 +1169,7 @@ function LiveGameScreen({
           {validationErrors.join(". ")}
         </div>
       )}
-      {queuedPairs.length > 0 && (
+      {queuedPairs.length > 0 && !periodBreak && (
         <section
           className={`queued-substitution-banner ${
             queuedPlanErrors.length ? "invalid" : ""
@@ -1230,17 +1242,27 @@ function LiveGameScreen({
           </div>
           {game.benchIds.length ? (
             <div className="bench-list">
-              {game.benchIds.map((id) => (
-                <PlayerTimeRow
-                  key={id}
-                  player={team.roster.find((player) => player.id === id)!}
-                  primaryTime={displayed.totals[id]?.benchSeconds ?? 0}
-                  primaryLabel="bench"
-                  secondaryTime={displayed.totals[id]?.fieldSeconds ?? 0}
-                  secondaryLabel="played"
-                  onUnavailable={() => handleUnavailable(id)}
-                />
-              ))}
+              {game.benchIds.map((id) => {
+                const queuedPair = queuedPairs.find(
+                  (pair) => pair.inPlayerId === id,
+                );
+                const queuedPosition = formation.positions.find(
+                  (position) => position.id === queuedPair?.positionId,
+                );
+                return (
+                  <PlayerTimeRow
+                    key={id}
+                    player={team.roster.find((player) => player.id === id)!}
+                    primaryTime={displayed.totals[id]?.benchSeconds ?? 0}
+                    primaryLabel="bench"
+                    secondaryTime={displayed.totals[id]?.fieldSeconds ?? 0}
+                    secondaryLabel="played"
+                    queuedPositionLabel={queuedPosition?.shortLabel}
+                    onQueue={() => setBenchQueuePlayerId(id)}
+                    onUnavailable={() => handleUnavailable(id)}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="bench-empty">
@@ -1386,6 +1408,32 @@ function LiveGameScreen({
               )
             ) {
               setGoalScorerOpen(false);
+            }
+          }}
+        />
+      )}
+      {benchQueuePlayerId && (
+        <BenchSubstitutionPicker
+          playerId={benchQueuePlayerId}
+          game={displayed}
+          team={team}
+          onClose={() => setBenchQueuePlayerId(null)}
+          onSelect={(outPlayerId) => {
+            if (
+              safeChange(() =>
+                queueBenchSubstitution(game, benchQueuePlayerId, outPlayerId),
+              )
+            ) {
+              setBenchQueuePlayerId(null);
+            }
+          }}
+          onRemove={() => {
+            if (
+              safeChange(() =>
+                removeQueuedSubstitution(game, benchQueuePlayerId),
+              )
+            ) {
+              setBenchQueuePlayerId(null);
             }
           }}
         />
@@ -1545,6 +1593,12 @@ function Pitch({
       <div className="pitch-circle" aria-hidden="true" />
       <div className="pitch-box top" aria-hidden="true" />
       <div className="pitch-box bottom" aria-hidden="true" />
+      <span className="pitch-direction attack" aria-hidden="true">
+        Attack
+      </span>
+      <span className="pitch-direction defend" aria-hidden="true">
+        Defend
+      </span>
       {formation.positions.map((position) => {
         const playerId = assignments[position.id];
         const player = team.roster.find((item) => item.id === playerId);
@@ -1678,6 +1732,12 @@ function StarterPitch({
       <div className="pitch-circle" aria-hidden="true" />
       <div className="pitch-box top" aria-hidden="true" />
       <div className="pitch-box bottom" aria-hidden="true" />
+      <span className="pitch-direction attack" aria-hidden="true">
+        Attack
+      </span>
+      <span className="pitch-direction defend" aria-hidden="true">
+        Defend
+      </span>
       {formation.positions.map((position) => {
         const playerId = assignments[position.id];
         const player = team.roster.find((item) => item.id === playerId);
@@ -1878,12 +1938,128 @@ function GoalScorerPicker({
   );
 }
 
+function BenchSubstitutionPicker({
+  playerId,
+  game,
+  team,
+  onClose,
+  onSelect,
+  onRemove,
+}: {
+  playerId: string;
+  game: ActiveGame;
+  team: Team;
+  onClose: () => void;
+  onSelect: (outPlayerId: string) => void;
+  onRemove: () => void;
+}) {
+  const player = team.roster.find((item) => item.id === playerId);
+  if (!player) return null;
+  const formation = getFormation(game.formationId);
+  const currentPair = game.queuedSubstitutions?.find(
+    (pair) => pair.inPlayerId === playerId,
+  );
+  const choices = Object.entries(game.assignments)
+    .map(([positionId, outPlayerId], formationIndex) => {
+      const position = formation.positions.find(
+        (item) => item.id === positionId,
+      )!;
+      const preferenceIndex = player.preferredRoles.indexOf(position.role);
+      return {
+        position,
+        outPlayerId,
+        formationIndex,
+        preferenceIndex:
+          preferenceIndex === -1 ? Number.POSITIVE_INFINITY : preferenceIndex,
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.preferenceIndex - b.preferenceIndex ||
+        a.formationIndex - b.formationIndex,
+    );
+
+  return (
+    <ModalBackdrop>
+      <section
+        className="bottom-sheet compact-sheet bench-substitution-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bench-substitution-title"
+      >
+        <header className="sheet-header">
+          <div>
+            <h2 id="bench-substitution-title">
+              Queue {playerLabel(team, playerId)}
+            </h2>
+            <p>Choose the player they will replace.</p>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={22} />
+          </button>
+        </header>
+
+        <div className="bench-player-preferences">
+          <small>Preferred roles</small>
+          <strong>
+            {player.preferredRoles.map(preferredRoleLabel).join(" · ")}
+          </strong>
+        </div>
+
+        <div className="bench-replacement-list">
+          {choices.map(({ position, outPlayerId, preferenceIndex }) => (
+            <button
+              className={
+                currentPair?.outPlayerId === outPlayerId ? "selected" : ""
+              }
+              type="button"
+              key={outPlayerId}
+              aria-pressed={currentPair?.outPlayerId === outPlayerId}
+              onClick={() => onSelect(outPlayerId)}
+            >
+              <span>
+                <strong>{playerLabel(team, outPlayerId)}</strong>
+                <small>{position.label}</small>
+              </span>
+              <span className="replacement-fit">
+                {Number.isFinite(preferenceIndex)
+                  ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
+                  : "Other role"}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {currentPair && (
+          <div className="bench-picker-actions">
+            <button
+              className="secondary-action remove-from-plan-action"
+              type="button"
+              onClick={onRemove}
+            >
+              <Trash2 size={18} aria-hidden="true" />
+              Remove from queue
+            </button>
+          </div>
+        )}
+      </section>
+    </ModalBackdrop>
+  );
+}
+
 function PlayerTimeRow({
   player,
   primaryTime,
   primaryLabel,
   secondaryTime,
   secondaryLabel,
+  queuedPositionLabel,
+  onQueue,
   onUnavailable,
 }: {
   player: Player;
@@ -1891,30 +2067,54 @@ function PlayerTimeRow({
   primaryLabel: string;
   secondaryTime: number;
   secondaryLabel: string;
+  queuedPositionLabel?: string;
+  onQueue: () => void;
   onUnavailable: () => void;
 }) {
+  const queued = Boolean(queuedPositionLabel);
   return (
-    <div className="player-time-row">
+    <div className={`player-time-row ${queued ? "queued" : ""}`}>
       <span className="player-number">{player.number ?? "–"}</span>
       <span className="player-time-name">
         <strong>{player.name}</strong>
         <small>
           {formatDuration(secondaryTime)} {secondaryLabel}
         </small>
+        {queued && (
+          <span className="bench-queue-status">
+            <Check size={12} aria-hidden="true" />
+            Queued for {queuedPositionLabel}
+          </span>
+        )}
       </span>
       <span className="primary-time">
         <strong>{formatDuration(primaryTime)}</strong>
         <small>{primaryLabel}</small>
       </span>
-      <button
-        className="icon-button"
-        type="button"
-        onClick={onUnavailable}
-        aria-label={`Mark ${player.name} unavailable`}
-        title={`Mark ${player.name} unavailable`}
-      >
-        <UserRoundX size={20} />
-      </button>
+      <span className="player-row-actions">
+        <button
+          className={`icon-button queue-player-button ${queued ? "queued" : ""}`}
+          type="button"
+          onClick={onQueue}
+          aria-label={`${queued ? "Edit queued substitution for" : "Queue"} ${player.name}`}
+          title={`${queued ? "Edit queued substitution for" : "Queue"} ${player.name}`}
+        >
+          {queued ? (
+            <Pencil size={19} aria-hidden="true" />
+          ) : (
+            <ArrowRightLeft size={20} aria-hidden="true" />
+          )}
+        </button>
+        <button
+          className="icon-button"
+          type="button"
+          onClick={onUnavailable}
+          aria-label={`Mark ${player.name} unavailable`}
+          title={`Mark ${player.name} unavailable`}
+        >
+          <UserRoundX size={20} />
+        </button>
+      </span>
     </div>
   );
 }
@@ -1943,18 +2143,52 @@ function SubstitutionPlanner({
       initialPairs?.map((pair) => ({ ...pair })) ??
       suggestSubstitutions(game, maxCount, team),
   );
+  const [hasCoachSelections, setHasCoachSelections] = useState(
+    Boolean(initialPairs?.length),
+  );
   const formation = getFormation(game.formationId);
 
   const changeCount = (nextCount: number) => {
     setCount(nextCount);
-    setPairs(suggestSubstitutions(game, nextCount, team));
+    if (!hasCoachSelections) {
+      setPairs(suggestSubstitutions(game, nextCount, team));
+      return;
+    }
+    setPairs((current) => {
+      if (nextCount <= current.length) {
+        return current.slice(0, nextCount);
+      }
+
+      const selectedOutIds = new Set(current.map((pair) => pair.outPlayerId));
+      const selectedInIds = new Set(current.map((pair) => pair.inPlayerId));
+      const remainingGame = {
+        ...game,
+        assignments: Object.fromEntries(
+          Object.entries(game.assignments).filter(
+            ([, playerId]) => !selectedOutIds.has(playerId),
+          ),
+        ),
+        benchIds: game.benchIds.filter(
+          (playerId) => !selectedInIds.has(playerId),
+        ),
+      };
+      const additionalPairs = suggestSubstitutions(
+        remainingGame,
+        nextCount - current.length,
+        team,
+      );
+
+      return [...current, ...additionalPairs];
+    });
   };
-  const updatePair = (index: number, patch: Partial<SubstitutionPair>) =>
+  const updatePair = (index: number, patch: Partial<SubstitutionPair>) => {
+    setHasCoachSelections(true);
     setPairs((current) =>
       current.map((pair, pairIndex) =>
         pairIndex === index ? { ...pair, ...patch } : pair,
       ),
     );
+  };
   const duplicateOuts =
     new Set(pairs.map((pair) => pair.outPlayerId)).size !== pairs.length;
   const duplicateIns =
@@ -2164,6 +2398,22 @@ function QueuedSubstitutionSummary({
   onCancel: () => void;
   onExecute: () => void;
 }) {
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  if (deleteConfirm) {
+    return (
+      <ConfirmSheet
+        title="Delete queued plan?"
+        body="This removes every queued swap. Players and playing time will not change."
+        cancelLabel="Keep plan"
+        confirmLabel="Delete plan"
+        confirmIcon={<Trash2 size={18} aria-hidden="true" />}
+        onCancel={() => setDeleteConfirm(false)}
+        onConfirm={onCancel}
+      />
+    );
+  }
+
   return (
     <ModalBackdrop>
       <section
@@ -2208,12 +2458,12 @@ function QueuedSubstitutionSummary({
             Edit plan
           </button>
           <button
-            className="secondary-action cancel-plan-action"
+            className="danger-action delete-plan-action"
             type="button"
-            onClick={onCancel}
+            onClick={() => setDeleteConfirm(true)}
           >
-            <X size={18} aria-hidden="true" />
-            Cancel plan
+            <Trash2 size={18} aria-hidden="true" />
+            Delete plan
           </button>
           <button
             className="sub-confirm"
@@ -2628,13 +2878,17 @@ function PositionEditor({
 function ConfirmSheet({
   title,
   body,
+  cancelLabel = "Keep game",
   confirmLabel,
+  confirmIcon = <Square size={18} aria-hidden="true" />,
   onCancel,
   onConfirm,
 }: {
   title: string;
   body: string;
+  cancelLabel?: string;
   confirmLabel: string;
+  confirmIcon?: ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -2651,10 +2905,10 @@ function ConfirmSheet({
         <p id="confirm-body">{body}</p>
         <div className="sheet-actions">
           <button className="secondary-action" type="button" onClick={onCancel}>
-            Keep game
+            {cancelLabel}
           </button>
           <button className="danger-action" type="button" onClick={onConfirm}>
-            <Square size={18} aria-hidden="true" /> {confirmLabel}
+            {confirmIcon} {confirmLabel}
           </button>
         </div>
       </section>
