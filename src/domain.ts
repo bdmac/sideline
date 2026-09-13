@@ -547,14 +547,32 @@ export const suggestSubstitutions = (
   count: number,
   team: Team,
 ): SubstitutionPair[] => {
+  const formation = getFormation(game.formationId);
+  const goalkeeperPosition = formation.positions.find(
+    (positionItem) => positionItem.role === "goalkeeper",
+  );
+  const goalkeeperId = goalkeeperPosition
+    ? game.assignments[goalkeeperPosition.id]
+    : undefined;
+  const isGoalkeeper = (playerId: string) =>
+    team.roster
+      .find((player) => player.id === playerId)
+      ?.preferredRoles.includes("goalkeeper") ?? false;
+  const availableGoalkeeperIds = [
+    ...Object.values(game.assignments),
+    ...game.benchIds,
+  ].filter(
+    (playerId) =>
+      !game.unavailableIds.includes(playerId) && isGoalkeeper(playerId),
+  );
   const bench = game.benchIds
     .filter((id) => !game.unavailableIds.includes(id))
     .sort(
       (a, b) =>
-        (game.totals[b]?.benchSeconds ?? 0) -
-          (game.totals[a]?.benchSeconds ?? 0) ||
         (game.totals[a]?.fieldSeconds ?? 0) -
           (game.totals[b]?.fieldSeconds ?? 0) ||
+        (game.totals[b]?.benchSeconds ?? 0) -
+          (game.totals[a]?.benchSeconds ?? 0) ||
         a.localeCompare(b),
     );
   const substitutionCount = Math.min(
@@ -562,19 +580,69 @@ export const suggestSubstitutions = (
     Object.keys(game.assignments).length,
     bench.length,
   );
-  const incomingIds = bench.slice(0, substitutionCount);
-  const formation = getFormation(game.formationId);
+  const benchGoalkeepers = bench.filter(isGoalkeeper);
+  const goalkeeperCandidate = benchGoalkeepers[0];
+  const shouldRotateGoalkeeper =
+    Boolean(goalkeeperPosition && goalkeeperCandidate && goalkeeperId) &&
+    (!isGoalkeeper(goalkeeperId!) ||
+      (game.totals[goalkeeperCandidate]?.fieldSeconds ?? 0) <
+        (game.totals[goalkeeperId!]?.fieldSeconds ?? 0));
+  const currentOutfieldGoalkeeperCount = Object.entries(
+    game.assignments,
+  ).filter(
+    ([positionId, playerId]) =>
+      positionId !== goalkeeperPosition?.id && isGoalkeeper(playerId),
+  ).length;
+  const allowedOutfieldGoalkeeperCount = Math.max(
+    0,
+    availableGoalkeeperIds.length - 2 - currentOutfieldGoalkeeperCount,
+  );
+  const outfieldGoalkeepers = benchGoalkeepers
+    .filter((playerId) => playerId !== goalkeeperCandidate)
+    .slice(0, allowedOutfieldGoalkeeperCount);
+  const preferredOutfieldBench = bench.filter(
+    (playerId) =>
+      !isGoalkeeper(playerId) || outfieldGoalkeepers.includes(playerId),
+  );
+  const preferredIncomingIds = [
+    ...(shouldRotateGoalkeeper ? [goalkeeperCandidate] : []),
+    ...preferredOutfieldBench,
+  ].filter(
+    (playerId, index, playerIds) => playerIds.indexOf(playerId) === index,
+  );
+  const fallbackIncomingIds = bench.filter(
+    (playerId) => !preferredIncomingIds.includes(playerId),
+  );
+  const incomingIds = [...preferredIncomingIds, ...fallbackIncomingIds].slice(
+    0,
+    substitutionCount,
+  );
   const roleByPosition = new Map(
     formation.positions.map((positionItem) => [
       positionItem.id,
       positionItem.role,
     ]),
   );
-  const incomingPlayers = incomingIds
+  const goalkeeperPair =
+    shouldRotateGoalkeeper &&
+    goalkeeperPosition &&
+    goalkeeperId &&
+    incomingIds.includes(goalkeeperCandidate)
+      ? {
+          positionId: goalkeeperPosition.id,
+          outPlayerId: goalkeeperId,
+          inPlayerId: goalkeeperCandidate,
+        }
+      : null;
+  const remainingIncomingIds = incomingIds.filter(
+    (playerId) => playerId !== goalkeeperPair?.inPlayerId,
+  );
+  const incomingPlayers = remainingIncomingIds
     .map((id) => team.roster.find((player) => player.id === id))
     .filter((player): player is Player => Boolean(player));
   const onField = Object.entries(game.assignments)
     .filter(([, playerId]) => !game.unavailableIds.includes(playerId))
+    .filter(([positionId]) => positionId !== goalkeeperPair?.positionId)
     .sort(([positionA, playerA], [positionB, playerB]) => {
       const timeDifference =
         (game.totals[playerB]?.fieldSeconds ?? 0) -
@@ -594,7 +662,7 @@ export const suggestSubstitutions = (
       );
       return fitB - fitA || playerA.localeCompare(playerB);
     })
-    .slice(0, substitutionCount);
+    .slice(0, remainingIncomingIds.length);
   const selectedPositions: Formation = {
     ...formation,
     positions: onField
@@ -607,15 +675,98 @@ export const suggestSubstitutions = (
   };
   const incomingAssignments = assignPlayersByPreference(
     selectedPositions,
-    incomingIds,
+    remainingIncomingIds,
     team.roster,
   );
 
-  return onField.map(([positionId, outPlayerId]) => ({
-    positionId,
-    outPlayerId,
-    inPlayerId: incomingAssignments[positionId],
-  }));
+  return [
+    ...(goalkeeperPair ? [goalkeeperPair] : []),
+    ...onField.map(([positionId, outPlayerId]) => ({
+      positionId,
+      outPlayerId,
+      inPlayerId: incomingAssignments[positionId],
+    })),
+  ];
+};
+
+export const getRecommendedSubstitutionCount = (
+  game: ActiveGame,
+  team: Team,
+) => {
+  const maxCount = Math.min(
+    game.benchIds.length,
+    Object.keys(game.assignments).length,
+  );
+  if (maxCount === 0) return 0;
+  const formation = getFormation(game.formationId);
+  const goalkeeperPosition = formation.positions.find(
+    (positionItem) => positionItem.role === "goalkeeper",
+  );
+  const goalkeeperId = goalkeeperPosition
+    ? game.assignments[goalkeeperPosition.id]
+    : undefined;
+  const isGoalkeeper = (playerId: string) =>
+    team.roster
+      .find((player) => player.id === playerId)
+      ?.preferredRoles.includes("goalkeeper") ?? false;
+  const availableGoalkeepers = [
+    ...Object.values(game.assignments),
+    ...game.benchIds,
+  ].filter(
+    (playerId) =>
+      !game.unavailableIds.includes(playerId) && isGoalkeeper(playerId),
+  );
+  const benchGoalkeepers = game.benchIds
+    .filter((playerId) => !game.unavailableIds.includes(playerId))
+    .filter(isGoalkeeper)
+    .sort(
+      (a, b) =>
+        (game.totals[a]?.fieldSeconds ?? 0) -
+          (game.totals[b]?.fieldSeconds ?? 0) || a.localeCompare(b),
+    );
+  if (availableGoalkeepers.length < 2 || benchGoalkeepers.length === 0) {
+    return maxCount;
+  }
+  const goalkeeperCandidate = benchGoalkeepers[0];
+  const rotatesGoalkeeper =
+    Boolean(goalkeeperId) &&
+    (!isGoalkeeper(goalkeeperId!) ||
+      (game.totals[goalkeeperCandidate]?.fieldSeconds ?? 0) <
+        (game.totals[goalkeeperId!]?.fieldSeconds ?? 0));
+  const currentOutfieldGoalkeepers = Object.entries(game.assignments).filter(
+    ([positionId, playerId]) =>
+      positionId !== goalkeeperPosition?.id && isGoalkeeper(playerId),
+  ).length;
+  const allowedOutfieldGoalkeepers = Math.max(
+    0,
+    availableGoalkeepers.length - 2 - currentOutfieldGoalkeepers,
+  );
+  const nonGoalkeeperBench = game.benchIds.filter(
+    (playerId) =>
+      !game.unavailableIds.includes(playerId) && !isGoalkeeper(playerId),
+  ).length;
+  return Math.min(
+    maxCount,
+    nonGoalkeeperBench +
+      allowedOutfieldGoalkeepers +
+      (rotatesGoalkeeper ? 1 : 0),
+  );
+};
+
+export const getCurrentBenchSeconds = (game: ActiveGame, playerId: string) => {
+  if (!game.benchIds.includes(playerId)) return 0;
+  let enteredBenchAt = 0;
+  game.history.forEach((event, index) => {
+    const afterBenchIds =
+      game.history[index + 1]?.beforeBenchIds ?? game.benchIds;
+    if (
+      !event.beforeBenchIds.includes(playerId) &&
+      afterBenchIds.includes(playerId)
+    ) {
+      enteredBenchAt = event.atSeconds;
+    }
+  });
+  return Math.max(0, game.clock.elapsedSeconds - enteredBenchAt);
 };
 
 export const validateGame = (game: ActiveGame, sideSize: number): string[] => {

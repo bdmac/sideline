@@ -8,8 +8,10 @@ import {
   cancelQueuedSubstitutions,
   createGame,
   FORMATIONS,
+  getCurrentBenchSeconds,
   getFormationsForTeam,
   getPeriodStatus,
+  getRecommendedSubstitutionCount,
   getScore,
   INITIAL_TEAMS,
   markAvailable,
@@ -503,7 +505,9 @@ describe("substitutions", () => {
     );
     const initialPairs = suggestSubstitutions(game, 2, team);
     const queued = queueSubstitutions(game, initialPairs);
-    const incomingPlayerId = game.benchIds[2];
+    const incomingPlayerId = game.benchIds.find(
+      (playerId) => !initialPairs.some((pair) => pair.inPlayerId === playerId),
+    )!;
     const replacementOutId = initialPairs[0].outPlayerId;
     const updated = queueBenchSubstitution(
       queued,
@@ -624,7 +628,7 @@ describe("substitutions", () => {
       cancelQueuedSubstitutions(changed).queuedSubstitutions,
     ).toBeUndefined();
   });
-  it("suggests the longest-benched players and confirms swaps atomically", () => {
+  it("suggests the least-played players and confirms swaps atomically", () => {
     const team = INITIAL_TEAMS.u8;
     const game = createGame(
       team,
@@ -634,8 +638,8 @@ describe("substitutions", () => {
       1_000,
     );
     const [firstBench, secondBench] = game.benchIds;
-    game.totals[firstBench].benchSeconds = 120;
-    game.totals[secondBench].benchSeconds = 240;
+    game.totals[firstBench].fieldSeconds = 120;
+    game.totals[secondBench].fieldSeconds = 30;
     const pairs = suggestSubstitutions(game, 2, team);
 
     expect(pairs.map((pair) => pair.inPlayerId)).toContain(secondBench);
@@ -646,7 +650,7 @@ describe("substitutions", () => {
     expect(next.history).toHaveLength(1);
   });
 
-  it("keeps bench time ahead of position preference", () => {
+  it("keeps played-time fairness ahead of position preference", () => {
     const team = structuredClone(INITIAL_TEAMS.u8);
     const game = createGame(
       team,
@@ -655,18 +659,131 @@ describe("substitutions", () => {
       40,
       1_000,
     );
-    const [longestBenched, preferredBenchPlayer] = game.benchIds;
-    game.totals[longestBenched].benchSeconds = 300;
-    game.totals[preferredBenchPlayer].benchSeconds = 100;
-    team.roster.find((player) => player.id === longestBenched)!.preferredRoles =
-      ["forward"];
+    const [leastPlayed, preferredBenchPlayer] = game.benchIds;
+    game.totals[leastPlayed].fieldSeconds = 30;
+    game.totals[preferredBenchPlayer].fieldSeconds = 300;
+    team.roster.find((player) => player.id === leastPlayed)!.preferredRoles = [
+      "forward",
+    ];
     team.roster.find(
       (player) => player.id === preferredBenchPlayer,
     )!.preferredRoles = ["goalkeeper"];
 
     const [pair] = suggestSubstitutions(game, 1, team);
 
-    expect(pair.inPlayerId).toBe(longestBenched);
+    expect(pair.inPlayerId).toBe(leastPlayed);
+  });
+
+  it("selects a late arrival by played time rather than their short bench stint", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const [firstBench, lateArrival] = game.benchIds;
+    game.totals[firstBench] = {
+      fieldSeconds: 300,
+      benchSeconds: 900,
+    };
+    game.totals[lateArrival] = {
+      fieldSeconds: 0,
+      benchSeconds: 30,
+    };
+
+    expect(suggestSubstitutions(game, 1, team)[0].inPlayerId).toBe(lateArrival);
+  });
+
+  it("keeps a second goalkeeper in reserve until they are due to rotate in goal", () => {
+    const team = structuredClone(INITIAL_TEAMS.u8);
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const goalkeeperId = game.assignments.gk;
+    const reserveGoalkeeper = game.benchIds[0];
+    team.roster.find(
+      (player) => player.id === reserveGoalkeeper,
+    )!.preferredRoles = ["goalkeeper", "defender"];
+
+    expect(getRecommendedSubstitutionCount(game, team)).toBe(1);
+    expect(suggestSubstitutions(game, 1, team)[0].inPlayerId).not.toBe(
+      reserveGoalkeeper,
+    );
+
+    game.totals[goalkeeperId].fieldSeconds = 600;
+    game.totals[reserveGoalkeeper].fieldSeconds = 0;
+
+    expect(getRecommendedSubstitutionCount(game, team)).toBe(2);
+    expect(suggestSubstitutions(game, 2, team)[0]).toEqual({
+      positionId: "gk",
+      outPlayerId: goalkeeperId,
+      inPlayerId: reserveGoalkeeper,
+    });
+  });
+
+  it("allows a third goalkeeper to play outfield while preserving a reserve", () => {
+    const team = structuredClone(INITIAL_TEAMS.u8);
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const benchGoalkeepers = [game.benchIds[0], game.benchIds.at(-1)!];
+    benchGoalkeepers.forEach((playerId) => {
+      team.roster.find((player) => player.id === playerId)!.preferredRoles = [
+        "goalkeeper",
+        "defender",
+      ];
+    });
+
+    expect(getRecommendedSubstitutionCount(game, team)).toBe(3);
+    const incomingIds = suggestSubstitutions(game, 3, team).map(
+      (pair) => pair.inPlayerId,
+    );
+    expect(
+      incomingIds.filter((playerId) => benchGoalkeepers.includes(playerId)),
+    ).toHaveLength(1);
+  });
+
+  it("tracks the current bench stint separately from aggregate bench time", () => {
+    const team = INITIAL_TEAMS.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const pair = suggestSubstitutions(game, 1, team)[0];
+    const playerId = pair.inPlayerId;
+    game.clock.elapsedSeconds = 300;
+    expect(getCurrentBenchSeconds(game, playerId)).toBe(300);
+
+    game = applySubstitutions(game, [pair], team.sideSize, 1_000);
+    game.clock.elapsedSeconds = 420;
+    game = applySubstitutions(
+      game,
+      [
+        {
+          positionId: pair.positionId,
+          outPlayerId: pair.inPlayerId,
+          inPlayerId: pair.outPlayerId,
+        },
+      ],
+      team.sideSize,
+      1_000,
+    );
+    game.clock.elapsedSeconds = 480;
+
+    expect(getCurrentBenchSeconds(game, playerId)).toBe(60);
   });
 
   it("undoes the most recent confirmed substitution", () => {
