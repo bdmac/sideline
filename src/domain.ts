@@ -516,12 +516,40 @@ export const movePlayer = (
     ([, id]) => id === playerId,
   );
   if (!sourceEntry) throw new Error("Player is not currently on the field");
+  if (
+    !getFormation(current.formationId).positions.some(
+      (positionItem) => positionItem.id === targetPositionId,
+    )
+  ) {
+    throw new Error("Target position does not exist");
+  }
+  if (sourceEntry[0] === targetPositionId) return current;
   const targetPlayer = current.assignments[targetPositionId];
   const assignments = { ...current.assignments };
   assignments[targetPositionId] = playerId;
   if (targetPlayer) assignments[sourceEntry[0]] = targetPlayer;
   else delete assignments[sourceEntry[0]];
-  return { ...current, assignments };
+  return {
+    ...current,
+    assignments,
+    history: [
+      ...current.history,
+      {
+        id: `position-${now}`,
+        type: "position-change",
+        atSeconds: current.clock.elapsedSeconds,
+        pairs: [],
+        playerId,
+        fromPositionId: sourceEntry[0],
+        toPositionId: targetPositionId,
+        note: targetPlayer ? "Players swapped positions" : "Player moved",
+        beforeAssignments: current.assignments,
+        beforeBenchIds: current.benchIds,
+        beforeUnavailableIds: current.unavailableIds,
+        beforePresentIds: current.presentIds,
+      },
+    ],
+  };
 };
 
 export const markUnavailable = (

@@ -15,7 +15,15 @@ import {
   UserRoundX,
   X,
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   applySubstitutions,
   assignPlayerToPosition,
@@ -38,6 +46,7 @@ import { loadState, saveState } from "./storage";
 import type {
   ActiveGame,
   AppState,
+  GameEvent,
   Player,
   SubstitutionPair,
   Team,
@@ -59,6 +68,81 @@ const playerLabel = (team: Team, id: string) => {
   const player = team.roster.find((item) => item.id === id);
   if (!player) return "Unknown player";
   return player.number ? `#${player.number} ${player.name}` : player.name;
+};
+
+let modalLockCount = 0;
+let modalScrollY = 0;
+let previousBodyStyles = {
+  overflow: "",
+  position: "",
+  top: "",
+  left: "",
+  right: "",
+  width: "",
+};
+let previousRootOverflow = "";
+
+function ModalBackdrop({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    if (modalLockCount === 0) {
+      modalScrollY = window.scrollY;
+      previousBodyStyles = {
+        overflow: document.body.style.overflow,
+        position: document.body.style.position,
+        top: document.body.style.top,
+        left: document.body.style.left,
+        right: document.body.style.right,
+        width: document.body.style.width,
+      };
+      previousRootOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${modalScrollY}px`;
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+      document.body.style.width = "100%";
+    }
+    modalLockCount += 1;
+
+    return () => {
+      modalLockCount = Math.max(0, modalLockCount - 1);
+      if (modalLockCount !== 0) return;
+
+      document.documentElement.style.overflow = previousRootOverflow;
+      Object.assign(document.body.style, previousBodyStyles);
+      window.scrollTo({ top: modalScrollY, left: 0, behavior: "auto" });
+    };
+  }, []);
+
+  return (
+    <div className="sheet-backdrop" role="presentation">
+      {children}
+    </div>
+  );
+}
+
+const formatPositionChange = (
+  event: GameEvent,
+  formation: ReturnType<typeof getFormation>,
+  team: Team,
+) => {
+  if (!event.playerId || !event.fromPositionId || !event.toPositionId) {
+    return event.note ?? "Positions updated";
+  }
+
+  const fromPosition = formation.positions.find(
+    (position) => position.id === event.fromPositionId,
+  );
+  const toPosition = formation.positions.find(
+    (position) => position.id === event.toPositionId,
+  );
+  const targetPlayerId = event.beforeAssignments[event.toPositionId];
+  const movedPlayer = `${playerName(team, event.playerId)}: ${fromPosition?.label ?? event.fromPositionId} → ${toPosition?.label ?? event.toPositionId}`;
+
+  return targetPlayerId
+    ? `${movedPlayer} · ${playerName(team, targetPlayerId)}: ${toPosition?.label ?? event.toPositionId} → ${fromPosition?.label ?? event.fromPositionId}`
+    : movedPlayer;
 };
 
 const isStandalone = () =>
@@ -318,7 +402,7 @@ function InstallHelpDialog({
   onClose: () => void;
 }) {
   return (
-    <div className="sheet-backdrop" role="presentation">
+    <ModalBackdrop>
       <section
         className="bottom-sheet confirm-sheet"
         role="dialog"
@@ -335,7 +419,7 @@ function InstallHelpDialog({
           Got it
         </button>
       </section>
-    </div>
+    </ModalBackdrop>
   );
 }
 
@@ -801,6 +885,11 @@ function LiveGameScreen({
             team={team}
             totals={displayed.totals}
             onEditPlayer={setPositionEditorPlayerId}
+            onMovePlayer={(playerId, positionId) =>
+              safeChange(() =>
+                movePlayer(game, playerId, positionId, Date.now()),
+              )
+            }
           />
         </section>
 
@@ -880,19 +969,23 @@ function LiveGameScreen({
                       <strong>
                         {event.type === "substitution"
                           ? `${event.pairs.length} substitution${event.pairs.length === 1 ? "" : "s"}`
-                          : event.type === "available"
-                            ? `${eventPlayer ?? "Player"} available`
-                            : `${eventPlayer ?? "Player"} unavailable`}
+                          : event.type === "position-change"
+                            ? "Position change"
+                            : event.type === "available"
+                              ? `${eventPlayer ?? "Player"} available`
+                              : `${eventPlayer ?? "Player"} unavailable`}
                       </strong>
                       <small>
-                        {event.pairs.length
-                          ? event.pairs
-                              .map(
-                                (pair) =>
-                                  `${playerName(team, pair.outPlayerId)} → ${playerName(team, pair.inPlayerId)}`,
-                              )
-                              .join(" · ")
-                          : event.note}
+                        {event.type === "position-change"
+                          ? formatPositionChange(event, formation, team)
+                          : event.pairs.length
+                            ? event.pairs
+                                .map(
+                                  (pair) =>
+                                    `${playerName(team, pair.outPlayerId)} → ${playerName(team, pair.inPlayerId)}`,
+                                )
+                                .join(" · ")
+                            : event.note}
                       </small>
                     </span>
                   </li>
@@ -1016,15 +1109,98 @@ function Pitch({
   team,
   totals,
   onEditPlayer,
+  onMovePlayer,
 }: {
   formation: ReturnType<typeof getFormation>;
   assignments: Record<string, string>;
   team: Team;
   totals: ActiveGame["totals"];
   onEditPlayer: (playerId: string) => void;
+  onMovePlayer: (playerId: string, positionId: string) => void;
 }) {
+  const pitchRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    playerId: string;
+    sourcePositionId: string;
+    targetPositionId: string | null;
+    startX: number;
+    startY: number;
+    deltaX: number;
+    deltaY: number;
+    dragging: boolean;
+  } | null>(null);
+  const [dragState, setDragState] = useState(dragRef.current);
+  const suppressClickRef = useRef(false);
+
+  const updateDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    playerId: string,
+    sourcePositionId: string,
+  ) => {
+    const drag = dragRef.current;
+    if (!drag || drag.playerId !== playerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    const dragging = drag.dragging || Math.hypot(deltaX, deltaY) > 8;
+    if (!dragging) return;
+
+    const bounds = pitchRef.current?.getBoundingClientRect();
+    let targetPositionId: string | null = null;
+    if (
+      bounds &&
+      event.clientX >= bounds.left &&
+      event.clientX <= bounds.right &&
+      event.clientY >= bounds.top &&
+      event.clientY <= bounds.bottom
+    ) {
+      const x = ((event.clientX - bounds.left) / bounds.width) * 100;
+      const y = ((event.clientY - bounds.top) / bounds.height) * 100;
+      const target = formation.positions.reduce(
+        (closest, position) => {
+          const distance = Math.hypot(position.x - x, position.y - y);
+          return distance < closest.distance
+            ? { id: position.id, distance }
+            : closest;
+        },
+        { id: sourcePositionId, distance: Number.POSITIVE_INFINITY },
+      );
+      targetPositionId = target.id === sourcePositionId ? null : target.id;
+    }
+
+    const nextDrag = {
+      ...drag,
+      targetPositionId,
+      deltaX,
+      deltaY,
+      dragging: true,
+    };
+    dragRef.current = nextDrag;
+    setDragState(nextDrag);
+    event.preventDefault();
+  };
+
+  const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (drag?.dragging) {
+      event.preventDefault();
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+      if (drag.targetPositionId) {
+        onMovePlayer(drag.playerId, drag.targetPositionId);
+      }
+    }
+    dragRef.current = null;
+    setDragState(null);
+  };
+
   return (
-    <div className="pitch" aria-label={`${formation.name} formation`}>
+    <div
+      className="pitch"
+      aria-label={`${formation.name} formation`}
+      ref={pitchRef}
+    >
       <div className="pitch-halfway" aria-hidden="true" />
       <div className="pitch-circle" aria-hidden="true" />
       <div className="pitch-box top" aria-hidden="true" />
@@ -1053,16 +1229,55 @@ function Pitch({
         const style = {
           left: `${position.x}%`,
           top: `${position.y}%`,
+          ...(dragState?.sourcePositionId === position.id && dragState.dragging
+            ? {
+                transform: `translate(calc(-50% + ${dragState.deltaX}px), calc(-50% + ${dragState.deltaY}px))`,
+              }
+            : {}),
         };
 
         return player ? (
           <button
             type="button"
-            className="pitch-player"
+            className={`pitch-player ${
+              dragState?.sourcePositionId === position.id && dragState.dragging
+                ? "dragging"
+                : ""
+            } ${
+              dragState?.targetPositionId === position.id ? "drop-target" : ""
+            }`}
             key={position.id}
             style={style}
+            data-position-id={position.id}
             aria-label={`Change ${player.name}'s position`}
-            onClick={() => onEditPlayer(player.id)}
+            title="Tap to edit or drag to another position"
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+              const nextDrag = {
+                playerId: player.id,
+                sourcePositionId: position.id,
+                targetPositionId: null,
+                startX: event.clientX,
+                startY: event.clientY,
+                deltaX: 0,
+                deltaY: 0,
+                dragging: false,
+              };
+              dragRef.current = nextDrag;
+              setDragState(nextDrag);
+            }}
+            onPointerMove={(event) => updateDrag(event, player.id, position.id)}
+            onPointerUp={finishDrag}
+            onPointerCancel={finishDrag}
+            onClick={(event) => {
+              if (suppressClickRef.current) {
+                event.preventDefault();
+                suppressClickRef.current = false;
+                return;
+              }
+              onEditPlayer(player.id);
+            }}
           >
             {content}
           </button>
@@ -1071,6 +1286,7 @@ function Pitch({
             className={`pitch-player ${player ? "" : "empty"}`}
             key={position.id}
             style={style}
+            data-position-id={position.id}
           >
             {content}
           </div>
@@ -1181,7 +1397,7 @@ function SubstitutionPlanner({
   const valid = pairs.length === count && !duplicateOuts && !duplicateIns;
 
   return (
-    <div className="sheet-backdrop" role="presentation">
+    <ModalBackdrop>
       <section
         className="bottom-sheet substitution-sheet"
         role="dialog"
@@ -1317,7 +1533,7 @@ function SubstitutionPlanner({
           </button>
         </div>
       </section>
-    </div>
+    </ModalBackdrop>
   );
 }
 
@@ -1333,7 +1549,7 @@ function SubstitutionSummary({
   onClose: () => void;
 }) {
   return (
-    <div className="sheet-backdrop" role="presentation">
+    <ModalBackdrop>
       <section
         className="bottom-sheet substitution-ready-sheet"
         role="dialog"
@@ -1383,7 +1599,7 @@ function SubstitutionSummary({
           Done
         </button>
       </section>
-    </div>
+    </ModalBackdrop>
   );
 }
 
@@ -1403,7 +1619,7 @@ function PlayerEntrySummary({
   );
 
   return (
-    <div className="sheet-backdrop" role="presentation">
+    <ModalBackdrop>
       <section
         className="bottom-sheet substitution-ready-sheet"
         role="dialog"
@@ -1440,7 +1656,7 @@ function PlayerEntrySummary({
           Done
         </button>
       </section>
-    </div>
+    </ModalBackdrop>
   );
 }
 
@@ -1476,7 +1692,7 @@ function PositionEditor({
   );
 
   return (
-    <div className="sheet-backdrop" role="presentation">
+    <ModalBackdrop>
       <section
         className="bottom-sheet compact-sheet"
         role="dialog"
@@ -1562,7 +1778,7 @@ function PositionEditor({
           </button>
         </div>
       </section>
-    </div>
+    </ModalBackdrop>
   );
 }
 
@@ -1580,7 +1796,7 @@ function ConfirmSheet({
   onConfirm: () => void;
 }) {
   return (
-    <div className="sheet-backdrop" role="presentation">
+    <ModalBackdrop>
       <section
         className="bottom-sheet confirm-sheet"
         role="alertdialog"
@@ -1599,7 +1815,7 @@ function ConfirmSheet({
           </button>
         </div>
       </section>
-    </div>
+    </ModalBackdrop>
   );
 }
 

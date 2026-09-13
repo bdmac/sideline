@@ -24,7 +24,8 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 - After a planned substitution or an automatic replacement for an unavailable on-field player, a substitution-ready sheet shows the numbered OUT / IN pairs and affected positions so the coach can organize players before play resumes.
 - The latest confirmed substitution or unavailable-player event can be undone.
 - The game log is collapsed by default to protect live-screen space. Expanding it shows the affected player on availability events and the OUT / IN players on substitutions.
-- Position changes do not count as substitutions. Tapping an occupied player magnet on the pitch opens the position editor with that player already selected.
+- Position changes do not count as substitutions. Tapping an occupied player magnet on the pitch opens the position editor with that player already selected; dragging a magnet onto another position moves or swaps the players directly.
+- Position changes from either interaction are recorded in the game log and can be undone as the latest event.
 - Marking an on-field player unavailable uses the fairest available bench replacement; if none exists, the open position is explicit.
 - Players not marked as attending begin the game as unavailable rather than disappearing. A late arrival can be marked available and joins the bench, or fills an open position automatically when the team is short-sided.
 - When a newly available player fills an open position, a player-ready sheet identifies the numbered player and their assigned position before play continues.

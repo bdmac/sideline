@@ -58,6 +58,8 @@ The pitch is the signature surface. It uses real field markings and restrained m
 
 The product uses no decorative animation. State changes are immediate. `prefers-reduced-motion` reduces all transitions and animation durations. Semantic headings, labels, buttons, pressed states, dialogs, alerts, keyboard focus, and a skip link are included. Text and controls target WCAG AA contrast.
 
+Modal bottom sheets lock the underlying document at its current scroll position while allowing the sheet itself to scroll, preventing background drift on both iOS and Android.
+
 ## Responsive rules
 
 - At 760px, pitch and bench stack; the clock becomes sticky.

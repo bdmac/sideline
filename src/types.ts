@@ -53,10 +53,12 @@ export type SubstitutionPair = {
 
 export type GameEvent = {
   id: string;
-  type: "substitution" | "unavailable" | "available";
+  type: "substitution" | "position-change" | "unavailable" | "available";
   atSeconds: number;
   pairs: SubstitutionPair[];
   playerId?: string;
+  fromPositionId?: string;
+  toPositionId?: string;
   note?: string;
   beforeAssignments: Record<string, string>;
   beforeBenchIds: string[];

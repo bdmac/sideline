@@ -163,6 +163,80 @@ describe("Sideline app", () => {
     );
   });
 
+  it("logs position changes made in the editor", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Change Maddox's position" }),
+    );
+    fireEvent.change(screen.getByLabelText("Move to"), {
+      target: { value: "m" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save positions" }));
+
+    expect(screen.getByText("Position change")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Maddox: Left Midfielder → Right Midfielder · Ollie: Right Midfielder → Left Midfielder",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("drags an on-field player onto another position", () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+
+    const pitch = container.querySelector(".pitch")!;
+    vi.spyOn(pitch, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      right: 1_000,
+      bottom: 1_000,
+      width: 1_000,
+      height: 1_000,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    const maddox = screen.getByRole("button", {
+      name: "Change Maddox's position",
+    });
+
+    fireEvent(
+      maddox,
+      new MouseEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        clientX: 300,
+        clientY: 420,
+      }),
+    );
+    fireEvent(
+      maddox,
+      new MouseEvent("pointermove", {
+        bubbles: true,
+        clientX: 700,
+        clientY: 420,
+      }),
+    );
+    fireEvent(
+      maddox,
+      new MouseEvent("pointerup", {
+        bubbles: true,
+        clientX: 700,
+        clientY: 420,
+      }),
+    );
+
+    expect(
+      screen.getByText(
+        "Maddox: Left Midfielder → Right Midfielder · Ollie: Right Midfielder → Left Midfielder",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("shows a numbered substitution summary after confirmation", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -273,6 +347,12 @@ describe("Sideline app", () => {
     ).toHaveTextContent(
       "Open your browser menu and choose Install app or Add to Home screen.",
     );
+    expect(document.body.style.position).toBe("fixed");
+    expect(document.body.style.overflow).toBe("hidden");
+
+    fireEvent.click(screen.getByRole("button", { name: "Got it" }));
+    expect(document.body.style.position).toBe("");
+    expect(document.body.style.overflow).toBe("");
   });
 
   it("uses the browser's native installation prompt when available", async () => {

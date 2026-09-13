@@ -875,6 +875,22 @@ select:hover {
   z-index: 2;
   font: inherit;
   text-align: left;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pitch-player.dragging {
+  z-index: 5;
+  box-shadow: 0 9px 18px rgba(9, 26, 29, 0.28);
+  opacity: 0.88;
+}
+
+.pitch-player.drop-target {
+  border-color: var(--warm);
+  box-shadow:
+    0 0 0 4px rgba(220, 102, 48, 0.28),
+    0 5px 0 rgba(7, 76, 72, 0.42);
 }
 
 .pitch-player strong,

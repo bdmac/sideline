@@ -9,6 +9,7 @@ import {
   INITIAL_TEAMS,
   markAvailable,
   materializeGame,
+  movePlayer,
   suggestSubstitutions,
   undoLastEvent,
   validateFormation,
@@ -178,6 +179,51 @@ describe("starter assignment", () => {
       gk: "player-1",
       dl: "player-3",
     });
+  });
+});
+
+describe("position changes", () => {
+  it("records and undoes a position swap", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 5).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const beforeAssignments = structuredClone(game.assignments);
+    const movedPlayerId = game.assignments.dr;
+    const targetPlayerId = game.assignments.m;
+    const changed = movePlayer(game, movedPlayerId, "m", 2_000);
+    const event = changed.history.at(-1);
+
+    expect(changed.assignments.m).toBe(movedPlayerId);
+    expect(changed.assignments.dr).toBe(targetPlayerId);
+    expect(event).toMatchObject({
+      type: "position-change",
+      playerId: movedPlayerId,
+      fromPositionId: "dr",
+      toPositionId: "m",
+    });
+    expect(undoLastEvent(changed, 3_000).assignments).toEqual(
+      beforeAssignments,
+    );
+  });
+
+  it("does not log a no-op move to the player's current position", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 5).map((player) => player.id),
+      40,
+      1_000,
+    );
+
+    expect(movePlayer(game, game.assignments.gk, "gk", 2_000).history).toEqual(
+      [],
+    );
   });
 });
 
