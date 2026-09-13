@@ -41,8 +41,9 @@ Use one practical system sans stack: `Inter, ui-sans-serif, system-ui, -apple-sy
 ## Controls
 
 - Minimum interactive target: 44px; critical controls are 50–66px.
-- Buttons are square or minimally softened by default; pinned mobile controls use compact native-like corner radii without becoming pills.
+- Buttons are square or minimally softened by default. On phones, setup and live toolbar commands have borderless tap areas with compact filled capsule indicators for primary actions; bottom-sheet task and confirmation actions use full capsule buttons.
 - Primary actions use turf. Substitution planning and confirmation use warm orange sparingly.
+- On phones, the persistent End Game control uses a red icon capsule and label; the final confirmation remains a fully filled danger capsule.
 - PWA installation appears as a full-width turf-tinted action beneath team selection, visible only while running in a browser.
 - Form controls use white fill, dark text, and a visible 1px neutral border.
 - Focus uses a 3px blue outline with offset.

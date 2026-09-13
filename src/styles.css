@@ -1340,6 +1340,31 @@ select:hover {
     background: rgba(251, 252, 248, 0.97);
   }
 
+  .end-game-button {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--danger);
+    padding: 0.3rem 0.4rem;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .end-game-button:hover:not(:disabled),
+  .end-game-button:active:not(:disabled) {
+    border-color: transparent;
+    background: #fae5e5;
+  }
+
+  .end-game-button svg {
+    box-sizing: content-box;
+    width: 16px;
+    height: 16px;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    background: var(--danger);
+    color: white;
+  }
+
   .setup-submit {
     bottom: 0;
     margin: 1.25rem -1rem 0;
@@ -1355,7 +1380,39 @@ select:hover {
   }
 
   .setup-submit .primary-action {
-    border-radius: 12px;
+    min-height: 66px;
+    flex-direction: column;
+    gap: 0.25rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--turf-dark);
+    line-height: 1.05;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .setup-submit .primary-action:hover:not(:disabled),
+  .setup-submit .primary-action:active:not(:disabled) {
+    border-color: transparent;
+    background: var(--wash);
+  }
+
+  .setup-submit .primary-action svg {
+    box-sizing: content-box;
+    width: 22px;
+    height: 22px;
+    padding: 0.28rem 0.6rem;
+    border-radius: 999px;
+    background: var(--turf);
+    color: white;
+  }
+
+  .bottom-sheet .primary-action,
+  .bottom-sheet .secondary-action,
+  .bottom-sheet .danger-action,
+  .bottom-sheet .sub-confirm,
+  .bottom-sheet .unavailable-action {
+    border-radius: 999px;
   }
 
   .live-page {
@@ -1383,13 +1440,47 @@ select:hover {
     gap: 0.25rem;
     min-height: 66px;
     padding: 0.35rem;
-    border-color: transparent;
-    border-radius: 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     line-height: 1.05;
+    -webkit-tap-highlight-color: transparent;
   }
 
+  .mobile-control-dock .clock-button,
+  .mobile-control-dock .sub-button,
   .mobile-control-dock button:not(.clock-button):not(.sub-button) {
+    background: transparent;
+  }
+
+  .mobile-control-dock .clock-button {
+    color: var(--turf-dark);
+  }
+
+  .mobile-control-dock .sub-button {
+    color: var(--warm-dark);
+  }
+
+  .mobile-control-dock button:active:not(:disabled) {
     background: var(--wash);
+  }
+
+  .mobile-control-dock .clock-button svg,
+  .mobile-control-dock .sub-button svg {
+    box-sizing: content-box;
+    width: 22px;
+    height: 22px;
+    padding: 0.28rem 0.6rem;
+    border-radius: 999px;
+    color: white;
+  }
+
+  .mobile-control-dock .clock-button svg {
+    background: var(--turf);
+  }
+
+  .mobile-control-dock .sub-button svg {
+    background: var(--warm);
   }
 }
 
