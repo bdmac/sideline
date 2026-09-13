@@ -23,7 +23,7 @@ npm run build
 npm run preview
 ```
 
-Use the browser’s **Install app** action when available. Service workers require `localhost` or HTTPS.
+Use **Install Sideline** on the home screen. Supported browsers open their native installation prompt. On iPhone or iPad, open the app in Safari, tap **Share**, then choose **Add to Home Screen**. Service workers require `localhost` or HTTPS.
 
 ## Quality commands
 

@@ -43,6 +43,7 @@ Use one practical system sans stack: `Inter, ui-sans-serif, system-ui, -apple-sy
 - Minimum interactive target: 44px; critical controls are 50–66px.
 - Buttons are square or minimally softened by the platform; no decorative pills.
 - Primary actions use turf. Substitution planning and confirmation use warm orange sparingly.
+- PWA installation appears as a full-width turf-tinted action beneath team selection, visible only while running in a browser.
 - Form controls use white fill, dark text, and a visible 1px neutral border.
 - Focus uses a 3px blue outline with offset.
 - Disabled controls retain their label and use reduced opacity.

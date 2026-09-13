@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { STORAGE_KEY } from "./storage";
@@ -108,5 +108,41 @@ describe("Sideline app", () => {
       left: 0,
       behavior: "auto",
     });
+  });
+
+  it("shows manual installation guidance when no native prompt is available", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /Install Sideline/i }));
+
+    expect(
+      screen.getByRole("dialog", { name: "Install Sideline" }),
+    ).toHaveTextContent(
+      "Open your browser menu and choose Install app or Add to Home screen.",
+    );
+  });
+
+  it("uses the browser's native installation prompt when available", async () => {
+    const prompt = vi.fn().mockResolvedValue(undefined);
+    const installEvent = Object.assign(
+      new Event("beforeinstallprompt", { cancelable: true }),
+      {
+        prompt,
+        userChoice: Promise.resolve({
+          outcome: "accepted",
+          platform: "web",
+        }),
+      },
+    );
+
+    render(<App />);
+    fireEvent(window, installEvent);
+    fireEvent.click(screen.getByRole("button", { name: /Install Sideline/i }));
+
+    await waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /Install Sideline/i }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

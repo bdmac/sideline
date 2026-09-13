@@ -25,6 +25,7 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 - Position changes do not count as substitutions.
 - Marking an on-field player unavailable uses the fairest available bench replacement; if none exists, the open position is explicit.
 - Ending an active game requires confirmation.
+- The home screen offers installation whenever Sideline is running in a browser. Supported browsers open their native install prompt; iPhone and iPad users receive concise Add to Home Screen instructions.
 
 ## Initial team defaults
 

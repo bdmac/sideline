@@ -259,6 +259,37 @@ h3 {
   background: var(--wash);
 }
 
+.install-strip {
+  width: 100%;
+  min-height: 68px;
+  margin-top: 1.5rem;
+  border: 2px solid var(--turf);
+  background: var(--turf-pale);
+  color: var(--turf-dark);
+  padding: 0.8rem 1rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.8rem;
+  text-align: left;
+}
+
+.install-strip:hover {
+  background: #cce3dd;
+}
+
+.install-strip span,
+.install-strip strong,
+.install-strip small {
+  display: block;
+}
+
+.install-strip small {
+  margin-top: 0.2rem;
+  color: var(--turf-dark);
+  line-height: 1.35;
+}
+
 .team-crest {
   width: 58px;
   height: 58px;
@@ -1206,6 +1237,10 @@ select:hover {
 .confirm-sheet p {
   color: var(--ink-soft);
   line-height: 1.55;
+}
+
+.confirm-sheet > .primary-action {
+  width: 100%;
 }
 
 .empty-state {

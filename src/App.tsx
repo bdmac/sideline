@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleAlert,
   Clock3,
+  Download,
   Pause,
   Pencil,
   Play,
@@ -45,8 +46,21 @@ import type {
 type Screen =
   { name: "home" } | { name: "setup"; teamId: TeamId } | { name: "live" };
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+}
+
 const playerName = (team: Team, id: string) =>
   team.roster.find((player) => player.id === id)?.name ?? "Unknown player";
+
+const isStandalone = () =>
+  window.matchMedia?.("(display-mode: standalone)").matches ||
+  (navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+const isIos = () =>
+  /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
 function App() {
   const [state, setState] = useState<AppState>(() => loadState());
@@ -56,6 +70,10 @@ function App() {
   );
   const screenKey =
     screen.name === "setup" ? `${screen.name}:${screen.teamId}` : screen.name;
+  const [installPrompt, setInstallPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(isStandalone);
+  const [installHelpOpen, setInstallHelpOpen] = useState(false);
 
   const commitState = (update: (current: AppState) => AppState) => {
     const next = update(stateRef.current);
@@ -74,9 +92,41 @@ function App() {
     return () => window.removeEventListener("pagehide", persist);
   }, []);
 
+  useEffect(() => {
+    const captureInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const markInstalled = () => {
+      setInstalled(true);
+      setInstallPrompt(null);
+      setInstallHelpOpen(false);
+    };
+    window.addEventListener("beforeinstallprompt", captureInstallPrompt);
+    window.addEventListener("appinstalled", markInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", captureInstallPrompt);
+      window.removeEventListener("appinstalled", markInstalled);
+    };
+  }, []);
+
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [screenKey]);
+
+  const installApp = async () => {
+    if (!installPrompt) {
+      setInstallHelpOpen(true);
+      return;
+    }
+
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    setInstallPrompt(null);
+    if (choice.outcome === "accepted") {
+      setInstalled(true);
+    }
+  };
 
   const activeTeam = state.activeGame
     ? state.teams[state.activeGame.teamId]
@@ -115,6 +165,8 @@ function App() {
               }
             }}
             onResume={() => setScreen({ name: "live" })}
+            showInstall={!installed}
+            onInstall={installApp}
           />
         )}
         {screen.name === "setup" && (
@@ -149,6 +201,12 @@ function App() {
           />
         )}
       </main>
+      {installHelpOpen && (
+        <InstallHelpDialog
+          ios={isIos()}
+          onClose={() => setInstallHelpOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -157,10 +215,14 @@ function HomeScreen({
   state,
   onChooseTeam,
   onResume,
+  showInstall,
+  onInstall,
 }: {
   state: AppState;
   onChooseTeam: (teamId: TeamId) => void;
   onResume: () => void;
+  showInstall: boolean;
+  onInstall: () => void;
 }) {
   const activeTeam = state.activeGame
     ? state.teams[state.activeGame.teamId]
@@ -221,9 +283,51 @@ function HomeScreen({
         })}
       </div>
 
+      {showInstall && (
+        <button className="install-strip" type="button" onClick={onInstall}>
+          <Download size={22} aria-hidden="true" />
+          <span>
+            <strong>Install Sideline</strong>
+            <small>
+              Keep it on your home screen for quick game-day access.
+            </small>
+          </span>
+          <ChevronRight size={20} aria-hidden="true" />
+        </button>
+      )}
+
       <p className="privacy-note">
         Sideline works offline. Names and game data stay in this browser.
       </p>
+    </div>
+  );
+}
+
+function InstallHelpDialog({
+  ios,
+  onClose,
+}: {
+  ios: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="sheet-backdrop" role="presentation">
+      <section
+        className="bottom-sheet confirm-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="install-title"
+      >
+        <h2 id="install-title">Install Sideline</h2>
+        <p>
+          {ios
+            ? "In Safari, tap the Share button, choose Add to Home Screen, then tap Add."
+            : "Open your browser menu and choose Install app or Add to Home screen."}
+        </p>
+        <button className="primary-action" type="button" onClick={onClose}>
+          Got it
+        </button>
+      </section>
     </div>
   );
 }
