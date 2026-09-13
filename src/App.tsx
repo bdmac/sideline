@@ -855,7 +855,11 @@ function LiveGameScreen({
           disabled={game.benchIds.length === 0}
           onClick={() => setPlannerOpen(true)}
         >
-          <ArrowRightLeft size={22} aria-hidden="true" />
+          <ArrowRightLeft
+            className="swap-direction"
+            size={22}
+            aria-hidden="true"
+          />
           Plan subs
         </button>
         <button
@@ -1152,7 +1156,7 @@ function SubstitutionPlanner({
                   {game.benchIds.map((id) => (
                     <option value={id} key={id}>
                       {playerName(team, id)} ·{" "}
-                      {formatDuration(game.totals[id]?.benchSeconds ?? 0)} bench
+                      {formatDuration(game.totals[id]?.benchSeconds ?? 0)}
                     </option>
                   ))}
                 </select>
@@ -1173,7 +1177,11 @@ function SubstitutionPlanner({
             <div key={index}>
               <span className="out-label">OUT</span>
               <strong>{playerName(team, pair.outPlayerId)}</strong>
-              <ArrowRightLeft size={17} aria-hidden="true" />
+              <ArrowRightLeft
+                className="review-direction"
+                size={17}
+                aria-hidden="true"
+              />
               <span className="in-label">IN</span>
               <strong>{playerName(team, pair.inPlayerId)}</strong>
             </div>

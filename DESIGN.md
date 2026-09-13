@@ -60,5 +60,5 @@ The product uses no decorative animation. State changes are immediate. `prefers-
 ## Responsive rules
 
 - At 760px, pitch and bench stack; the clock becomes sticky.
-- At 520px, attendance becomes one column, setup assignments stack their select, and substitution rows become a vertical OUT/IN sequence.
+- At 520px, attendance becomes one column and setup assignments stack their select. Substitution rows retain the desktop OUT ↔ IN sequence using constrained selector columns, compact option text, and a visible directional icon.
 - No critical action depends on hover.

@@ -1566,24 +1566,51 @@ select:hover {
   }
 
   .swap-row {
-    grid-template-columns: 32px 1fr;
-    align-items: center;
+    grid-template-columns: 24px minmax(0, 1fr) 18px minmax(0, 1fr);
+    align-items: end;
+    gap: 0.35rem;
+    padding: 0.8rem 0;
   }
 
-  .swap-row > svg {
-    display: none;
+  .swap-number {
+    width: 24px;
   }
 
-  .swap-row label:last-child {
-    grid-column: 2;
+  .swap-row label {
+    min-width: 0;
+  }
+
+  .swap-row select {
+    min-width: 0;
+    padding: 0.55rem 1.35rem 0.55rem 0.45rem;
+    font-size: 0.76rem;
+  }
+
+  .swap-direction {
+    justify-self: center;
+    align-self: center;
+    margin-top: 1rem;
+    color: var(--ink-soft);
   }
 
   .review-checklist > div {
-    grid-template-columns: 30px 1fr;
+    grid-template-columns:
+      26px minmax(0, 1fr) 18px 20px
+      minmax(0, 1fr);
+    gap: 0.3rem;
   }
 
-  .review-checklist > div svg {
-    display: none;
+  .review-checklist .review-direction {
+    display: block;
+    justify-self: center;
+    color: var(--ink-soft);
+  }
+
+  .review-checklist strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .sheet-actions > * {
