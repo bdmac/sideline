@@ -12,6 +12,7 @@ import {
   saveState,
   STORAGE_KEY,
 } from "./storage";
+import type { Player } from "./types";
 
 describe("persistence migrations", () => {
   beforeEach(() => {
@@ -162,6 +163,31 @@ describe("persistence migrations", () => {
     expect(loadState().activeGame?.queuedSubstitutions).toEqual(
       queued.queuedSubstitutions,
     );
+  });
+
+  it("preserves game-only guest players during active-game recovery", () => {
+    const team = structuredClone(INITIAL_STATE.teams.u8);
+    const guest: Player = {
+      id: "guest-u8-test",
+      name: "Borrowed Alex",
+      number: 31,
+      preferredRoles: ["defender", "midfielder", "forward"],
+      active: true,
+      guest: true,
+    };
+    const gameTeam = { ...team, roster: [...team.roster, guest] };
+    const game = createGame(
+      gameTeam,
+      "5-1-2-1",
+      [...team.roster.slice(0, 4).map((player) => player.id), guest.id],
+      40,
+      1_000,
+    );
+    game.guestPlayers = [guest];
+    saveState({ ...structuredClone(INITIAL_STATE), activeGame: game });
+
+    expect(loadState().activeGame?.guestPlayers).toEqual([guest]);
+    expect(loadState().activeGame?.presentIds).toContain(guest.id);
   });
 
   it("migrates absent players in an active version 7 game to unavailable", () => {

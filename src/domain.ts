@@ -788,6 +788,7 @@ export const undoLastEvent = (
     presentIds: event.beforePresentIds ?? current.presentIds,
     queuedSubstitutions:
       event.beforeQueuedSubstitutions ?? current.queuedSubstitutions,
+    guestPlayers: event.beforeGuestPlayers ?? current.guestPlayers,
     history: current.history.slice(0, -1),
   };
 };
@@ -825,15 +826,32 @@ export const summarizePlayerPositions = (
 
   return game.presentIds.map((playerId) => {
     const positionSeconds = secondsByPlayer.get(playerId) ?? new Map();
+    const goals = game.history
+      .filter(
+        (event) => event.type === "goal-for" && event.playerId === playerId,
+      )
+      .map((event) => ({
+        atSeconds: event.atSeconds,
+        positionId:
+          Object.entries(event.beforeAssignments).find(
+            ([, assignedPlayerId]) => assignedPlayerId === playerId,
+          )?.[0] ?? "",
+      }))
+      .filter((goal) => goal.positionId);
     return {
       playerId,
       totalSeconds: game.totals[playerId]?.fieldSeconds ?? 0,
+      goals,
       positions: formation.positions
         .map((positionItem) => ({
           positionId: positionItem.id,
           seconds: positionSeconds.get(positionItem.id) ?? 0,
         }))
-        .filter((positionItem) => positionItem.seconds > 0),
+        .filter(
+          (positionItem) =>
+            positionItem.seconds > 0 ||
+            goals.some((goal) => goal.positionId === positionItem.positionId),
+        ),
     };
   });
 };
@@ -1022,6 +1040,60 @@ export const markAvailable = (
         beforeBenchIds,
         beforeUnavailableIds,
         beforePresentIds,
+      },
+    ],
+  };
+  const errors = validateGame(next, sideSize);
+  if (errors.length) throw new Error(errors.join(". "));
+  return next;
+};
+
+export const addGuestPlayer = (
+  game: ActiveGame,
+  player: Player,
+  positionId: string,
+  sideSize: number,
+  now = Date.now(),
+): ActiveGame => {
+  const current = materializeGame(game, now);
+  const formation = getFormation(current.formationId);
+  if (!player.guest) throw new Error("Guest player is not marked as a guest");
+  if (!formation.positions.some((position) => position.id === positionId)) {
+    throw new Error("Choose a valid open position");
+  }
+  if (current.assignments[positionId]) {
+    throw new Error("That position is no longer open");
+  }
+  if (
+    current.presentIds.includes(player.id) ||
+    current.guestPlayers?.some((guest) => guest.id === player.id)
+  ) {
+    throw new Error("That guest player is already in the game");
+  }
+
+  const next: ActiveGame = {
+    ...current,
+    guestPlayers: [...(current.guestPlayers ?? []), { ...player }],
+    presentIds: [...current.presentIds, player.id],
+    assignments: { ...current.assignments, [positionId]: player.id },
+    totals: {
+      ...current.totals,
+      [player.id]: { fieldSeconds: 0, benchSeconds: 0 },
+    },
+    history: [
+      ...current.history,
+      {
+        id: `guest-${now}`,
+        type: "available",
+        atSeconds: current.clock.elapsedSeconds,
+        pairs: [],
+        playerId: player.id,
+        note: "Guest player joined an open position",
+        beforeAssignments: current.assignments,
+        beforeBenchIds: current.benchIds,
+        beforeUnavailableIds: current.unavailableIds,
+        beforePresentIds: current.presentIds,
+        beforeGuestPlayers: current.guestPlayers ?? [],
       },
     ],
   };

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { Player } from "./types";
 import {
+  addGuestPlayer,
   applySubstitutions,
   assignPlayerToPosition,
   assignPlayersByPreference,
@@ -388,11 +390,69 @@ describe("game summaries", () => {
     expect(summary).toEqual({
       playerId: movedPlayerId,
       totalSeconds: 20,
+      goals: [],
       positions: [
         { positionId: "dr", seconds: 10 },
         { positionId: "m", seconds: 10 },
       ],
     });
+  });
+
+  it("adds a guest directly to an open position and starts timing from entry", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 4).map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    const guest = {
+      id: "guest-u8-live",
+      name: "Borrowed Alex",
+      number: 31,
+      preferredRoles: ["forward", "midfielder"] as Player["preferredRoles"],
+      active: true,
+      guest: true,
+    };
+    const added = addGuestPlayer(game, guest, "f", team.sideSize, 6_000);
+
+    expect(added.clock.elapsedSeconds).toBe(5);
+    expect(added.assignments.f).toBe(guest.id);
+    expect(added.presentIds).toContain(guest.id);
+    expect(added.guestPlayers).toEqual([guest]);
+    expect(added.totals[guest.id]).toEqual({
+      fieldSeconds: 0,
+      benchSeconds: 0,
+    });
+    expect(undoLastEvent(added, 6_000).guestPlayers).toEqual([]);
+  });
+
+  it("attributes each goal to the scorer's position at that moment", () => {
+    const team = INITIAL_TEAMS.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 5).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const scorerId = game.assignments.dr;
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    game = recordGoal(game, "us", scorerId, 6_000);
+    game = movePlayer(game, scorerId, "m", 11_000);
+    game = recordGoal(game, "us", scorerId, 16_000);
+    game = setClockRunning(game, false, 21_000);
+
+    expect(
+      summarizePlayerPositions(game).find(
+        (summary) => summary.playerId === scorerId,
+      )?.goals,
+    ).toEqual([
+      { atSeconds: 5, positionId: "dr" },
+      { atSeconds: 15, positionId: "m" },
+    ]);
   });
 });
 

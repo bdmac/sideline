@@ -22,6 +22,7 @@
   --warm: #d45c27;
   --warm-dark: #9d3d19;
   --warm-pale: #fff0e8;
+  --goal: #925700;
   --danger: #a12f2f;
   --focus: #0066cc;
   --shadow: 0 10px 30px rgba(16, 40, 44, 0.12);
@@ -427,10 +428,35 @@ h3 {
 }
 
 .attendance-warning {
+  display: block;
   margin: 0 0 1rem;
   color: #6f1f1f;
   background: #fae5e5;
   border-left: 4px solid var(--danger);
+}
+
+.attendance-warning-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.attendance-warning-message svg {
+  flex: none;
+  margin-top: 0.08rem;
+}
+
+.attendance-support-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-left: 1.45rem;
+}
+
+.attendance-support-actions small {
+  color: #6f1f1f;
+  font-size: 0.75rem;
 }
 
 .field {
@@ -551,6 +577,23 @@ select:hover {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.5rem;
+}
+
+.guest-attendance-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 0.35rem;
+}
+
+.guest-attendance-row .attendance-button {
+  width: 100%;
+}
+
+.guest-attendance-row > .icon-button {
+  align-self: center;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .attendance-button {
@@ -1256,6 +1299,12 @@ select:hover {
 .pitch-player.empty {
   background: rgba(251, 252, 248, 0.78);
   border-style: dashed;
+  cursor: pointer;
+}
+
+.pitch-player.empty:hover {
+  background: var(--turf-pale);
+  border-color: var(--turf);
 }
 
 .position-label {
@@ -1373,18 +1422,17 @@ select:hover {
 
 .availability-section {
   margin-top: 1.5rem;
-  padding-top: 1rem;
   border-top: 1px solid var(--line);
-}
-
-.availability-section h3 {
-  margin-bottom: 0.35rem;
 }
 
 .availability-section p {
   color: var(--ink-soft);
   font-size: 0.82rem;
   margin: 0;
+}
+
+.availability-content {
+  padding-bottom: 0.75rem;
 }
 
 .unavailable-list {
@@ -1423,7 +1471,7 @@ select:hover {
   padding: 0;
 }
 
-.game-log-summary {
+.disclosure-summary {
   min-height: 64px;
   display: flex;
   align-items: center;
@@ -1435,11 +1483,11 @@ select:hover {
   list-style: none;
 }
 
-.game-log-summary::-webkit-details-marker {
+.disclosure-summary::-webkit-details-marker {
   display: none;
 }
 
-.game-log-summary::after {
+.disclosure-summary::after {
   content: "";
   position: absolute;
   right: 0.35rem;
@@ -1450,27 +1498,28 @@ select:hover {
   transform: rotate(45deg);
 }
 
-.game-log[open] .game-log-summary::after {
+.game-log[open] .disclosure-summary::after,
+.availability-section[open] .disclosure-summary::after {
   transform: rotate(225deg);
 }
 
-.game-log-summary strong,
-.game-log-summary small {
+.disclosure-summary strong,
+.disclosure-summary small {
   display: block;
 }
 
-.game-log-summary strong {
+.disclosure-summary strong {
   font-size: 1rem;
 }
 
-.game-log-summary small {
+.disclosure-summary small {
   margin-top: 0.12rem;
   color: var(--ink-soft);
   font-size: 0.75rem;
   font-weight: 650;
 }
 
-.game-log-summary > span:last-child {
+.disclosure-summary > span:last-child {
   color: var(--ink-soft);
   font-size: 0.78rem;
   white-space: nowrap;
@@ -1985,7 +2034,6 @@ select:hover {
   list-style: none;
   margin: 1rem 0;
   padding: 0;
-  border-top: 2px solid var(--ink);
 }
 
 .player-game-summaries > li {
@@ -2004,11 +2052,38 @@ select:hover {
   margin-bottom: 0.45rem;
 }
 
-.player-summary-heading > span {
+.player-summary-total {
   color: var(--turf-dark);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.player-summary-name,
+.player-goal-total {
+  display: inline-flex;
+  align-items: center;
+}
+
+.player-summary-name {
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+.player-goal-total {
+  gap: 0.15rem;
+  color: var(--goal);
+}
+
+.soccer-ball-icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  fill: var(--paper);
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .player-game-summaries ul {
@@ -2455,6 +2530,17 @@ select:hover {
 }
 
 @media (max-width: 520px) {
+  .attendance-support-actions {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding-left: 0;
+  }
+
+  .attendance-support-actions .secondary-action {
+    width: 100%;
+  }
+
   h1 {
     font-size: 1.72rem;
   }

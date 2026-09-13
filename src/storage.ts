@@ -10,9 +10,13 @@ type StoredState = Omit<Partial<AppState>, "version"> & {
 
 const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
   const team = INITIAL_STATE.teams[game.teamId];
-  const rosterIds = team.roster
-    .filter((player) => player.active)
-    .map((player) => player.id);
+  const guestPlayers = (game.guestPlayers ?? []).filter(
+    (player) => player.guest && player.active,
+  );
+  const rosterIds = [
+    ...team.roster.filter((player) => player.active).map((player) => player.id),
+    ...guestPlayers.map((player) => player.id),
+  ];
   const rosterIdSet = new Set(rosterIds);
   const presentIds = game.presentIds.filter((id) => rosterIdSet.has(id));
   const unavailableIds = [
@@ -28,6 +32,7 @@ const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
 
   return {
     ...game,
+    ...(guestPlayers.length ? { guestPlayers } : {}),
     periodCount: game.periodCount ?? (game.teamId === "u8" ? 4 : 2),
     presentIds,
     unavailableIds,

@@ -96,6 +96,9 @@ describe("Sideline app", () => {
   it("warns when attendance drops below the required side size", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    expect(
+      screen.queryByRole("button", { name: "Add guest player" }),
+    ).not.toBeInTheDocument();
 
     ["Simon", "Noah", "Maddox", "Ollie", "Malik"].forEach((name) => {
       fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
@@ -108,12 +111,114 @@ describe("Sideline app", () => {
       container.querySelector(".setup-progress-detail.danger"),
     ).toHaveTextContent("4 here");
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Short 1 player: 4 present, 5 required",
+      "Short 1 player: 4 present for this 5v5 game",
     );
+    expect(
+      screen
+        .getByRole("button", { name: "Add guest player" })
+        .closest('[role="alert"]'),
+    ).toBe(screen.getByRole("alert"));
 
     fireEvent.click(screen.getByRole("button", { name: "Simon Absent" }));
     expect(container.querySelector(".attendance-count.short")).toBeNull();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add guest player" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("adds a guest player for one game without changing the team roster", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    ["Simon", "Noah", "Maddox", "Ollie", "Malik"].forEach((name) => {
+      fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add guest player" }));
+    const guestDialog = screen.getByRole("dialog", {
+      name: "Add guest player",
+    });
+    fireEvent.change(within(guestDialog).getByLabelText("Player name"), {
+      target: { value: "Borrowed Alex" },
+    });
+    fireEvent.change(within(guestDialog).getByLabelText(/Jersey number/), {
+      target: { value: "31" },
+    });
+    fireEvent.click(
+      within(guestDialog).getByRole("button", { name: "Add guest" }),
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: /Borrowed Alex Guest · Present/,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(screen.getByText("Borrowed Alex")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", { name: "End this game?" }),
+      ).getByRole("button", { name: "End game" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Return to teams" }));
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    expect(screen.queryByText("Borrowed Alex")).not.toBeInTheDocument();
+  });
+
+  it("allows a confirmed short-sided start with every available player assigned", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    ["Simon", "Noah", "Maddox", "Ollie", "Malik"].forEach((name) => {
+      fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Start short-sided" }));
+    const confirmation = screen.getByRole("alertdialog", {
+      name: "Start with 4 players?",
+    });
+    expect(confirmation).toHaveTextContent(
+      "This 5v5 game will begin short-sided",
+    );
+    fireEvent.click(
+      within(confirmation).getByRole("button", {
+        name: "Start short-sided",
+      }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "On the field" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "On the field" }).parentElement,
+    ).toHaveTextContent("4/4");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add guest player at Striker" }),
+    );
+    const guestDialog = screen.getByRole("dialog", {
+      name: "Add guest player",
+    });
+    fireEvent.change(within(guestDialog).getByLabelText("Player name"), {
+      target: { value: "Late Guest" },
+    });
+    fireEvent.click(
+      within(guestDialog).getByRole("button", { name: "Add guest" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Change Late Guest's position" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "On the field" }).parentElement,
+    ).toHaveTextContent("5/5");
   });
 
   it("assigns starters from the tactics board and swaps occupied positions", () => {
@@ -181,6 +286,11 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByRole("button", { name: /Evan Present/i }));
     startGame();
 
+    const unavailable = screen.getByText("Unavailable").closest("details");
+    expect(unavailable).not.toHaveAttribute("open");
+
+    fireEvent.click(screen.getByText("Unavailable"));
+    expect(unavailable).toHaveAttribute("open");
     const markAvailable = screen.getByRole("button", {
       name: "Mark Evan available",
     });
@@ -649,6 +759,9 @@ describe("Sideline app", () => {
 
     fireEvent.click(screen.getByText("Game log"));
     expect(screen.getByText("Simon scored")).toBeInTheDocument();
+    expect(
+      screen.getByText("Goal for Golden Dragons · Goalkeeper"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Opponent scored")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Undo last change" }),
@@ -663,6 +776,12 @@ describe("Sideline app", () => {
     expect(screen.getByLabelText("Final score")).toHaveTextContent(
       "Golden Dragons1 – 1Opponent",
     );
+    expect(
+      screen.getByLabelText("Simon scored 1 goal").querySelectorAll("svg"),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByLabelText("1 goal scored as Goalkeeper"),
+    ).not.toBeInTheDocument();
   });
 
   it("compacts the match status header after scrolling", async () => {

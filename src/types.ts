@@ -8,6 +8,7 @@ export type Player = {
   number?: number;
   preferredRoles: PositionRole[];
   active: boolean;
+  guest?: boolean;
 };
 
 export type Team = {
@@ -45,6 +46,10 @@ export type PlayerTotals = {
 export type PlayerGameSummary = {
   playerId: string;
   totalSeconds: number;
+  goals: Array<{
+    atSeconds: number;
+    positionId: string;
+  }>;
   positions: Array<{
     positionId: string;
     seconds: number;
@@ -83,6 +88,7 @@ export type GameEvent = {
   beforeUnavailableIds: string[];
   beforePresentIds?: string[];
   beforeQueuedSubstitutions?: SubstitutionPair[];
+  beforeGuestPlayers?: Player[];
 };
 
 export type ActiveGame = {
@@ -104,6 +110,7 @@ export type ActiveGame = {
   totals: Record<string, PlayerTotals>;
   history: GameEvent[];
   queuedSubstitutions?: SubstitutionPair[];
+  guestPlayers?: Player[];
 };
 
 export type AppState = {

@@ -18,6 +18,7 @@ The physical scene is a coach using a phone outdoors in daylight, often one-hand
 | Turf pale | `#dbece7` | Selected backgrounds                         |
 | Warm      | `#d45c27` | Substitution action only                     |
 | Warm dark | `#9d3d19` | Warm-state text and hover                    |
+| Goal      | `#925700` | Completed-game goal markers                  |
 | Danger    | `#a12f2f` | Destructive end action                       |
 | Focus     | `#0066cc` | Visible keyboard focus                       |
 
@@ -57,8 +58,12 @@ Use one practical system sans stack: `Inter, ui-sans-serif, system-ui, -apple-sy
 - The live match status uses two expanded tiers: team identity with End Game, then a normalized clock/score/period row. As this header scrolls away on phones, a separate compact row fades and slides into place with team, elapsed time, score, and End Game; reversing the scroll naturally restores the expanded header without layout snapping.
 - Period boundaries surface as a full-width turf-tinted operational banner immediately below match status, pairing the break state with substitution review/planning and the next-period action. When substitutions are already queued, this banner absorbs their count and becomes the sole “Review & execute” entry point; the regular queue banner returns only if play resumes without execution. Regulation completion uses the same structure with danger emphasis for End Game.
 - Short-sided attendance uses the danger color on both visible counts plus a bordered text alert, so the state never depends on color alone.
+- Only while attendance is short, its warning area exposes an “Add guest player” action. Guest rows span the compact grid, identify themselves in text, and offer a separate remove control; the entry sheet asks only for name and optional jersey number.
+- A complete but undersized starter assignment changes the final setup action to “Start short-sided” and presents a calm confirmation explaining the player count before entering the live game.
+- In a short-sided live game, an empty dashed pitch magnet is an actionable “Open” position. Tapping it opens the guest-player sheet and places the new guest directly into that role without a separate assignment step.
+- The live unavailable-player list uses the same collapsed disclosure language as the game log. Its summary keeps the player count visible while the infrequent recovery controls stay out of the primary sideline scan path.
 - On phones, the persistent End Game control uses a red icon capsule and label; the final confirmation remains a fully filled danger capsule.
-- After end confirmation, a dedicated full-height game-summary page leads with the final score and uses a ruled roster ledger: each player has one bold total followed by plain position/time rows, with a direct zero-time message for players who never entered. The collapsed game-log disclosure follows the roster ledger, and a sticky footer provides the single return action without covering report content.
+- After end confirmation, a dedicated full-height game-summary page leads with the final score and uses a ruled roster ledger: each player has one bold total followed by plain position/time rows, with a direct zero-time message for players who never entered. Scorers receive one small soccer-ball marker per goal beside their name; goal positions and exact times stay in the game log to keep the player ledger calm. The collapsed game-log disclosure follows the roster ledger, and a sticky footer provides the single return action without covering report content.
 - PWA installation appears as a full-width turf-tinted action beneath team selection, visible only while running in a browser.
 - Form controls use white fill, dark text, and a visible 1px neutral border.
 - Focus uses a 3px blue outline with offset.

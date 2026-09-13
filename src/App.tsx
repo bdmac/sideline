@@ -27,6 +27,7 @@ import {
   useState,
 } from "react";
 import {
+  addGuestPlayer,
   applySubstitutions,
   assignPlayerToPosition,
   assignPlayersByPreference,
@@ -89,6 +90,25 @@ const preferredRoleLabel = (role: Player["preferredRoles"][number]) =>
       : role === "midfielder"
         ? "Midfield"
         : "Forward";
+
+const buildGuestPlayer = (
+  teamId: TeamId,
+  name: string,
+  number: number | undefined,
+  sequence: number,
+): Player => ({
+  id: `guest-${teamId}-${Date.now()}-${sequence}`,
+  name,
+  number,
+  preferredRoles: ["defender", "midfielder", "forward", "goalkeeper"],
+  active: true,
+  guest: true,
+});
+
+const teamWithGameGuests = (team: Team, game: ActiveGame): Team =>
+  game.guestPlayers?.length
+    ? { ...team, roster: [...team.roster, ...game.guestPlayers] }
+    : team;
 
 let modalLockCount = 0;
 let modalScrollY = 0;
@@ -240,7 +260,7 @@ function App() {
   };
 
   const activeTeam = state.activeGame
-    ? state.teams[state.activeGame.teamId]
+    ? teamWithGameGuests(state.teams[state.activeGame.teamId], state.activeGame)
     : null;
 
   return (
@@ -443,6 +463,97 @@ function InstallHelpDialog({
   );
 }
 
+function GuestPlayerSheet({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (name: string, number?: number) => void;
+}) {
+  const [name, setName] = useState("");
+  const [number, setNumber] = useState("");
+  const trimmedName = name.trim();
+
+  return (
+    <ModalBackdrop>
+      <section
+        className="bottom-sheet compact-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="guest-player-title"
+      >
+        <header className="sheet-header">
+          <div>
+            <h2 id="guest-player-title">Add guest player</h2>
+            <p>This player will exist only for this game.</p>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={22} />
+          </button>
+        </header>
+
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!trimmedName) return;
+            onAdd(
+              trimmedName,
+              number ? Number.parseInt(number, 10) : undefined,
+            );
+          }}
+        >
+          <label className="field">
+            <span>Player name</span>
+            <input
+              autoFocus
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Guest player"
+              required
+            />
+          </label>
+          <label className="field">
+            <span>
+              Jersey number <small>Optional</small>
+            </span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              max="99"
+              value={number}
+              onChange={(event) => setNumber(event.target.value)}
+              placeholder="—"
+            />
+          </label>
+          <div className="sheet-actions">
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              className="primary-action"
+              type="submit"
+              disabled={!trimmedName}
+            >
+              <CirclePlus size={18} aria-hidden="true" />
+              Add guest
+            </button>
+          </div>
+        </form>
+      </section>
+    </ModalBackdrop>
+  );
+}
+
 function SetupScreen({
   team,
   onBack,
@@ -452,9 +563,16 @@ function SetupScreen({
   onBack: () => void;
   onStart: (game: ActiveGame) => void;
 }) {
+  const [guestPlayers, setGuestPlayers] = useState<Player[]>([]);
+  const [guestPlayerOpen, setGuestPlayerOpen] = useState(false);
+  const [shortStartConfirm, setShortStartConfirm] = useState(false);
+  const setupTeam = useMemo(
+    () => ({ ...team, roster: [...team.roster, ...guestPlayers] }),
+    [guestPlayers, team],
+  );
   const activePlayers = useMemo(
-    () => team.roster.filter((player) => player.active),
-    [team.roster],
+    () => setupTeam.roster.filter((player) => player.active),
+    [setupTeam.roster],
   );
   const formations = getFormationsForTeam(team);
   const [presentIds, setPresentIds] = useState(
@@ -491,7 +609,7 @@ function SetupScreen({
       assignPlayersByPreference(
         nextFormation,
         present.map((player) => player.id),
-        team.roster,
+        setupTeam.roster,
       ),
     );
   };
@@ -501,8 +619,9 @@ function SetupScreen({
   const assignmentCount = selectedIds.length;
   const benchIds = presentIds.filter((id) => !selectedIds.includes(id));
   const attendanceShortfall = Math.max(0, team.sideSize - presentIds.length);
+  const requiredAssignments = Math.min(team.sideSize, presentIds.length);
   const canStart =
-    presentIds.length >= team.sideSize && assignmentCount === expectedOnField;
+    presentIds.length > 0 && assignmentCount === requiredAssignments;
   const setupSteps = [
     { label: "Attendance", detail: `${presentIds.length} here` },
     { label: "Formation", detail: formation.name },
@@ -522,7 +641,7 @@ function SetupScreen({
       .filter((player) => presentIds.includes(player.id))
       .map((player) => player.id);
     setAssignments(
-      assignPlayersByPreference(formation, availableIds, team.roster),
+      assignPlayersByPreference(formation, availableIds, setupTeam.roster),
     );
   };
 
@@ -563,10 +682,45 @@ function SetupScreen({
     });
   };
 
+  const addGuestPlayer = (name: string, number?: number) => {
+    const guest = buildGuestPlayer(
+      team.id,
+      name,
+      number,
+      guestPlayers.length + 1,
+    );
+    setGuestPlayers((current) => [...current, guest]);
+    setPresentIds((current) => [...current, guest.id]);
+    setAssignments((current) => {
+      const openPosition = formation.positions.find(
+        (position) => !current[position.id],
+      );
+      return openPosition
+        ? { ...current, [openPosition.id]: guest.id }
+        : current;
+    });
+    setGuestPlayerOpen(false);
+  };
+
+  const removeGuestPlayer = (playerId: string) => {
+    setGuestPlayers((current) =>
+      current.filter((player) => player.id !== playerId),
+    );
+    setPresentIds((current) => current.filter((id) => id !== playerId));
+    setAssignments((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([positionId, id]) => [
+          positionId,
+          id === playerId ? "" : id,
+        ]),
+      ),
+    );
+  };
+
   const start = () => {
     if (!canStart) return;
     const game = createGame(
-      team,
+      setupTeam,
       formationId,
       presentIds,
       team.defaultDurationMinutes,
@@ -577,6 +731,7 @@ function SetupScreen({
       Object.entries(assignments).filter(([, id]) => Boolean(id)),
     );
     game.benchIds = benchIds;
+    game.guestPlayers = guestPlayers.map((player) => ({ ...player }));
     onStart(game);
   };
 
@@ -625,18 +780,34 @@ function SetupScreen({
             </span>
           </div>
           {attendanceShortfall > 0 && (
-            <p className="inline-warning attendance-warning" role="alert">
-              <CircleAlert size={18} aria-hidden="true" />
-              Short {attendanceShortfall}{" "}
-              {attendanceShortfall === 1 ? "player" : "players"}:{" "}
-              {presentIds.length} present, {team.sideSize} required to start
-              this {team.sideSize}v{team.sideSize} game.
-            </p>
+            <div className="inline-warning attendance-warning" role="alert">
+              <div className="attendance-warning-message">
+                <CircleAlert size={18} aria-hidden="true" />
+                <span>
+                  Short {attendanceShortfall}{" "}
+                  {attendanceShortfall === 1 ? "player" : "players"}:{" "}
+                  {presentIds.length} present for this {team.sideSize}v
+                  {team.sideSize} game. Add a guest or prepare to play
+                  short-sided.
+                </span>
+              </div>
+              <div className="attendance-support-actions">
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => setGuestPlayerOpen(true)}
+                >
+                  <CirclePlus size={18} aria-hidden="true" />
+                  Add guest player
+                </button>
+                <small>Guest players are saved only with this game.</small>
+              </div>
+            </div>
           )}
           <div className="attendance-grid">
             {activePlayers.map((player) => {
               const present = presentIds.includes(player.id);
-              return (
+              const attendanceButton = (
                 <button
                   className={`attendance-button ${present ? "selected" : ""}`}
                   type="button"
@@ -649,9 +820,28 @@ function SetupScreen({
                   </span>
                   <span>
                     <strong>{player.name}</strong>
-                    <small>{present ? "Present" : "Absent"}</small>
+                    <small>
+                      {player.guest ? "Guest · " : ""}
+                      {present ? "Present" : "Absent"}
+                    </small>
                   </span>
                 </button>
+              );
+              return player.guest ? (
+                <div className="guest-attendance-row" key={player.id}>
+                  {attendanceButton}
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={() => removeGuestPlayer(player.id)}
+                    aria-label={`Remove guest ${player.name}`}
+                    title={`Remove guest ${player.name}`}
+                  >
+                    <Trash2 size={19} aria-hidden="true" />
+                  </button>
+                </div>
+              ) : (
+                attendanceButton
               );
             })}
           </div>
@@ -738,7 +928,7 @@ function SetupScreen({
           <StarterPitch
             formation={formation}
             assignments={assignments}
-            team={team}
+            team={setupTeam}
             onChoosePosition={setStarterPositionId}
           />
           <div className="bench-preview">
@@ -746,7 +936,7 @@ function SetupScreen({
             {benchIds.length ? (
               <ul className="starter-bench-list">
                 {benchIds.map((id) => (
-                  <li key={id}>{playerName(team, id)}</li>
+                  <li key={id}>{playerName(setupTeam, id)}</li>
                 ))}
               </ul>
             ) : (
@@ -781,16 +971,21 @@ function SetupScreen({
             className="primary-action"
             type="button"
             disabled={!canStart}
-            onClick={start}
+            onClick={() =>
+              attendanceShortfall > 0 ? setShortStartConfirm(true) : start()
+            }
           >
-            <Play size={22} aria-hidden="true" /> Start game
+            <Play size={22} aria-hidden="true" />{" "}
+            {attendanceShortfall > 0 ? "Start short-sided" : "Start game"}
           </button>
         )}
         <span>
           Step {setupStep + 1} of 3
           {setupStep === 2 && !canStart && presentIds.length > 0
-            ? ` · Fill all ${team.sideSize} positions`
-            : ""}
+            ? ` · Assign all ${requiredAssignments} available players`
+            : setupStep === 2 && attendanceShortfall > 0
+              ? ` · ${presentIds.length} playing`
+              : ""}
         </span>
       </div>
 
@@ -818,6 +1013,24 @@ function SetupScreen({
           }}
         />
       )}
+      {guestPlayerOpen && (
+        <GuestPlayerSheet
+          onClose={() => setGuestPlayerOpen(false)}
+          onAdd={addGuestPlayer}
+        />
+      )}
+      {shortStartConfirm && (
+        <ConfirmSheet
+          title={`Start with ${assignmentCount} players?`}
+          body={`This ${team.sideSize}v${team.sideSize} game will begin short-sided with ${assignmentCount} assigned players. You can mark a late or guest player available during the game.`}
+          cancelLabel="Keep preparing"
+          confirmLabel="Start short-sided"
+          confirmClassName="primary-action"
+          confirmIcon={<Play size={18} aria-hidden="true" />}
+          onCancel={() => setShortStartConfirm(false)}
+          onConfirm={start}
+        />
+      )}
     </div>
   );
 }
@@ -838,6 +1051,7 @@ function LiveGameScreen({
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [queuedPlanOpen, setQueuedPlanOpen] = useState(false);
   const [goalScorerOpen, setGoalScorerOpen] = useState(false);
+  const [guestPositionId, setGuestPositionId] = useState<string | null>(null);
   const [benchQueuePlayerId, setBenchQueuePlayerId] = useState<string | null>(
     null,
   );
@@ -1217,7 +1431,9 @@ function LiveGameScreen({
               {fieldIds.length}/
               {Math.min(
                 team.sideSize,
-                game.presentIds.length - game.unavailableIds.length,
+                game.presentIds.filter(
+                  (playerId) => !game.unavailableIds.includes(playerId),
+                ).length,
               )}
             </span>
           </div>
@@ -1227,6 +1443,7 @@ function LiveGameScreen({
             team={team}
             totals={displayed.totals}
             onEditPlayer={setPositionEditorPlayerId}
+            onAddGuestAtPosition={setGuestPositionId}
             onMovePlayer={(playerId, positionId) =>
               safeChange(() =>
                 movePlayer(game, playerId, positionId, Date.now()),
@@ -1271,31 +1488,42 @@ function LiveGameScreen({
             </div>
           )}
 
-          <div className="availability-section">
-            <h3>Unavailable</h3>
-            {game.unavailableIds.length ? (
-              <div className="unavailable-list">
-                {game.unavailableIds.map((id) => (
-                  <div className="unavailable-row" key={id}>
-                    <span>
-                      <strong>{playerName(team, id)}</strong>
-                      <small>Not available</small>
-                    </span>
-                    <button
-                      className="secondary-action"
-                      type="button"
-                      aria-label={`Mark ${playerName(team, id)} available`}
-                      onClick={() => handleAvailable(id)}
-                    >
-                      Mark available
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p>Everyone present is available.</p>
-            )}
-          </div>
+          <details className="availability-section">
+            <summary className="disclosure-summary">
+              <span>
+                <strong>Unavailable</strong>
+                <small>Players currently out of the game</small>
+              </span>
+              <span>
+                {game.unavailableIds.length}{" "}
+                {game.unavailableIds.length === 1 ? "player" : "players"}
+              </span>
+            </summary>
+            <div className="availability-content">
+              {game.unavailableIds.length ? (
+                <div className="unavailable-list">
+                  {game.unavailableIds.map((id) => (
+                    <div className="unavailable-row" key={id}>
+                      <span>
+                        <strong>{playerName(team, id)}</strong>
+                        <small>Not available</small>
+                      </span>
+                      <button
+                        className="secondary-action"
+                        type="button"
+                        aria-label={`Mark ${playerName(team, id)} available`}
+                        onClick={() => handleAvailable(id)}
+                      >
+                        Mark available
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>Everyone present is available.</p>
+              )}
+            </div>
+          </details>
         </aside>
       </div>
 
@@ -1412,6 +1640,32 @@ function LiveGameScreen({
           }}
         />
       )}
+      {guestPositionId && (
+        <GuestPlayerSheet
+          onClose={() => setGuestPositionId(null)}
+          onAdd={(name, number) => {
+            const guest = buildGuestPlayer(
+              team.id,
+              name,
+              number,
+              (game.guestPlayers?.length ?? 0) + 1,
+            );
+            if (
+              safeChange(() =>
+                addGuestPlayer(
+                  game,
+                  guest,
+                  guestPositionId,
+                  team.sideSize,
+                  Date.now(),
+                ),
+              )
+            ) {
+              setGuestPositionId(null);
+            }
+          }}
+        />
+      )}
       {benchQueuePlayerId && (
         <BenchSubstitutionPicker
           playerId={benchQueuePlayerId}
@@ -1497,6 +1751,7 @@ function Pitch({
   team,
   totals,
   onEditPlayer,
+  onAddGuestAtPosition,
   onMovePlayer,
 }: {
   formation: ReturnType<typeof getFormation>;
@@ -1504,6 +1759,7 @@ function Pitch({
   team: Team;
   totals: ActiveGame["totals"];
   onEditPlayer: (playerId: string) => void;
+  onAddGuestAtPosition: (positionId: string) => void;
   onMovePlayer: (playerId: string, positionId: string) => void;
 }) {
   const pitchRef = useRef<HTMLDivElement>(null);
@@ -1676,14 +1932,18 @@ function Pitch({
             {content}
           </button>
         ) : (
-          <div
-            className={`pitch-player ${player ? "" : "empty"}`}
+          <button
+            type="button"
+            className="pitch-player empty"
             key={position.id}
             style={style}
             data-position-id={position.id}
+            onClick={() => onAddGuestAtPosition(position.id)}
+            aria-label={`Add guest player at ${position.label}`}
+            title={`Add guest player at ${position.label}`}
           >
             {content}
-          </div>
+          </button>
         );
       })}
     </div>
@@ -2630,11 +2890,30 @@ function GameSummary({
             const player = team.roster.find(
               (item) => item.id === summary.playerId,
             );
+            const playerDisplayName = player?.name ?? "Unknown player";
             return (
               <li key={summary.playerId}>
                 <div className="player-summary-heading">
-                  <strong>{player?.name ?? "Unknown player"}</strong>
-                  <span>{formatDuration(summary.totalSeconds)} total</span>
+                  <span className="player-summary-name">
+                    <strong>{playerDisplayName}</strong>
+                    {summary.goals.length > 0 && (
+                      <span
+                        className="player-goal-total"
+                        aria-label={`${playerDisplayName} scored ${
+                          summary.goals.length
+                        } ${summary.goals.length === 1 ? "goal" : "goals"}`}
+                      >
+                        {summary.goals.map((goal, index) => (
+                          <SoccerBallIcon
+                            key={`${goal.atSeconds}-${goal.positionId}-${index}`}
+                          />
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                  <span className="player-summary-total">
+                    {formatDuration(summary.totalSeconds)} total
+                  </span>
                 </div>
                 {summary.positions.length ? (
                   <ul>
@@ -2670,6 +2949,19 @@ function GameSummary({
   );
 }
 
+function SoccerBallIcon() {
+  return (
+    <svg className="soccer-ball-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m12 7 3 2.2-1.1 3.5h-3.8L9 9.2 12 7Z" fill="currentColor" />
+      <path
+        d="M9 9.2 5.4 9.1m4.7 3.6-2.3 3m6.1-3 2.3 3M15 9.2l3.6-.1M7.8 15.7 7 19m9.2-3.3.8 3"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
 function GameLog({
   game,
   formation,
@@ -2683,7 +2975,7 @@ function GameLog({
 }) {
   return (
     <details className="game-log">
-      <summary className="game-log-summary">
+      <summary className="disclosure-summary">
         <span>
           <strong>Game log</strong>
           <small>Review confirmed game changes</small>
@@ -2697,6 +2989,17 @@ function GameLog({
               const eventPlayer = event.playerId
                 ? playerName(team, event.playerId)
                 : null;
+              const goalPositionId =
+                event.type === "goal-for" && event.playerId
+                  ? Object.entries(event.beforeAssignments).find(
+                      ([, playerId]) => playerId === event.playerId,
+                    )?.[0]
+                  : undefined;
+              const goalPosition = goalPositionId
+                ? formation.positions.find(
+                    (position) => position.id === goalPositionId,
+                  )
+                : undefined;
               const eventTitle =
                 event.type === "goal-for"
                   ? `${eventPlayer ?? "Player"} scored`
@@ -2711,7 +3014,9 @@ function GameLog({
                           : `${eventPlayer ?? "Player"} unavailable`;
               const eventDetail =
                 event.type === "goal-for"
-                  ? `Goal for ${team.name}`
+                  ? `Goal for ${team.name}${
+                      goalPosition ? ` · ${goalPosition.label}` : ""
+                    }`
                   : event.type === "goal-against"
                     ? "Opponent goal"
                     : event.type === "position-change"
@@ -2881,6 +3186,7 @@ function ConfirmSheet({
   cancelLabel = "Keep game",
   confirmLabel,
   confirmIcon = <Square size={18} aria-hidden="true" />,
+  confirmClassName = "danger-action",
   onCancel,
   onConfirm,
 }: {
@@ -2889,6 +3195,7 @@ function ConfirmSheet({
   cancelLabel?: string;
   confirmLabel: string;
   confirmIcon?: ReactNode;
+  confirmClassName?: "primary-action" | "danger-action";
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -2907,7 +3214,11 @@ function ConfirmSheet({
           <button className="secondary-action" type="button" onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button className="danger-action" type="button" onClick={onConfirm}>
+          <button
+            className={confirmClassName}
+            type="button"
+            onClick={onConfirm}
+          >
             {confirmIcon} {confirmLabel}
           </button>
         </div>
