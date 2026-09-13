@@ -553,10 +553,11 @@ function LiveGameScreen({
           </span>
         </div>
         <button
-          className="quiet-button"
+          className="danger-action end-game-button"
           type="button"
           onClick={() => setEndConfirm(true)}
         >
+          <Square size={18} aria-hidden="true" />
           End game
         </button>
       </header>
@@ -1111,11 +1112,18 @@ function PositionEditor({
             value={playerId}
             onChange={(event) => setPlayerId(event.target.value)}
           >
-            {Object.values(game.assignments).map((id) => (
-              <option value={id} key={id}>
-                {playerName(team, id)}
-              </option>
-            ))}
+            {Object.entries(game.assignments).map(
+              ([assignedPositionId, id]) => {
+                const assignedPosition = formation.positions.find(
+                  (position) => position.id === assignedPositionId,
+                );
+                return (
+                  <option value={id} key={id}>
+                    {playerName(team, id)} ({assignedPosition?.label})
+                  </option>
+                );
+              },
+            )}
           </select>
         </label>
         <label className="field">
@@ -1128,8 +1136,8 @@ function PositionEditor({
               const occupant = game.assignments[position.id];
               return (
                 <option value={position.id} key={position.id}>
-                  {position.label}
-                  {occupant ? ` · ${playerName(team, occupant)}` : " · open"}
+                  ({position.label}){" "}
+                  {occupant ? playerName(team, occupant) : "Open"}
                 </option>
               );
             })}

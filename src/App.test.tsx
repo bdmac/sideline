@@ -75,4 +75,18 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Clock running")).toBeInTheDocument();
   });
+
+  it("shows current assignments in both position-change selectors", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    fireEvent.click(screen.getByRole("button", { name: "Positions" }));
+
+    expect(
+      screen.getByRole("option", { name: "Simon (Goalkeeper)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "(Goalkeeper) Simon" }),
+    ).toBeInTheDocument();
+  });
 });

@@ -359,6 +359,16 @@ h3 {
   color: white;
 }
 
+.danger-action:hover:not(:disabled) {
+  background: #7f2424;
+}
+
+.end-game-button {
+  min-height: 44px;
+  padding: 0.6rem 0.85rem;
+  white-space: nowrap;
+}
+
 .sub-confirm {
   background: var(--warm);
   color: white;
