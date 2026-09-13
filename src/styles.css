@@ -1361,15 +1361,46 @@ select:hover {
   }
 
   .pitch-player {
-    width: 31%;
-    min-height: 55px;
-    padding-left: 1.55rem;
+    width: 26%;
+    min-height: 50px;
+    padding: 0.28rem 0.3rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "position time"
+      "name name";
+    gap: 0.12rem 0.2rem;
+    align-items: center;
   }
 
   .position-label {
-    width: 18px;
-    height: 24px;
-    left: 0.25rem;
+    position: static;
+    grid-area: position;
+    width: auto;
+    min-width: 20px;
+    height: 18px;
+    padding: 0 0.18rem;
+    transform: none;
+  }
+
+  .pitch-player strong {
+    grid-area: name;
+    font-size: 0.7rem;
+    line-height: 1.1;
+    text-align: center;
+  }
+
+  .pitch-player small {
+    grid-area: time;
+    margin: 0;
+    font-size: 0.56rem;
+    line-height: 1;
+    text-align: right;
+  }
+
+  .pitch-time-label,
+  .pitch-player.empty small {
+    display: none;
   }
 
   .swap-row {

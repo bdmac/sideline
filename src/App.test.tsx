@@ -31,6 +31,18 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
+  it("labels setup navigation by its team-selection destination", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+
+    const backButton = screen.getByRole("button", { name: "Team selection" });
+    expect(backButton).toBeInTheDocument();
+    fireEvent.click(backButton);
+    expect(
+      screen.getByRole("heading", { name: "Which team are you coaching?" }),
+    ).toBeInTheDocument();
+  });
+
   it("opens U12 setup directly without configurable duration or format", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Fireballers"));

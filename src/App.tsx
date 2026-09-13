@@ -439,7 +439,7 @@ function SetupScreen({
 
   return (
     <div className="page setup-page">
-      <PageBack onClick={onBack}>{team.name}</PageBack>
+      <PageBack onClick={onBack}>Team selection</PageBack>
       <section className="page-heading">
         <div>
           <h1>Prepare game</h1>
@@ -928,9 +928,16 @@ function Pitch({
             <span className="position-label">{position.shortLabel}</span>
             <strong>{player?.name ?? "Open"}</strong>
             <small>
-              {player
-                ? `${formatDuration(totals[player.id]?.fieldSeconds ?? 0)} played`
-                : position.label}
+              {player ? (
+                <>
+                  <span className="pitch-time">
+                    {formatDuration(totals[player.id]?.fieldSeconds ?? 0)}
+                  </span>
+                  <span className="pitch-time-label"> played</span>
+                </>
+              ) : (
+                position.label
+              )}
             </small>
           </div>
         );
