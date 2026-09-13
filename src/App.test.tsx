@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { STORAGE_KEY } from "./storage";
 
@@ -88,5 +88,25 @@ describe("Sideline app", () => {
     expect(
       screen.getByRole("option", { name: "(Goalkeeper) Simon" }),
     ).toBeInTheDocument();
+  });
+
+  it("scrolls to the top when navigating between app screens", () => {
+    render(<App />);
+    vi.mocked(window.scrollTo).mockClear();
+
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    expect(window.scrollTo).toHaveBeenLastCalledWith({
+      top: 0,
+      left: 0,
+      behavior: "auto",
+    });
+
+    vi.mocked(window.scrollTo).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(window.scrollTo).toHaveBeenLastCalledWith({
+      top: 0,
+      left: 0,
+      behavior: "auto",
+    });
   });
 });

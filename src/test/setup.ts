@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 
 const createStorageMock = (): Storage => {
   const values = new Map<string, string>();
@@ -39,5 +39,12 @@ Object.defineProperty(window, "sessionStorage", {
   value: sessionStorageMock,
   configurable: true,
 });
+Object.defineProperty(window, "scrollTo", {
+  value: vi.fn(),
+  configurable: true,
+});
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});

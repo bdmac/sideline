@@ -14,7 +14,7 @@ import {
   UserRoundX,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   applySubstitutions,
   assignPlayerToPosition,
@@ -54,6 +54,8 @@ function App() {
   const [screen, setScreen] = useState<Screen>(() =>
     state.activeGame ? { name: "live" } : { name: "home" },
   );
+  const screenKey =
+    screen.name === "setup" ? `${screen.name}:${screen.teamId}` : screen.name;
 
   const commitState = (update: (current: AppState) => AppState) => {
     const next = update(stateRef.current);
@@ -71,6 +73,10 @@ function App() {
     window.addEventListener("pagehide", persist);
     return () => window.removeEventListener("pagehide", persist);
   }, []);
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [screenKey]);
 
   const activeTeam = state.activeGame
     ? state.teams[state.activeGame.teamId]
