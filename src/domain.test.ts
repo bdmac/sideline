@@ -7,6 +7,7 @@ import {
   getFormationsForTeam,
   getPeriodStatus,
   INITIAL_TEAMS,
+  markAvailable,
   materializeGame,
   suggestSubstitutions,
   undoLastEvent,
@@ -51,6 +52,60 @@ describe("time accounting", () => {
       expect(next.totals[id].benchSeconds).toBe(10);
     });
     expect(next.clock.elapsedSeconds).toBe(10);
+  });
+});
+
+describe("player availability", () => {
+  it("starts non-attending roster players as unavailable", () => {
+    const team = INITIAL_TEAMS.u8;
+    const attendingIds = team.roster.slice(0, 7).map((player) => player.id);
+    const game = createGame(team, "5-1-2-1", attendingIds, 40, 1_000);
+
+    expect(game.presentIds).toEqual(attendingIds);
+    expect(game.unavailableIds).toEqual(
+      team.roster.slice(7).map((player) => player.id),
+    );
+    expect(validateGame(game, team.sideSize)).toEqual([]);
+  });
+
+  it("adds a late arrival to the bench and supports undo", () => {
+    const team = INITIAL_TEAMS.u8;
+    const latePlayer = team.roster.at(-1)!;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, -1).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const available = markAvailable(game, latePlayer.id, team.sideSize, 2_000);
+
+    expect(available.presentIds).toContain(latePlayer.id);
+    expect(available.unavailableIds).not.toContain(latePlayer.id);
+    expect(available.benchIds).toContain(latePlayer.id);
+    expect(validateGame(available, team.sideSize)).toEqual([]);
+
+    const undone = undoLastEvent(available, 3_000);
+    expect(undone.presentIds).not.toContain(latePlayer.id);
+    expect(undone.unavailableIds).toContain(latePlayer.id);
+    expect(undone.benchIds).not.toContain(latePlayer.id);
+  });
+
+  it("places a late arrival into an open position when short-sided", () => {
+    const team = INITIAL_TEAMS.u12;
+    const game = createGame(
+      team,
+      "9-3-1-3-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      60,
+      1_000,
+    );
+    const latePlayer = team.roster[7];
+    const available = markAvailable(game, latePlayer.id, team.sideSize, 2_000);
+
+    expect(Object.values(available.assignments)).toContain(latePlayer.id);
+    expect(available.benchIds).not.toContain(latePlayer.id);
+    expect(validateGame(available, team.sideSize)).toEqual([]);
   });
 });
 

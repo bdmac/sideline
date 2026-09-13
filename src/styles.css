@@ -997,6 +997,36 @@ select:hover {
   margin: 0;
 }
 
+.unavailable-list {
+  border-top: 1px solid var(--line);
+}
+
+.unavailable-row {
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--line);
+  padding: 0.55rem 0;
+}
+
+.unavailable-row strong,
+.unavailable-row small {
+  display: block;
+}
+
+.unavailable-row small {
+  margin-top: 0.15rem;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.unavailable-row .secondary-action {
+  min-height: 44px;
+  padding: 0.55rem 0.7rem;
+}
+
 .game-log {
   margin-top: 1rem;
   border-top: 2px solid var(--ink);
@@ -1310,8 +1340,42 @@ select:hover {
     background: rgba(251, 252, 248, 0.97);
   }
 
+  .setup-submit {
+    bottom: 0;
+    margin: 1.25rem -1rem 0;
+    padding-top: 0.7rem;
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: calc(0.7rem + env(safe-area-inset-bottom));
+    padding-left: max(1rem, env(safe-area-inset-left));
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: var(--paper);
+    box-shadow: 0 -8px 24px rgba(16, 40, 44, 0.12);
+  }
+
+  .setup-submit .primary-action {
+    border-radius: 12px;
+  }
+
+  .live-page {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+
   .mobile-control-dock {
+    left: 0;
+    right: 0;
+    bottom: 0;
     grid-template-columns: repeat(4, 1fr);
+    padding-top: 0.65rem;
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: calc(0.65rem + env(safe-area-inset-bottom));
+    padding-left: max(1rem, env(safe-area-inset-left));
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: var(--paper);
+    box-shadow: 0 -8px 24px rgba(16, 40, 44, 0.14);
   }
 
   .mobile-control-dock button {
@@ -1319,6 +1383,13 @@ select:hover {
     gap: 0.25rem;
     min-height: 66px;
     padding: 0.35rem;
+    border-color: transparent;
+    border-radius: 12px;
+    line-height: 1.05;
+  }
+
+  .mobile-control-dock button:not(.clock-button):not(.sub-button) {
+    background: var(--wash);
   }
 }
 

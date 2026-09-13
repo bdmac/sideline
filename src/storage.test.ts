@@ -39,7 +39,7 @@ describe("persistence migrations", () => {
       activeGame,
     });
 
-    expect(migrated.version).toBe(7);
+    expect(migrated.version).toBe(8);
     expect(migrated.teams.u8.name).toBe("Golden Dragons");
     expect(migrated.teams.u8.roster.map((player) => player.name)).toEqual([
       "Simon",
@@ -53,7 +53,8 @@ describe("persistence migrations", () => {
       "Evan",
     ]);
     expect(migrated.teams.u8.roster[2].active).toBe(true);
-    expect(migrated.activeGame).toEqual(activeGame);
+    expect(migrated.activeGame?.presentIds).toEqual(activeGame.presentIds);
+    expect(migrated.activeGame?.unavailableIds).toEqual(["u8-p3", "u8-p9"]);
   });
 
   it("adopts the supplied U12 roster from version 2 state", () => {
@@ -74,7 +75,7 @@ describe("persistence migrations", () => {
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(7);
+    expect(migrated.version).toBe(8);
     expect(migrated.teams.u12.name).toBe("Fireballers");
     expect(migrated.teams.u12.roster.map((player) => player.name)).toEqual([
       "Jackson",
@@ -135,5 +136,28 @@ describe("persistence migrations", () => {
     sessionStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(game));
 
     expect(loadState().activeGame).toEqual(game);
+  });
+
+  it("migrates absent players in an active version 7 game to unavailable", () => {
+    const team = INITIAL_STATE.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.unavailableIds = [];
+
+    const migrated = migrateStoredState({
+      version: 7,
+      teams: structuredClone(INITIAL_STATE.teams),
+      activeGame: game,
+    });
+
+    expect(migrated.version).toBe(8);
+    expect(migrated.activeGame?.unavailableIds).toEqual(
+      team.roster.slice(7).map((player) => player.id),
+    );
   });
 });

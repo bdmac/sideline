@@ -8,6 +8,33 @@ type StoredState = Omit<Partial<AppState>, "version"> & {
   version?: number;
 };
 
+const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
+  const team = INITIAL_STATE.teams[game.teamId];
+  const rosterIds = team.roster
+    .filter((player) => player.active)
+    .map((player) => player.id);
+  const rosterIdSet = new Set(rosterIds);
+  const presentIds = game.presentIds.filter((id) => rosterIdSet.has(id));
+  const unavailableIds = [
+    ...new Set([
+      ...(game.unavailableIds ?? []).filter((id) => rosterIdSet.has(id)),
+      ...rosterIds.filter((id) => !presentIds.includes(id)),
+    ]),
+  ];
+  const totals = { ...game.totals };
+  rosterIds.forEach((id) => {
+    totals[id] ??= { fieldSeconds: 0, benchSeconds: 0 };
+  });
+
+  return {
+    ...game,
+    periodCount: game.periodCount ?? (game.teamId === "u8" ? 4 : 2),
+    presentIds,
+    unavailableIds,
+    totals,
+  };
+};
+
 export const migrateStoredState = (parsed: StoredState): AppState => {
   if (!parsed.teams?.u8 || !parsed.teams?.u12) {
     return structuredClone(INITIAL_STATE);
@@ -19,23 +46,19 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     parsed.version === 3 ||
     parsed.version === 4 ||
     parsed.version === 5 ||
-    parsed.version === 6
+    parsed.version === 6 ||
+    parsed.version === 7
   ) {
     return {
-      version: 7,
+      version: 8,
       teams: structuredClone(INITIAL_STATE.teams),
       activeGame: parsed.activeGame
-        ? {
-            ...parsed.activeGame,
-            periodCount:
-              parsed.activeGame.periodCount ??
-              (parsed.activeGame.teamId === "u8" ? 4 : 2),
-          }
+        ? normalizeActiveGame(parsed.activeGame)
         : null,
     };
   }
 
-  if (parsed.version === 7) {
+  if (parsed.version === 8) {
     return parsed as AppState;
   }
 
@@ -84,8 +107,7 @@ const readActiveGameRecovery = (): ActiveGame | null => {
         game.benchIds
       ) {
         return {
-          ...(game as ActiveGame),
-          periodCount: game.periodCount ?? (game.teamId === "u8" ? 4 : 2),
+          ...normalizeActiveGame(game as ActiveGame),
         };
       }
     } catch (error) {

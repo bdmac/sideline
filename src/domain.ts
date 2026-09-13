@@ -184,7 +184,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 7,
+  version: 8,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
@@ -245,6 +245,9 @@ export const createGame = (
   const validPresent = team.roster
     .filter((player) => player.active && presentIds.includes(player.id))
     .map((player) => player.id);
+  const activeRosterIds = team.roster
+    .filter((player) => player.active)
+    .map((player) => player.id);
   const onField = validPresent.slice(0, team.sideSize);
   const assignments = Object.fromEntries(
     formation.positions
@@ -252,7 +255,7 @@ export const createGame = (
       .map((positionItem, index) => [positionItem.id, onField[index]]),
   );
   const totals = Object.fromEntries(
-    validPresent.map((id) => [id, { fieldSeconds: 0, benchSeconds: 0 }]),
+    activeRosterIds.map((id) => [id, { fieldSeconds: 0, benchSeconds: 0 }]),
   );
   return {
     id: `${team.id}-${now}`,
@@ -262,7 +265,7 @@ export const createGame = (
     durationSeconds: Math.max(1, durationMinutes) * 60,
     periodCount,
     presentIds: validPresent,
-    unavailableIds: [],
+    unavailableIds: activeRosterIds.filter((id) => !validPresent.includes(id)),
     assignments,
     benchIds: validPresent.slice(team.sideSize),
     clock: { elapsedSeconds: 0, running: false, lastStartedAt: null },
@@ -408,6 +411,12 @@ export const validateGame = (game: ActiveGame, sideSize: number): string[] => {
   if (fieldIds.some((id) => game.benchIds.includes(id))) {
     errors.push("A player cannot be on the field and bench");
   }
+  if (fieldIds.some((id) => game.unavailableIds.includes(id))) {
+    errors.push("An unavailable player cannot be on the field");
+  }
+  if (game.benchIds.some((id) => game.unavailableIds.includes(id))) {
+    errors.push("An unavailable player cannot be on the bench");
+  }
   const availableCount = game.presentIds.filter(
     (id) => !game.unavailableIds.includes(id),
   ).length;
@@ -465,6 +474,7 @@ export const applySubstitutions = (
         beforeAssignments: current.assignments,
         beforeBenchIds: current.benchIds,
         beforeUnavailableIds: current.unavailableIds,
+        beforePresentIds: current.presentIds,
       },
     ],
   };
@@ -485,6 +495,7 @@ export const undoLastEvent = (
     assignments: event.beforeAssignments,
     benchIds: event.beforeBenchIds,
     unavailableIds: event.beforeUnavailableIds,
+    presentIds: event.beforePresentIds ?? current.presentIds,
     history: current.history.slice(0, -1),
   };
 };
@@ -564,6 +575,72 @@ export const markUnavailable = (
         beforeAssignments,
         beforeBenchIds,
         beforeUnavailableIds,
+        beforePresentIds: current.presentIds,
+      },
+    ],
+  };
+  const errors = validateGame(next, sideSize);
+  if (errors.length) throw new Error(errors.join(". "));
+  return next;
+};
+
+export const markAvailable = (
+  game: ActiveGame,
+  playerId: string,
+  sideSize: number,
+  now = Date.now(),
+): ActiveGame => {
+  const current = materializeGame(game, now);
+  if (!current.unavailableIds.includes(playerId)) return current;
+
+  const beforeAssignments = current.assignments;
+  const beforeBenchIds = current.benchIds;
+  const beforeUnavailableIds = current.unavailableIds;
+  const beforePresentIds = current.presentIds;
+  const presentIds = current.presentIds.includes(playerId)
+    ? current.presentIds
+    : [...current.presentIds, playerId];
+  const unavailableIds = current.unavailableIds.filter((id) => id !== playerId);
+  const assignments = { ...current.assignments };
+  let benchIds = current.benchIds;
+  let note = "Player marked available and added to bench";
+
+  if (Object.keys(assignments).length < Math.min(sideSize, presentIds.length)) {
+    const openPosition = getFormation(current.formationId).positions.find(
+      (positionItem) => !assignments[positionItem.id],
+    );
+    if (!openPosition) throw new Error("No open position is available");
+    assignments[openPosition.id] = playerId;
+    note = "Player marked available and entered an open position";
+  } else if (!benchIds.includes(playerId)) {
+    benchIds = [...benchIds, playerId];
+  }
+
+  const next: ActiveGame = {
+    ...current,
+    presentIds,
+    unavailableIds,
+    assignments,
+    benchIds,
+    totals: {
+      ...current.totals,
+      [playerId]: current.totals[playerId] ?? {
+        fieldSeconds: 0,
+        benchSeconds: 0,
+      },
+    },
+    history: [
+      ...current.history,
+      {
+        id: `available-${now}`,
+        type: "available",
+        atSeconds: current.clock.elapsedSeconds,
+        pairs: [],
+        note,
+        beforeAssignments,
+        beforeBenchIds,
+        beforeUnavailableIds,
+        beforePresentIds,
       },
     ],
   };

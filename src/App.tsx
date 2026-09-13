@@ -25,6 +25,7 @@ import {
   getFormation,
   getFormationsForTeam,
   getPeriodStatus,
+  markAvailable,
   markUnavailable,
   materializeGame,
   movePlayer,
@@ -767,11 +768,28 @@ function LiveGameScreen({
           <div className="availability-section">
             <h3>Unavailable</h3>
             {game.unavailableIds.length ? (
-              <p>
-                {game.unavailableIds
-                  .map((id) => playerName(team, id))
-                  .join(", ")}
-              </p>
+              <div className="unavailable-list">
+                {game.unavailableIds.map((id) => (
+                  <div className="unavailable-row" key={id}>
+                    <span>
+                      <strong>{playerName(team, id)}</strong>
+                      <small>Not available</small>
+                    </span>
+                    <button
+                      className="secondary-action"
+                      type="button"
+                      aria-label={`Mark ${playerName(team, id)} available`}
+                      onClick={() =>
+                        safeChange(() =>
+                          markAvailable(game, id, team.sideSize, Date.now()),
+                        )
+                      }
+                    >
+                      Mark available
+                    </button>
+                  </div>
+                ))}
+              </div>
             ) : (
               <p>Everyone present is available.</p>
             )}
@@ -793,7 +811,9 @@ function LiveGameScreen({
                   <strong>
                     {event.type === "substitution"
                       ? `${event.pairs.length} substitution${event.pairs.length === 1 ? "" : "s"}`
-                      : "Player unavailable"}
+                      : event.type === "available"
+                        ? "Player available"
+                        : "Player unavailable"}
                   </strong>
                   <small>
                     {event.pairs.length

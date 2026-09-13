@@ -35,13 +35,13 @@ Use one practical system sans stack: `Inter, ui-sans-serif, system-ui, -apple-sy
 - The Sideline mark shows a ball crossing a touchline, combining the match setting with a small flash of substitution orange.
 - Golden Dragons use a gold-and-turf dragon shield; Fireballers use an ink shield with an orange flame and ball. Team crests identify squads without replacing text labels.
 - The live game expands to a two-column pitch/bench workspace on larger screens and a single scan path on phones.
-- Critical live controls remain fixed at the bottom and respect safe-area insets.
+- Critical live controls sit inside an opaque, edge-to-edge bottom surface with safe-area padding and individually rounded, inset touch targets. Content never shows through or around the navigation surface while scrolling.
 - The game clock remains sticky below the app header on phones.
 
 ## Controls
 
 - Minimum interactive target: 44px; critical controls are 50–66px.
-- Buttons are square or minimally softened by the platform; no decorative pills.
+- Buttons are square or minimally softened by default; pinned mobile controls use compact native-like corner radii without becoming pills.
 - Primary actions use turf. Substitution planning and confirmation use warm orange sparingly.
 - PWA installation appears as a full-width turf-tinted action beneath team selection, visible only while running in a browser.
 - Form controls use white fill, dark text, and a visible 1px neutral border.

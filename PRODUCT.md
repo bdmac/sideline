@@ -24,6 +24,7 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 - The latest confirmed substitution or unavailable-player event can be undone.
 - Position changes do not count as substitutions.
 - Marking an on-field player unavailable uses the fairest available bench replacement; if none exists, the open position is explicit.
+- Players not marked as attending begin the game as unavailable rather than disappearing. A late arrival can be marked available and joins the bench, or fills an open position automatically when the team is short-sided.
 - Ending an active game requires confirmation.
 - The home screen offers installation whenever Sideline is running in a browser. Supported browsers open their native install prompt; iPhone and iPad users receive concise Add to Home Screen instructions.
 

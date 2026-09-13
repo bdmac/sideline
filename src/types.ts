@@ -53,13 +53,14 @@ export type SubstitutionPair = {
 
 export type GameEvent = {
   id: string;
-  type: "substitution" | "unavailable";
+  type: "substitution" | "unavailable" | "available";
   atSeconds: number;
   pairs: SubstitutionPair[];
   note?: string;
   beforeAssignments: Record<string, string>;
   beforeBenchIds: string[];
   beforeUnavailableIds: string[];
+  beforePresentIds?: string[];
 };
 
 export type ActiveGame = {
@@ -79,7 +80,7 @@ export type ActiveGame = {
 };
 
 export type AppState = {
-  version: 7;
+  version: 8;
   teams: Record<TeamId, Team>;
   activeGame: ActiveGame | null;
 };

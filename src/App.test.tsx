@@ -43,6 +43,24 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
+  it("lets an absent player become available after the game starts", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: /Evan Present/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+
+    const markAvailable = screen.getByRole("button", {
+      name: "Mark Evan available",
+    });
+    expect(markAvailable).toBeInTheDocument();
+    fireEvent.click(markAvailable);
+
+    expect(
+      screen.queryByRole("button", { name: "Mark Evan available" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Evan")).toBeInTheDocument();
+  });
+
   it("opens U12 setup directly without configurable duration or format", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Fireballers"));
