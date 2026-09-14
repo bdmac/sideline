@@ -3419,7 +3419,7 @@ select:hover {
 
   .ready-swap-list.removable .ready-swap-shell.swipe-revealed .ready-swap,
   .ready-swap-list.removable .ready-swap-shell:focus-within .ready-swap {
-    transform: translateX(-64px);
+    transform: translateX(-72px);
   }
 
   .ready-swap-list.removable .ready-swap-remove {
