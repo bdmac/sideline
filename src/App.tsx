@@ -290,7 +290,10 @@ const formatPositionChange = (
   team: Team,
 ) => {
   if (!event.playerId || !event.fromPositionId || !event.toPositionId) {
-    return event.note ?? "Positions updated";
+    return {
+      title: "Position change",
+      detail: event.note ?? "Positions updated",
+    };
   }
 
   const fromPosition = formation.positions.find(
@@ -300,11 +303,19 @@ const formatPositionChange = (
     (position) => position.id === event.toPositionId,
   );
   const targetPlayerId = event.beforeAssignments[event.toPositionId];
-  const movedPlayer = `${playerName(team, event.playerId)}: ${fromPosition?.label ?? event.fromPositionId} → ${toPosition?.label ?? event.toPositionId}`;
+  const movedPlayer = playerName(team, event.playerId);
+  const fromLabel = fromPosition?.label ?? event.fromPositionId;
+  const toLabel = toPosition?.label ?? event.toPositionId;
 
   return targetPlayerId
-    ? `${movedPlayer} · ${playerName(team, targetPlayerId)}: ${toPosition?.label ?? event.toPositionId} → ${fromPosition?.label ?? event.fromPositionId}`
-    : movedPlayer;
+    ? {
+        title: `${movedPlayer} ↔ ${playerName(team, targetPlayerId)}`,
+        detail: `${fromLabel} ↔ ${toLabel}`,
+      }
+    : {
+        title: `${movedPlayer} moved`,
+        detail: `${fromLabel} → ${toLabel}`,
+      };
 };
 
 const isStandalone = () =>
@@ -5324,6 +5335,10 @@ function GameLog({
                     (position) => position.id === goalPositionId,
                   )
                 : undefined;
+              const positionChange =
+                event.type === "position-change"
+                  ? formatPositionChange(event, formation, team)
+                  : null;
               const eventTitle =
                 event.type === "goal-for"
                   ? `${eventPlayer ?? "Player"} scored`
@@ -5332,7 +5347,7 @@ function GameLog({
                     : event.type === "substitution"
                       ? `${event.pairs.length} substitution${event.pairs.length === 1 ? "" : "s"}`
                       : event.type === "position-change"
-                        ? "Position change"
+                        ? positionChange?.title
                         : event.type === "available"
                           ? `${eventPlayer ?? "Player"} added to game`
                           : `${eventPlayer ?? "Player"} out of game`;
@@ -5344,7 +5359,7 @@ function GameLog({
                   : event.type === "goal-against"
                     ? "Opponent goal"
                     : event.type === "position-change"
-                      ? formatPositionChange(event, formation, team)
+                      ? positionChange?.detail
                       : event.pairs.length
                         ? event.pairs
                             .map(

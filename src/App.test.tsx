@@ -944,11 +944,9 @@ describe("Sideline app", () => {
     ).toHaveTextContent("Left MidfielderRM");
     fireEvent.click(confirmButton);
 
-    expect(screen.getByText("Position change")).toBeInTheDocument();
+    expect(screen.getByText("Ollie ↔ Haru")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Ollie: Left Midfielder → Right Midfielder · Haru: Right Midfielder → Left Midfielder",
-      ),
+      screen.getByText("Left Midfielder ↔ Right Midfielder"),
     ).toBeInTheDocument();
   });
 
@@ -999,10 +997,9 @@ describe("Sideline app", () => {
       }),
     );
 
+    expect(screen.getByText("Ollie ↔ Haru")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Ollie: Left Midfielder → Right Midfielder · Haru: Right Midfielder → Left Midfielder",
-      ),
+      screen.getByText("Left Midfielder ↔ Right Midfielder"),
     ).toBeInTheDocument();
   });
 
