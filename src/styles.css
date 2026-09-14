@@ -2066,7 +2066,6 @@ select:hover {
 
 .availability-section {
   margin-top: 1.5rem;
-  border-top: 1px solid var(--line);
 }
 
 .availability-section p {
@@ -2111,7 +2110,8 @@ select:hover {
 
 .game-log {
   margin-top: 1rem;
-  border-top: 2px solid var(--rule-strong);
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
   padding: 0;
 }
 
