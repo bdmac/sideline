@@ -1501,6 +1501,17 @@ function LiveGameScreen({
 
   const displayed = materializeGame(game, now);
   const fieldIds = Object.values(game.assignments);
+  const currentFieldTimes = Object.fromEntries(
+    fieldIds.map((id) => [id, getCurrentFieldSeconds(displayed, id)]),
+  );
+  const showPitchPlayerTimes = fieldIds.some(
+    (id) =>
+      (displayed.totals[id]?.fieldSeconds ?? 0) !==
+      displayed.clock.elapsedSeconds,
+  );
+  const showFieldPlayerTimes = fieldIds.some(
+    (id) => currentFieldTimes[id] !== displayed.clock.elapsedSeconds,
+  );
   const benchTimes = Object.fromEntries(
     game.benchIds.map((id) => [id, getCurrentBenchSeconds(displayed, id)]),
   );
@@ -1988,7 +1999,7 @@ function LiveGameScreen({
             team={team}
             game={displayed}
             totals={displayed.totals}
-            elapsedSeconds={displayed.clock.elapsedSeconds}
+            showPlayerTimes={showPitchPlayerTimes}
             onEditPlayer={(playerId) =>
               setFieldActions({
                 playerId,
@@ -2106,14 +2117,11 @@ function LiveGameScreen({
                         player={team.roster.find((player) => player.id === id)!}
                         goalCount={playerGoalCount(displayed, id)}
                         positionLabel={position.label}
-                        currentFieldTime={getCurrentFieldSeconds(displayed, id)}
+                        currentFieldTime={currentFieldTimes[id]}
                         aggregateFieldTime={
                           displayed.totals[id]?.fieldSeconds ?? 0
                         }
-                        showCurrentFieldTime={
-                          getCurrentFieldSeconds(displayed, id) !==
-                          displayed.clock.elapsedSeconds
-                        }
+                        showCurrentFieldTime={showFieldPlayerTimes}
                         queuedIncomingName={queuedIncoming}
                         canQueue={game.benchIds.length > 0}
                         onQueue={() => setFieldQueuePlayerId(id)}
@@ -2549,7 +2557,7 @@ function Pitch({
   team,
   game,
   totals,
-  elapsedSeconds,
+  showPlayerTimes,
   onEditPlayer,
   onAddGuestAtPosition,
   onMovePlayer,
@@ -2559,7 +2567,7 @@ function Pitch({
   team: Team;
   game: ActiveGame;
   totals: ActiveGame["totals"];
-  elapsedSeconds: number;
+  showPlayerTimes: boolean;
   onEditPlayer: (playerId: string) => void;
   onAddGuestAtPosition: (positionId: string) => void;
   onMovePlayer: (playerId: string, positionId: string) => void;
@@ -2677,7 +2685,7 @@ function Pitch({
               <strong>Open</strong>
             )}
             {player ? (
-              playedSeconds !== elapsedSeconds && (
+              showPlayerTimes && (
                 <small>
                   <span className="pitch-time">
                     {formatPlayerDuration(playedSeconds)}
@@ -3456,7 +3464,7 @@ function PlayerTimeRow({
         <small>
           {playedTime > 0
             ? `${formatPlayerDuration(playedTime)} played`
-            : "Waiting to enter"}
+            : "Not played yet"}
         </small>
         {queued ? (
           <span className="bench-queue-status">

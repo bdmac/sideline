@@ -1751,7 +1751,7 @@ describe("Sideline app", () => {
     expect(screen.getByRole("button", { name: "Queue Dylan" })).toHaveClass(
       "primary-action",
     );
-    expect(dylanRow).toHaveTextContent("Waiting to enter");
+    expect(dylanRow).toHaveTextContent("Not played yet");
     expect(dylanRow).not.toHaveTextContent("Sitting");
     expect(dylanRow).not.toHaveTextContent("total bench");
     expect(screen.getByLabelText("Shared bench time")).toHaveTextContent(
@@ -1759,7 +1759,7 @@ describe("Sideline app", () => {
     );
   });
 
-  it("shows only player-time exceptions after the first substitution", () => {
+  it("shows every field timer once one player's time diverges", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;
     let game = createGame(
@@ -1802,6 +1802,7 @@ describe("Sideline app", () => {
     const outgoingName = team.roster.find(
       (player) => player.id === outgoingId,
     )!.name;
+    const fieldIds = Object.values(game.assignments);
     expect(
       within(
         screen.getByRole("button", {
@@ -1809,7 +1810,9 @@ describe("Sideline app", () => {
         }),
       ).getByText("0:37"),
     ).toBeInTheDocument();
-    expect(document.querySelectorAll(".pitch-time")).toHaveLength(1);
+    expect(document.querySelectorAll(".pitch-time")).toHaveLength(
+      team.sideSize,
+    );
     expect(screen.getByLabelText("Shared bench time")).toHaveTextContent(
       "3 of 4 sitting since start10:37",
     );
@@ -1818,6 +1821,31 @@ describe("Sideline app", () => {
         .getByRole("button", { name: `Queue ${outgoingName}` })
         .closest(".player-time-row"),
     ).toHaveTextContent("Sitting0:37");
+
+    const fullGamePlayerId = fieldIds.find((id) => id !== incomingId)!;
+    const fullGamePlayerName = team.roster.find(
+      (player) => player.id === fullGamePlayerId,
+    )!.name;
+    expect(
+      screen.getByRole("button", {
+        name: `Open actions for ${fullGamePlayerName}`,
+      }),
+    ).toHaveTextContent("11 min");
+
+    fireEvent.click(screen.getByRole("tab", { name: /On field/ }));
+    expect(
+      document.querySelectorAll(".field-player-list .primary-time"),
+    ).toHaveLength(team.sideSize);
+    expect(
+      screen
+        .getByRole("button", { name: `Queue ${fullGamePlayerName} out` })
+        .closest(".player-time-row"),
+    ).toHaveTextContent("Playing11 min");
+    expect(
+      screen
+        .getByRole("button", { name: `Queue ${incomingName} out` })
+        .closest(".player-time-row"),
+    ).toHaveTextContent("Playing0:37");
   });
 
   it("shows game-summary goal markers beside player names off the pitch", () => {
