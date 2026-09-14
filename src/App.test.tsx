@@ -1047,7 +1047,7 @@ describe("Sideline app", () => {
     expect(reminder).toHaveTextContent("No player swaps in 5:00");
     expect(screen.getByRole("tab", { name: "Bench 4" })).toBeInTheDocument();
     expect(screen.getByLabelText("Rotation timer")).toHaveTextContent(
-      "Rotation5:00 since start",
+      "RotationDue now",
     );
     fireEvent.click(
       within(reminder).getByRole("button", { name: "Plan subs" }),
@@ -1055,6 +1055,28 @@ describe("Sideline app", () => {
     expect(
       screen.getByRole("dialog", { name: "Plan substitutions" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows the time remaining until the next rotation reminder", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      team.defaultDurationMinutes,
+      1_000,
+      2,
+    );
+    game.clock.elapsedSeconds = 120;
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+
+    expect(screen.getByLabelText("Rotation timer")).toHaveTextContent(
+      "RotationDue in 3:00",
+    );
   });
 
   it("allows the coach to reduce the default full-bench rotation", () => {
@@ -1577,8 +1599,11 @@ describe("Sideline app", () => {
     const benchPlayer = screen
       .getByRole("button", { name: `Queue ${team.roster[5].name}` })
       .closest(".player-time-row");
-    expect(benchPlayer).toHaveTextContent("2:00 played");
-    expect(benchPlayer).toHaveTextContent("Sitting10:00");
+    expect(benchPlayer).toHaveTextContent("2 min played");
+    expect(benchPlayer).not.toHaveTextContent("Sitting");
+    expect(screen.getByLabelText("Shared bench time")).toHaveTextContent(
+      "All 2 sitting since start10:00",
+    );
     expect(benchPlayer).toHaveTextContent("Below 50% pace");
     expect(benchPlayer).not.toHaveTextContent("total bench");
   });
@@ -1607,9 +1632,9 @@ describe("Sideline app", () => {
     const benchPlayer = screen
       .getByRole("button", { name: `Queue ${team.roster[5].name}` })
       .closest(".player-time-row");
-    expect(benchPlayer).toHaveTextContent("6:00 played");
-    expect(benchPlayer).toHaveTextContent("12:00 total bench");
-    expect(benchPlayer).toHaveTextContent("Sitting10:00");
+    expect(benchPlayer).toHaveTextContent("6 min played");
+    expect(benchPlayer).toHaveTextContent("12 min total bench");
+    expect(benchPlayer).not.toHaveTextContent("Sitting");
     expect(benchPlayer).not.toHaveTextContent("Below 50% pace");
   });
 
@@ -1641,8 +1666,72 @@ describe("Sideline app", () => {
       .getByRole("button", { name: "Queue Dylan" })
       .closest(".player-time-row");
     expect(dylanRow).toHaveTextContent("Waiting to enter");
-    expect(dylanRow).toHaveTextContent("Sitting0:00");
+    expect(dylanRow).not.toHaveTextContent("Sitting");
     expect(dylanRow).not.toHaveTextContent("total bench");
+    expect(screen.getByLabelText("Shared bench time")).toHaveTextContent(
+      "All 4 sitting since start0:00",
+    );
+  });
+
+  it("shows only player-time exceptions after the first substitution", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const [positionId, outgoingId] = Object.entries(game.assignments)[1];
+    const incomingId = game.benchIds[0];
+    Object.values(game.assignments).forEach((id) => {
+      game.totals[id].fieldSeconds = 600;
+    });
+    game.benchIds.forEach((id) => {
+      game.totals[id].benchSeconds = 600;
+    });
+    game.clock.elapsedSeconds = 600;
+    game = applySubstitutions(
+      game,
+      [{ outPlayerId: outgoingId, inPlayerId: incomingId, positionId }],
+      team.sideSize,
+      1_000,
+    );
+    game.clock.elapsedSeconds = 637;
+    Object.values(game.assignments).forEach((id) => {
+      game.totals[id].fieldSeconds += 37;
+    });
+    game.benchIds.forEach((id) => {
+      game.totals[id].benchSeconds += 37;
+    });
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+
+    const incomingName = team.roster.find(
+      (player) => player.id === incomingId,
+    )!.name;
+    const outgoingName = team.roster.find(
+      (player) => player.id === outgoingId,
+    )!.name;
+    expect(
+      within(
+        screen.getByRole("button", {
+          name: `Open actions for ${incomingName}`,
+        }),
+      ).getByText("0:37"),
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll(".pitch-time")).toHaveLength(1);
+    expect(screen.getByLabelText("Shared bench time")).toHaveTextContent(
+      "3 of 4 sitting since start10:37",
+    );
+    expect(
+      screen
+        .getByRole("button", { name: `Queue ${outgoingName}` })
+        .closest(".player-time-row"),
+    ).toHaveTextContent("Sitting0:37");
   });
 
   it("shows game-summary goal markers beside player names off the pitch", () => {
@@ -1709,7 +1798,7 @@ describe("Sideline app", () => {
       screen
         .getByRole("button", { name: "Queue Simon out" })
         .closest(".player-time-row"),
-    ).toHaveTextContent("Playing0:00");
+    ).not.toHaveTextContent("Playing");
 
     const panel = screen.getByRole("tabpanel");
     fireEvent.touchStart(panel, {
@@ -2044,11 +2133,15 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /Install Sideline/i }));
 
-    expect(
-      screen.getByRole("dialog", { name: "Install Sideline" }),
-    ).toHaveTextContent(
+    const dialog = screen.getByRole("dialog", { name: "Install Sideline" });
+    expect(dialog).toHaveTextContent(
       "Open your browser menu and choose Install app or Add to Home screen.",
     );
+    expect(
+      within(dialog).getAllByText(
+        "Open your browser menu and choose Install app or Add to Home screen.",
+      ),
+    ).toHaveLength(1);
     expect(document.body).toHaveAttribute("data-dialog-scroll-disabled");
 
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));

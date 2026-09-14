@@ -125,6 +125,12 @@ const playerGoalCount = (game: ActiveGame, playerId: string) =>
     (event) => event.type === "goal-for" && event.playerId === playerId,
   ).length;
 
+const formatPlayerDuration = (seconds: number) => {
+  const safe = Math.max(0, seconds);
+  if (safe < 60) return formatDuration(safe);
+  return `${Math.round(safe / 60)} min`;
+};
+
 const preferredRoleLabel = (role: Player["preferredRoles"][number]) =>
   role === "goalkeeper"
     ? "Goalkeeper"
@@ -789,9 +795,7 @@ function InstallHelpDialog({
           Got it
         </Button>
       }
-    >
-      <p>{instructions}</p>
-    </SidelineDialog>
+    />
   );
 }
 
@@ -1497,6 +1501,13 @@ function LiveGameScreen({
 
   const displayed = materializeGame(game, now);
   const fieldIds = Object.values(game.assignments);
+  const benchTimes = Object.fromEntries(
+    game.benchIds.map((id) => [id, getCurrentBenchSeconds(displayed, id)]),
+  );
+  const benchSinceStartCount = game.benchIds.filter(
+    (id) => benchTimes[id] === displayed.clock.elapsedSeconds,
+  ).length;
+  const showBenchSinceStartCohort = benchSinceStartCount >= 2;
   const goalkeeperPositionId = formation.positions.find(
     (position) => position.role === "goalkeeper",
   )?.id;
@@ -1974,6 +1985,7 @@ function LiveGameScreen({
             assignments={game.assignments}
             team={team}
             totals={displayed.totals}
+            elapsedSeconds={displayed.clock.elapsedSeconds}
             onEditPlayer={(playerId) =>
               setFieldActions({
                 playerId,
@@ -1994,13 +2006,12 @@ function LiveGameScreen({
             <div className="rotation-status" aria-label="Rotation timer">
               <span>Rotation</span>
               <strong>
-                {formatDuration(
-                  substitutionReminder.secondsSinceLastSubstitution,
-                )}{" "}
-                since{" "}
-                {substitutionReminder.hasExecutedSubstitution
-                  ? "swap"
-                  : "start"}
+                {substitutionReminder.due
+                  ? "Due now"
+                  : `Due in ${formatDuration(
+                      substitutionReminder.intervalSeconds -
+                        substitutionReminder.secondsSinceLastSubstitution,
+                    )}`}
               </strong>
             </div>
           )}
@@ -2096,6 +2107,10 @@ function LiveGameScreen({
                         aggregateFieldTime={
                           displayed.totals[id]?.fieldSeconds ?? 0
                         }
+                        showCurrentFieldTime={
+                          getCurrentFieldSeconds(displayed, id) !==
+                          displayed.clock.elapsedSeconds
+                        }
                         queuedIncomingName={queuedIncoming}
                         canQueue={game.benchIds.length > 0}
                         onQueue={() => setFieldQueuePlayerId(id)}
@@ -2116,37 +2131,60 @@ function LiveGameScreen({
                 </div>
               )
             ) : game.benchIds.length ? (
-              <div className="bench-list">
-                {game.benchIds.map((id) => {
-                  const queuedPair = queuedPairs.find(
-                    (pair) => pair.inPlayerId === id,
-                  );
-                  const queuedPosition = formation.positions.find(
-                    (position) => position.id === queuedPair?.positionId,
-                  );
-                  const playedSeconds = displayed.totals[id]?.fieldSeconds ?? 0;
-                  const belowMinimumPace =
-                    displayed.clock.elapsedSeconds >=
-                      game.durationSeconds * 0.25 &&
-                    playedSeconds / displayed.clock.elapsedSeconds < 0.5;
-                  return (
-                    <PlayerTimeRow
-                      key={id}
-                      player={team.roster.find((player) => player.id === id)!}
-                      goalCount={playerGoalCount(displayed, id)}
-                      currentBenchTime={getCurrentBenchSeconds(displayed, id)}
-                      playedTime={playedSeconds}
-                      aggregateBenchTime={
-                        displayed.totals[id]?.benchSeconds ?? 0
-                      }
-                      belowMinimumPace={belowMinimumPace}
-                      queuedPositionLabel={queuedPosition?.shortLabel}
-                      onQueue={() => setBenchQueuePlayerId(id)}
-                      onUnavailable={() => setUnavailableConfirmPlayerId(id)}
-                    />
-                  );
-                })}
-              </div>
+              <>
+                {showBenchSinceStartCohort && (
+                  <div
+                    className="cohort-time-summary"
+                    aria-label="Shared bench time"
+                  >
+                    <span>
+                      {benchSinceStartCount === game.benchIds.length
+                        ? `All ${benchSinceStartCount}`
+                        : `${benchSinceStartCount} of ${game.benchIds.length}`}{" "}
+                      sitting since start
+                    </span>
+                    <strong>
+                      {formatDuration(displayed.clock.elapsedSeconds)}
+                    </strong>
+                  </div>
+                )}
+                <div className="bench-list">
+                  {game.benchIds.map((id) => {
+                    const queuedPair = queuedPairs.find(
+                      (pair) => pair.inPlayerId === id,
+                    );
+                    const queuedPosition = formation.positions.find(
+                      (position) => position.id === queuedPair?.positionId,
+                    );
+                    const playedSeconds =
+                      displayed.totals[id]?.fieldSeconds ?? 0;
+                    const belowMinimumPace =
+                      displayed.clock.elapsedSeconds >=
+                        game.durationSeconds * 0.25 &&
+                      playedSeconds / displayed.clock.elapsedSeconds < 0.5;
+                    return (
+                      <PlayerTimeRow
+                        key={id}
+                        player={team.roster.find((player) => player.id === id)!}
+                        goalCount={playerGoalCount(displayed, id)}
+                        currentBenchTime={benchTimes[id]}
+                        showCurrentBenchTime={
+                          !showBenchSinceStartCohort ||
+                          benchTimes[id] !== displayed.clock.elapsedSeconds
+                        }
+                        playedTime={playedSeconds}
+                        aggregateBenchTime={
+                          displayed.totals[id]?.benchSeconds ?? 0
+                        }
+                        belowMinimumPace={belowMinimumPace}
+                        queuedPositionLabel={queuedPosition?.shortLabel}
+                        onQueue={() => setBenchQueuePlayerId(id)}
+                        onUnavailable={() => setUnavailableConfirmPlayerId(id)}
+                      />
+                    );
+                  })}
+                </div>
+              </>
             ) : (
               <div className="bench-empty">
                 <strong>No available substitutes</strong>
@@ -2499,6 +2537,7 @@ function Pitch({
   assignments,
   team,
   totals,
+  elapsedSeconds,
   onEditPlayer,
   onAddGuestAtPosition,
   onMovePlayer,
@@ -2507,6 +2546,7 @@ function Pitch({
   assignments: Record<string, string>;
   team: Team;
   totals: ActiveGame["totals"];
+  elapsedSeconds: number;
   onEditPlayer: (playerId: string) => void;
   onAddGuestAtPosition: (positionId: string) => void;
   onMovePlayer: (playerId: string, positionId: string) => void;
@@ -2607,22 +2647,25 @@ function Pitch({
       {formation.positions.map((position) => {
         const playerId = assignments[position.id];
         const player = team.roster.find((item) => item.id === playerId);
+        const playedSeconds = player
+          ? (totals[player.id]?.fieldSeconds ?? 0)
+          : 0;
         const content = (
           <>
             <span className="position-label">{position.shortLabel}</span>
             <strong>{player?.name ?? "Open"}</strong>
-            <small>
-              {player ? (
-                <>
+            {player ? (
+              playedSeconds !== elapsedSeconds && (
+                <small>
                   <span className="pitch-time">
-                    {formatDuration(totals[player.id]?.fieldSeconds ?? 0)}
+                    {formatPlayerDuration(playedSeconds)}
                   </span>
                   <span className="pitch-time-label"> played</span>
-                </>
-              ) : (
-                position.label
-              )}
-            </small>
+                </small>
+              )
+            ) : (
+              <small>{position.label}</small>
+            )}
           </>
         );
         const style = {
@@ -3283,6 +3326,7 @@ function FieldPlayerTimeRow({
   positionLabel,
   currentFieldTime,
   aggregateFieldTime,
+  showCurrentFieldTime,
   queuedIncomingName,
   canQueue,
   onQueue,
@@ -3293,6 +3337,7 @@ function FieldPlayerTimeRow({
   positionLabel: string;
   currentFieldTime: number;
   aggregateFieldTime: number;
+  showCurrentFieldTime: boolean;
   queuedIncomingName?: string;
   canQueue: boolean;
   onQueue: () => void;
@@ -3301,7 +3346,11 @@ function FieldPlayerTimeRow({
   const queued = Boolean(queuedIncomingName);
   const hasEarlierFieldTime = aggregateFieldTime > currentFieldTime;
   return (
-    <div className={`player-time-row ${queued ? "queued" : ""}`}>
+    <div
+      className={`player-time-row ${queued ? "queued" : ""} ${
+        showCurrentFieldTime ? "" : "time-suppressed"
+      }`}
+    >
       <span className="player-number">{player.number ?? "–"}</span>
       <span className="player-time-name">
         <GoalMarkedPlayerName label={player.name} goalCount={goalCount} />
@@ -3314,15 +3363,17 @@ function FieldPlayerTimeRow({
         ) : (
           hasEarlierFieldTime && (
             <span className="bench-total-status">
-              {formatDuration(aggregateFieldTime)} total played
+              {formatPlayerDuration(aggregateFieldTime)} total played
             </span>
           )
         )}
       </span>
-      <span className="primary-time">
-        <small>Playing</small>
-        <strong>{formatDuration(currentFieldTime)}</strong>
-      </span>
+      {showCurrentFieldTime && (
+        <span className="primary-time">
+          <small>Playing</small>
+          <strong>{formatPlayerDuration(currentFieldTime)}</strong>
+        </span>
+      )}
       <span className="player-row-actions">
         <IconButton
           className="queue-player-button"
@@ -3350,6 +3401,7 @@ function PlayerTimeRow({
   player,
   goalCount,
   currentBenchTime,
+  showCurrentBenchTime,
   playedTime,
   aggregateBenchTime,
   belowMinimumPace,
@@ -3360,6 +3412,7 @@ function PlayerTimeRow({
   player: Player;
   goalCount: number;
   currentBenchTime: number;
+  showCurrentBenchTime: boolean;
   playedTime: number;
   aggregateBenchTime: number;
   belowMinimumPace: boolean;
@@ -3370,13 +3423,17 @@ function PlayerTimeRow({
   const queued = Boolean(queuedPositionLabel);
   const hasEarlierBenchTime = aggregateBenchTime > currentBenchTime;
   return (
-    <div className={`player-time-row ${queued ? "queued" : ""}`}>
+    <div
+      className={`player-time-row ${queued ? "queued" : ""} ${
+        showCurrentBenchTime ? "" : "time-suppressed"
+      }`}
+    >
       <span className="player-number">{player.number ?? "–"}</span>
       <span className="player-time-name">
         <GoalMarkedPlayerName label={player.name} goalCount={goalCount} />
         <small>
           {playedTime > 0
-            ? `${formatDuration(playedTime)} played`
+            ? `${formatPlayerDuration(playedTime)} played`
             : "Waiting to enter"}
         </small>
         {queued ? (
@@ -3392,15 +3449,17 @@ function PlayerTimeRow({
         ) : (
           hasEarlierBenchTime && (
             <span className="bench-total-status">
-              {formatDuration(aggregateBenchTime)} total bench
+              {formatPlayerDuration(aggregateBenchTime)} total bench
             </span>
           )
         )}
       </span>
-      <span className="primary-time">
-        <small>Sitting</small>
-        <strong>{formatDuration(currentBenchTime)}</strong>
-      </span>
+      {showCurrentBenchTime && (
+        <span className="primary-time">
+          <small>Sitting</small>
+          <strong>{formatPlayerDuration(currentBenchTime)}</strong>
+        </span>
+      )}
       <span className="player-row-actions">
         <IconButton
           className="queue-player-button"

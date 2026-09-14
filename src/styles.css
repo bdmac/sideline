@@ -1709,8 +1709,31 @@ select:hover {
   touch-action: pan-y;
 }
 
+.cohort-time-summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.25rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.cohort-time-summary strong {
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .bench-list {
   border-top: 1px solid var(--line);
+}
+
+.cohort-time-summary + .bench-list {
+  border-top: 0;
 }
 
 .player-time-row {
@@ -1720,6 +1743,10 @@ select:hover {
   gap: 0.6rem;
   align-items: center;
   border-bottom: 1px solid var(--line);
+}
+
+.player-time-row.time-suppressed {
+  grid-template-columns: 34px minmax(0, 1fr) auto;
 }
 
 .player-time-row.queued {
