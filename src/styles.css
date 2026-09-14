@@ -2204,24 +2204,6 @@ select:hover {
   height: 18px;
 }
 
-.timeline-event-substitution {
-  color: var(--warm-dark);
-}
-
-.timeline-event-goal-for,
-.timeline-event-goal-against {
-  color: var(--goal);
-}
-
-.timeline-event-available,
-.period-timeline-marker .timeline-event-icon {
-  color: var(--turf-dark);
-}
-
-.timeline-event-unavailable {
-  color: var(--danger);
-}
-
 .game-log li.period-timeline-marker {
   border-top: 2px solid var(--rule-strong);
   background: var(--wash);
