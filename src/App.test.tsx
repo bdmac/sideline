@@ -1538,6 +1538,16 @@ describe("Sideline app", () => {
     expect(
       within(firstPicker).getAllByText("Outside preferences").length,
     ).toBeGreaterThan(0);
+    expect(
+      within(firstPicker)
+        .getByText("1st preference")
+        .closest(".replacement-fit"),
+    ).toHaveClass("preference-rank-1");
+    expect(
+      within(firstPicker)
+        .getAllByText("Outside preferences")[0]
+        .closest(".replacement-fit"),
+    ).toHaveClass("preference-rank-outside");
     fireEvent.click(
       within(firstPicker).getByRole("button", {
         name: /#10 Simon.*Center Back/,
@@ -1549,7 +1559,11 @@ describe("Sideline app", () => {
     );
 
     expect(screen.getByText("1 substitution ready")).toBeInTheDocument();
-    expect(screen.getByText("Going in at CB")).toBeInTheDocument();
+    const benchPlanStatus = screen.getByText("Going in at CB for Simon");
+    expect(benchPlanStatus).toBeInTheDocument();
+    expect(
+      benchPlanStatus.querySelector(".lucide-arrow-right-left"),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("dialog", { name: /Review substitutions/ }),
     ).not.toBeInTheDocument();
@@ -1581,7 +1595,7 @@ describe("Sideline app", () => {
     ).toHaveTextContent("Dylan");
     fireEvent.click(within(planner).getByRole("button", { name: "Close" }));
 
-    expect(screen.getByText("Going in at CB")).toBeInTheDocument();
+    expect(screen.getByText("Going in at CB for Simon")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", {
         name: "Edit Dylan going in",
@@ -1608,7 +1622,7 @@ describe("Sideline app", () => {
     expect(editPicker).toHaveTextContent(
       "Next rotationGoing in at LM for Ollie",
     );
-    expect(screen.getByText("Going in at CB")).toBeInTheDocument();
+    expect(screen.getByText("Going in at CB for Simon")).toBeInTheDocument();
     fireEvent.click(
       within(editPicker).getByRole("button", { name: "Update plan" }),
     );
@@ -1616,7 +1630,7 @@ describe("Sideline app", () => {
     expect(
       screen.queryByRole("dialog", { name: /Review substitutions/ }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Going in at LM")).toBeInTheDocument();
+    expect(screen.getByText("Going in at LM for Ollie")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Review substitutions" }),
     );
@@ -1691,23 +1705,34 @@ describe("Sideline app", () => {
 
     const goalButton = screen.getByRole("button", { name: "Record a goal" });
     expect(goalButton).toBeDisabled();
+    expect(goalButton.querySelector(".soccer-ball-icon")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start Q1" }));
     expect(goalButton).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Record a goal" }));
     const scorerDialog = screen.getByRole("dialog", { name: "Record a goal" });
     expect(
-      within(scorerDialog).queryByRole("button", { name: "#14 Maddox" }),
+      within(scorerDialog).queryByRole("button", {
+        name: /Record goal for #14 Maddox/,
+      }),
     ).not.toBeInTheDocument();
+    const simonScorer = within(scorerDialog).getByRole("button", {
+      name: "Record goal for #10 Simon at Center Back",
+    });
+    expect(simonScorer).toHaveTextContent("#10 SimonCB");
     expect(
-      within(scorerDialog).getByRole("button", { name: "#10 Simon" }),
-    ).toBeInTheDocument();
-    expect(
-      within(scorerDialog).queryByRole("button", { name: "#7 Noah" }),
+      simonScorer.querySelector(".soccer-ball-icon"),
     ).not.toBeInTheDocument();
-    fireEvent.click(
-      within(scorerDialog).getByRole("button", { name: "#10 Simon" }),
+    expect(simonScorer.querySelector(".goal-scorer-position")).toHaveAttribute(
+      "data-variant",
+      "secondary",
     );
+    expect(
+      within(scorerDialog).queryByRole("button", {
+        name: /Record goal for #7 Noah/,
+      }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(simonScorer);
     const expandedStatus = document.querySelector(".live-match-status");
     expect(
       within(expandedStatus as HTMLElement).getByLabelText("Score"),
@@ -2128,6 +2153,8 @@ describe("Sideline app", () => {
   });
 
   it("uses a hatted ball for a hat trick across player markers", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;
     let game = createGame(
@@ -2135,12 +2162,12 @@ describe("Sideline app", () => {
       "5-1-2-1",
       team.roster.slice(0, 7).map((player) => player.id),
       40,
-      1_000,
+      10_000,
     );
     const scorerId = Object.values(game.assignments)[1];
-    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 10_000 };
     for (let goal = 0; goal < 3; goal += 1) {
-      game = recordGoal(game, "us", scorerId, 1_000 + goal);
+      game = recordGoal(game, "us", scorerId, 10_000 + goal);
     }
     state.activeGame = game;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -2168,6 +2195,18 @@ describe("Sideline app", () => {
     visibleMarkers.forEach((marker) => {
       expect(marker.querySelectorAll(".hat-trick-icon")).toHaveLength(3);
     });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record a goal" }));
+    const scorerDialog = screen.getByRole("dialog", { name: "Record a goal" });
+    const scorerChoice = within(scorerDialog).getByRole("button", {
+      name: new RegExp(`Record goal for .*${scorerName}`),
+    });
+    const compactGoalTotal =
+      within(scorerChoice).getByLabelText(/scored 3 goals/);
+    expect(compactGoalTotal.querySelectorAll(".hat-trick-icon")).toHaveLength(
+      1,
+    );
+    expect(compactGoalTotal).toHaveTextContent("×3");
   });
 
   it("adds the exact count after the hatted marker above three goals", () => {
@@ -2282,6 +2321,9 @@ describe("Sideline app", () => {
       })
       .closest(".player-time-row");
     expect(simonRow).toHaveTextContent("Coming out for Dylan");
+    expect(
+      simonRow?.querySelector(".bench-queue-status .lucide-arrow-right-left"),
+    ).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", {

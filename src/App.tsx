@@ -167,6 +167,29 @@ const compactPreferredRolesLabel = (roles: Player["preferredRoles"]) =>
     ? roles.map(preferredRoleAbbreviation).join(" · ")
     : roles.map(preferredRoleLabel).join("");
 
+const preferenceFitLabel = (preferenceIndex: number) => {
+  if (!Number.isFinite(preferenceIndex)) return "Outside preferences";
+  const rank = preferenceIndex + 1;
+  const suffix =
+    rank % 100 >= 11 && rank % 100 <= 13
+      ? "th"
+      : rank % 10 === 1
+        ? "st"
+        : rank % 10 === 2
+          ? "nd"
+          : rank % 10 === 3
+            ? "rd"
+            : "th";
+  return `${rank}${suffix} preference`;
+};
+
+const preferenceFitClassName = (preferenceIndex: number) =>
+  `replacement-fit preference-rank-${
+    Number.isFinite(preferenceIndex)
+      ? Math.min(preferenceIndex + 1, 4)
+      : "outside"
+  }`;
+
 const buildGuestPlayer = (
   teamId: TeamId,
   name: string,
@@ -2287,6 +2310,11 @@ function LiveGameScreen({
                         }
                         belowMinimumPace={belowMinimumPace}
                         queuedPositionLabel={queuedPosition?.shortLabel}
+                        queuedOutgoingPlayerName={
+                          queuedPair
+                            ? playerName(team, queuedPair.outPlayerId)
+                            : undefined
+                        }
                         onQueue={() => setBenchQueuePlayerId(id)}
                         onUnavailable={() => setUnavailableConfirmPlayerId(id)}
                       />
@@ -2400,7 +2428,7 @@ function LiveGameScreen({
           size="large"
           block
           labelWrap
-          leadingVisual={CirclePlus}
+          leadingVisual={SoccerBallIcon}
           aria-label="Record a goal"
           disabled={!displayed.clock.running}
           onClick={() => setGoalScorerOpen(true)}
@@ -3113,6 +3141,7 @@ function GoalScorerPicker({
   onOpponentGoal: () => void;
 }) {
   const description = `${team.name} ${score.us} – ${score.opponent} Opponent`;
+  const formation = getFormation(game.formationId);
 
   return (
     <SidelineDialog
@@ -3126,7 +3155,7 @@ function GoalScorerPicker({
           className="secondary-action opponent-goal-action"
           variant="default"
           size="large"
-          leadingVisual={CirclePlus}
+          leadingVisual={SoccerBallIcon}
           onClick={onOpponentGoal}
         >
           Opponent scored
@@ -3135,22 +3164,40 @@ function GoalScorerPicker({
     >
       <h3>Who scored for us?</h3>
       <div className="goal-scorer-grid">
-        {playerIds.map((playerId) => (
-          <Button
-            className="secondary-action"
-            variant="default"
-            size="large"
-            leadingVisual={CirclePlus}
-            key={playerId}
-            onClick={() => onSelect(playerId)}
-          >
-            <GoalMarkedPlayerName
-              label={playerLabel(team, playerId)}
-              goalCount={playerGoalCount(game, playerId)}
-              emphasized={false}
-            />
-          </Button>
-        ))}
+        {playerIds.map((playerId) => {
+          const positionId = Object.entries(game.assignments).find(
+            ([, assignedPlayerId]) => assignedPlayerId === playerId,
+          )?.[0];
+          const position = formation.positions.find(
+            (candidate) => candidate.id === positionId,
+          );
+          return (
+            <Button
+              className="secondary-action"
+              variant="default"
+              size="large"
+              key={playerId}
+              aria-label={`Record goal for ${playerLabel(team, playerId)} at ${
+                position?.label ?? "unknown position"
+              }`}
+              onClick={() => onSelect(playerId)}
+            >
+              <GoalMarkedPlayerName
+                label={playerLabel(team, playerId)}
+                goalCount={playerGoalCount(game, playerId)}
+                emphasized={false}
+                compact
+              />
+              <Label
+                className="goal-scorer-position"
+                variant="secondary"
+                aria-hidden="true"
+              >
+                {position?.shortLabel ?? "—"}
+              </Label>
+            </Button>
+          );
+        })}
       </div>
     </SidelineDialog>
   );
@@ -3366,13 +3413,7 @@ function BenchSubstitutionPicker({
                   goalCount={playerGoalCount(game, outPlayerId)}
                 />
               </span>
-              <span
-                className={
-                  Number.isFinite(preferenceIndex)
-                    ? "replacement-fit"
-                    : "replacement-fit outside-preference"
-                }
-              >
+              <span className={preferenceFitClassName(preferenceIndex)}>
                 {selected && (
                   <Check
                     className="replacement-selected-icon"
@@ -3380,11 +3421,7 @@ function BenchSubstitutionPicker({
                     aria-hidden="true"
                   />
                 )}
-                <span>
-                  {Number.isFinite(preferenceIndex)
-                    ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
-                    : "Outside preferences"}
-                </span>
+                <span>{preferenceFitLabel(preferenceIndex)}</span>
               </span>
               <span className="replacement-player-position">
                 {position.label}
@@ -3556,13 +3593,7 @@ function FieldSubstitutionPicker({
                   goalCount={playerGoalCount(game, incoming.id)}
                 />
               </span>
-              <span
-                className={
-                  Number.isFinite(preferenceIndex)
-                    ? "replacement-fit"
-                    : "replacement-fit outside-preference"
-                }
-              >
+              <span className={preferenceFitClassName(preferenceIndex)}>
                 {selected && (
                   <Check
                     className="replacement-selected-icon"
@@ -3570,11 +3601,7 @@ function FieldSubstitutionPicker({
                     aria-hidden="true"
                   />
                 )}
-                <span>
-                  {Number.isFinite(preferenceIndex)
-                    ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
-                    : "Outside preferences"}
-                </span>
+                <span>{preferenceFitLabel(preferenceIndex)}</span>
               </span>
               <span
                 className="replacement-player-preferences"
@@ -3793,7 +3820,7 @@ function FieldPlayerTimeRow({
         <small>{positionLabel}</small>
         {queued ? (
           <span className="bench-queue-status">
-            <Check size={12} aria-hidden="true" />
+            <ArrowRightLeft size={12} aria-hidden="true" />
             Coming out for {queuedIncomingName}
           </span>
         ) : (
@@ -3842,6 +3869,7 @@ function PlayerTimeRow({
   aggregateBenchTime,
   belowMinimumPace,
   queuedPositionLabel,
+  queuedOutgoingPlayerName,
   onQueue,
   onUnavailable,
 }: {
@@ -3853,6 +3881,7 @@ function PlayerTimeRow({
   aggregateBenchTime: number;
   belowMinimumPace: boolean;
   queuedPositionLabel?: string;
+  queuedOutgoingPlayerName?: string;
   onQueue: () => void;
   onUnavailable: () => void;
 }) {
@@ -3874,8 +3903,9 @@ function PlayerTimeRow({
         </small>
         {queued ? (
           <span className="bench-queue-status">
-            <Check size={12} aria-hidden="true" />
+            <ArrowRightLeft size={12} aria-hidden="true" />
             Going in at {queuedPositionLabel}
+            {queuedOutgoingPlayerName ? ` for ${queuedOutgoingPlayerName}` : ""}
           </span>
         ) : belowMinimumPace ? (
           <span className="minimum-play-warning">
@@ -4879,13 +4909,16 @@ function GoalMarkedPlayerName({
   label,
   goalCount,
   emphasized = true,
+  compact = false,
 }: {
   label: string;
   goalCount: number;
   emphasized?: boolean;
+  compact?: boolean;
 }) {
   const hatTrick = goalCount >= 3;
-  const visibleMarkerCount = goalCount === 3 ? 3 : 1;
+  const visibleMarkerCount = compact && hatTrick ? 1 : goalCount === 3 ? 3 : 1;
+  const showGoalCount = goalCount > 3 || (compact && hatTrick);
 
   return (
     <span className="player-name-with-goals">
@@ -4904,7 +4937,7 @@ function GoalMarkedPlayerName({
             : Array.from({ length: goalCount }, (_, index) => (
                 <SoccerBallIcon key={index} />
               ))}
-          {goalCount > 3 && (
+          {showGoalCount && (
             <span className="goal-count-overflow" aria-hidden="true">
               ×{goalCount}
             </span>

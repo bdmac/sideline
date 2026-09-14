@@ -34,6 +34,12 @@
   --warm: #d45c27;
   --warm-dark: #9d3d19;
   --warm-pale: #fff0e8;
+  --preference-second: #725600;
+  --preference-second-pale: #fff3bf;
+  --preference-third: #944512;
+  --preference-third-pale: #ffead8;
+  --preference-fourth: #8a3522;
+  --preference-fourth-pale: #f9e4de;
   --goal: #925700;
   --danger: #a12f2f;
   --danger-dark: #6f1f1f;
@@ -79,6 +85,12 @@
   --warm: #e8763f;
   --warm-dark: #ffad82;
   --warm-pale: #40251b;
+  --preference-second: #f4d56f;
+  --preference-second-pale: #3b3213;
+  --preference-third: #ffad82;
+  --preference-third-pale: #40251b;
+  --preference-fourth: #ff9580;
+  --preference-fourth-pale: #43231f;
   --goal: #ffc15a;
   --danger: #df6464;
   --danger-dark: #ffb1b1;
@@ -2892,14 +2904,37 @@ select:hover {
   align-items: center;
   justify-content: flex-end;
   gap: 0.3rem;
+  width: fit-content;
+  justify-self: end;
+  padding: 0.16rem 0.38rem;
+  border-radius: 0.3rem;
   color: var(--turf-dark);
+  background: var(--turf-pale);
   font-size: 0.68rem;
   font-weight: 900;
+  line-height: 1.35;
   text-align: right;
+  white-space: nowrap;
 }
 
-.replacement-fit.outside-preference {
-  color: var(--ink-soft);
+.replacement-fit.preference-rank-2 {
+  color: var(--preference-second);
+  background: var(--preference-second-pale);
+}
+
+.replacement-fit.preference-rank-3 {
+  color: var(--preference-third);
+  background: var(--preference-third-pale);
+}
+
+.replacement-fit.preference-rank-4 {
+  color: var(--preference-fourth);
+  background: var(--preference-fourth-pale);
+}
+
+.replacement-fit.preference-rank-outside {
+  color: var(--danger-dark);
+  background: var(--danger-pale);
 }
 
 .replacement-player-position {
@@ -3007,6 +3042,39 @@ select:hover {
 .goal-scorer-grid button {
   justify-content: flex-start;
   min-width: 0;
+}
+
+.goal-scorer-grid button [data-component="buttonContent"] {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.goal-scorer-grid .player-name-with-goals {
+  overflow: hidden;
+}
+
+.goal-scorer-grid .player-name-with-goals > :first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.goal-scorer-grid .player-goal-total {
+  flex: none;
+}
+
+.goal-scorer-position {
+  flex: none;
+  margin-left: 0.55rem;
+}
+
+.score-button .soccer-ball-icon,
+.scorekeeper-sheet [data-component="leadingVisual"] .soccer-ball-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .opponent-goal-action {
