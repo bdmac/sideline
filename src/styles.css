@@ -584,10 +584,21 @@ h3 {
   opacity: 1;
 }
 
+.primary-action:disabled [data-component="text"],
+.primary-action:disabled [data-component="leadingVisual"] {
+  color: var(--ink-soft);
+  opacity: 0.68;
+}
+
 .turf-clock-action {
   background: var(--turf-fill);
   border-color: var(--turf-fill);
   color: var(--on-accent);
+}
+
+.turf-clock-action [data-component="text"],
+.turf-clock-action [data-component="leadingVisual"] {
+  color: inherit;
 }
 
 .turf-clock-action:hover:not(:disabled) {
