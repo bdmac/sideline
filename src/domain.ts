@@ -507,6 +507,22 @@ const preferenceScore = (player: Player, role: PositionRole) => {
   return preferenceIndex === -1 ? 0 : (4 - preferenceIndex) * 1_000;
 };
 
+const REPEATED_LINE_PENALTY_SECONDS = 60;
+const COMPLETE_LINE_PENALTY_SECONDS = 120;
+
+const combinationsOf = <T>(items: T[], count: number): T[][] => {
+  if (count === 0) return [[]];
+  if (count > items.length) return [];
+
+  const combinations: T[][] = [];
+  items.forEach((item, index) => {
+    combinationsOf(items.slice(index + 1), count - 1).forEach((rest) => {
+      combinations.push([item, ...rest]);
+    });
+  });
+  return combinations;
+};
+
 export const assignPlayersByPreference = (
   formation: Formation,
   playerIds: string[],
@@ -683,7 +699,7 @@ export const suggestSubstitutions = (
   const incomingPlayers = remainingIncomingIds
     .map((id) => team.roster.find((player) => player.id === id))
     .filter((player): player is Player => Boolean(player));
-  const onField = Object.entries(game.assignments)
+  const rankedOnField = Object.entries(game.assignments)
     .filter(([, playerId]) => !game.unavailableIds.includes(playerId))
     .filter(([positionId]) => positionId !== goalkeeperPair?.positionId)
     .sort(([positionA, playerA], [positionB, playerB]) => {
@@ -704,8 +720,81 @@ export const suggestSubstitutions = (
         0,
       );
       return fitB - fitA || playerA.localeCompare(playerB);
-    })
-    .slice(0, remainingIncomingIds.length);
+    });
+  const roleCounts = new Map<PositionRole, number>();
+  rankedOnField.forEach(([positionId]) => {
+    const role = roleByPosition.get(positionId)!;
+    roleCounts.set(role, (roleCounts.get(role) ?? 0) + 1);
+  });
+  const playerById = new Map(team.roster.map((player) => [player.id, player]));
+  const selections = combinationsOf(rankedOnField, remainingIncomingIds.length);
+  const onField =
+    selections.reduce<
+      | {
+          entries: Array<[string, string]>;
+          score: number;
+          preference: number;
+          key: string;
+        }
+      | undefined
+    >((best, entries) => {
+      const selectedRoleCounts = new Map<PositionRole, number>();
+      const selectedPositions = entries
+        .map(([positionId]) =>
+          formation.positions.find((item) => item.id === positionId),
+        )
+        .filter((item): item is Formation["positions"][number] =>
+          Boolean(item),
+        );
+      selectedPositions.forEach((positionItem) => {
+        selectedRoleCounts.set(
+          positionItem.role,
+          (selectedRoleCounts.get(positionItem.role) ?? 0) + 1,
+        );
+      });
+      const linePenalty = [...selectedRoleCounts].reduce(
+        (penalty, [role, selectedCount]) =>
+          penalty +
+          Math.max(0, selectedCount - 1) * REPEATED_LINE_PENALTY_SECONDS +
+          ((roleCounts.get(role) ?? 0) > 1 &&
+          selectedCount === roleCounts.get(role)
+            ? COMPLETE_LINE_PENALTY_SECONDS
+            : 0),
+        0,
+      );
+      const assignments = assignPlayersByPreference(
+        { ...formation, positions: selectedPositions },
+        remainingIncomingIds,
+        team.roster,
+      );
+      const candidate = {
+        entries,
+        score:
+          entries.reduce(
+            (total, [, playerId]) =>
+              total + (game.totals[playerId]?.fieldSeconds ?? 0),
+            0,
+          ) - linePenalty,
+        preference: selectedPositions.reduce((total, positionItem) => {
+          const player = playerById.get(assignments[positionItem.id]);
+          return (
+            total + (player ? preferenceScore(player, positionItem.role) : 0)
+          );
+        }, 0),
+        key: entries.map(([positionId]) => positionId).join(","),
+      };
+      if (
+        !best ||
+        candidate.score > best.score ||
+        (candidate.score === best.score &&
+          (candidate.preference > best.preference ||
+            (candidate.preference === best.preference &&
+              candidate.key < best.key)))
+      ) {
+        return candidate;
+      }
+      return best;
+    }, undefined)?.entries ?? [];
   const selectedPositions: Formation = {
     ...formation,
     positions: onField

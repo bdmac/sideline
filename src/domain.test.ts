@@ -792,6 +792,73 @@ describe("substitutions", () => {
     expect(pair.inPlayerId).toBe(leastPlayed);
   });
 
+  it("spreads near-equal substitutions across lines", () => {
+    const team = structuredClone(INITIAL_TEAMS.u12);
+    team.roster.forEach((player) => {
+      player.preferredRoles = player.preferredRoles.filter(
+        (role) => role !== "goalkeeper",
+      );
+    });
+    const game = createGame(
+      team,
+      "9-3-3-2",
+      team.roster.slice(0, 12).map((player) => player.id),
+      60,
+      1_000,
+    );
+    const formation = FORMATIONS.find((item) => item.id === game.formationId)!;
+    formation.positions.forEach((position) => {
+      game.totals[game.assignments[position.id]].fieldSeconds =
+        position.role === "defender"
+          ? 600
+          : position.role === "midfielder"
+            ? 550
+            : 0;
+    });
+
+    const roles = suggestSubstitutions(game, 3, team).map(
+      (pair) =>
+        formation.positions.find((position) => position.id === pair.positionId)!
+          .role,
+    );
+
+    expect(roles.filter((role) => role === "defender")).toHaveLength(2);
+    expect(roles.filter((role) => role === "midfielder")).toHaveLength(1);
+  });
+
+  it("still favors a whole line when its fairness gap is substantial", () => {
+    const team = structuredClone(INITIAL_TEAMS.u12);
+    team.roster.forEach((player) => {
+      player.preferredRoles = player.preferredRoles.filter(
+        (role) => role !== "goalkeeper",
+      );
+    });
+    const game = createGame(
+      team,
+      "9-3-3-2",
+      team.roster.slice(0, 12).map((player) => player.id),
+      60,
+      1_000,
+    );
+    const formation = FORMATIONS.find((item) => item.id === game.formationId)!;
+    formation.positions.forEach((position) => {
+      game.totals[game.assignments[position.id]].fieldSeconds =
+        position.role === "defender"
+          ? 600
+          : position.role === "midfielder"
+            ? 300
+            : 0;
+    });
+
+    const roles = suggestSubstitutions(game, 3, team).map(
+      (pair) =>
+        formation.positions.find((position) => position.id === pair.positionId)!
+          .role,
+    );
+
+    expect(roles).toEqual(["defender", "defender", "defender"]);
+  });
+
   it("recommends a fresh player only for the row displaced by an incoming conflict", () => {
     const team = structuredClone(INITIAL_TEAMS.u8);
     team.roster.forEach((player) => {
