@@ -2523,6 +2523,8 @@ select:hover {
 
 .sideline-player-action-menu {
   z-index: 80;
+  width: min(28rem, calc(100vw - 2rem));
+  max-width: min(28rem, calc(100vw - 2rem));
   max-height: min(22rem, calc(100vh - 2rem));
   max-height: min(22rem, calc(100dvh - 2rem));
   display: flex;
@@ -2644,7 +2646,7 @@ select:hover {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.3rem 1rem;
+  gap: 0.35rem 1rem;
 }
 
 .player-action-menu-row .replacement-player-summary,
@@ -2654,8 +2656,25 @@ select:hover {
 }
 
 .player-action-menu-row .replacement-player-times {
+  grid-column: 1 / -1;
+  justify-self: start;
+  justify-content: flex-start;
+  margin-top: 0.05rem;
+  text-align: left;
+}
+
+.player-action-menu-row .replacement-player-preferences {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.player-action-menu-row .replacement-player-preferences strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-action-menu-row .replacement-fit {
   justify-self: end;
-  text-align: right;
 }
 
 .player-action-menu-row .player-name-with-goals > :first-child {
