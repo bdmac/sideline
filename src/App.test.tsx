@@ -529,6 +529,7 @@ describe("Sideline app", () => {
       }),
     ).toBeInTheDocument();
 
+    fireEvent.mouseDown(actions.parentElement!);
     fireEvent.click(actions.parentElement!);
     expect(
       screen.queryByRole("dialog", { name: "Simon" }),
@@ -544,6 +545,7 @@ describe("Sideline app", () => {
     const confirmation = screen.getByRole("alertdialog", {
       name: "End this game?",
     });
+    fireEvent.mouseDown(confirmation.parentElement!);
     fireEvent.click(confirmation.parentElement!);
 
     expect(
@@ -666,7 +668,9 @@ describe("Sideline app", () => {
     expect(planner.querySelector(".swap-column-headings")).toHaveTextContent(
       "OUTIN",
     );
-    expect(planner.querySelectorAll(".swap-player-status")).toHaveLength(6);
+    expect(
+      planner.querySelector(".swap-player-status"),
+    ).not.toBeInTheDocument();
     expect(planner.querySelectorAll(".swap-transfer svg")).toHaveLength(3);
     expect(planner.querySelectorAll(".review-direction small")).toHaveLength(3);
     const outgoingPlayers =
@@ -675,27 +679,34 @@ describe("Sideline app", () => {
       within(planner).getAllByLabelText(/incoming player/);
     const firstOutgoingName = outgoingPlayers[0].textContent?.trim() ?? "";
     fireEvent.click(outgoingPlayers[1]);
+    expect(screen.getByText("Who's coming OUT?")).toBeInTheDocument();
     const repeatedOutgoing = screen
       .getAllByRole("menuitemradio")
       .find((item) => item.textContent?.startsWith(firstOutgoingName));
     expect(repeatedOutgoing).toHaveAttribute("data-inactive", "true");
     expect(repeatedOutgoing).toHaveAttribute("aria-disabled", "true");
     expect(repeatedOutgoing).toHaveAccessibleDescription(
-      expect.stringContaining("Planned to come off for Noah"),
+      expect.stringContaining("Planned to come OUT for Noah"),
     );
+    expect(repeatedOutgoing).not.toHaveTextContent("Prefers");
+    expect(repeatedOutgoing).toHaveTextContent(/#\d+ · \w+/);
     fireEvent.keyDown(document, { key: "Escape" });
 
     const firstIncomingName = incomingPlayers[0].textContent?.trim() ?? "";
     fireEvent.click(incomingPlayers[1]);
+    expect(screen.getByText("Who's going IN?")).toBeInTheDocument();
+    expect(screen.getByText(/^For .+ at .+$/)).toBeInTheDocument();
     const repeatedIncoming = screen
       .getAllByRole("menuitemradio")
       .find((item) => item.textContent?.startsWith(firstIncomingName));
-    expect(repeatedIncoming).toHaveAttribute("data-inactive", "true");
-    expect(repeatedIncoming).toHaveAttribute("aria-disabled", "true");
-    expect(repeatedIncoming).toHaveAccessibleDescription(
-      expect.stringContaining("Planned to go on for Simon"),
-    );
-    fireEvent.keyDown(document, { key: "Escape" });
+    expect(repeatedIncoming).not.toHaveAttribute("data-inactive", "true");
+    expect(repeatedIncoming).not.toHaveAttribute("aria-disabled", "true");
+    expect(repeatedIncoming).toHaveTextContent(/Prefers: .+/);
+    expect(repeatedIncoming).toHaveTextContent(/#\d+/);
+    expect(repeatedIncoming).toHaveTextContent("Planned to go IN for Simon");
+    fireEvent.click(repeatedIncoming!);
+    expect(incomingPlayers[1]).toHaveTextContent(firstIncomingName);
+    expect(incomingPlayers[0]).not.toHaveTextContent(firstIncomingName);
     expect(
       screen.getByRole("button", { name: "Queue 3 swaps" }),
     ).toBeInTheDocument();
@@ -710,7 +721,6 @@ describe("Sideline app", () => {
     expect(within(summary).getAllByText("OUT")).toHaveLength(1);
     expect(within(summary).getAllByText("IN")).toHaveLength(1);
     expect(summary.querySelectorAll(".ready-direction svg")).toHaveLength(3);
-    expect(summary).not.toHaveTextContent("#12 Henry");
     expect(
       screen.getByRole("button", { name: "Open actions for Simon" }),
     ).toBeInTheDocument();
@@ -722,6 +732,42 @@ describe("Sideline app", () => {
     expect(
       screen.queryByRole("dialog", { name: /Review substitutions/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps all six U12 bench players selectable while refilling the displaced row", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Fireballers"));
+    startGame();
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+
+    const planner = screen.getByRole("dialog", {
+      name: "Plan substitutions",
+    });
+    fireEvent.click(within(planner).getByRole("button", { name: "6" }));
+
+    const incomingPlayers =
+      within(planner).getAllByLabelText(/incoming player/);
+    expect(incomingPlayers).toHaveLength(6);
+    const firstIncomingName = incomingPlayers[0].textContent?.trim() ?? "";
+    const secondIncomingName = incomingPlayers[1].textContent?.trim() ?? "";
+
+    fireEvent.click(incomingPlayers[1]);
+    const choices = screen.getAllByRole("menuitemradio");
+    expect(choices).toHaveLength(6);
+    expect(
+      choices.every(
+        (choice) => choice.getAttribute("aria-disabled") !== "true",
+      ),
+    ).toBe(true);
+
+    fireEvent.click(
+      choices.find((choice) =>
+        choice.textContent?.startsWith(firstIncomingName),
+      )!,
+    );
+    expect(incomingPlayers[0]).toHaveTextContent(secondIncomingName);
+    expect(incomingPlayers[1]).toHaveTextContent(firstIncomingName);
+    expect(screen.getByRole("button", { name: "Queue 6 swaps" })).toBeEnabled();
   });
 
   it("prompts U8 to plan substitutions after five minutes without a swap", () => {
@@ -797,6 +843,31 @@ describe("Sideline app", () => {
     expect(outgoingTrigger).toHaveFocus();
   });
 
+  it("dismisses an open player menu before opening another selector", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+
+    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    fireEvent.click(within(planner).getByRole("button", { name: "1" }));
+    const outgoingTrigger = within(planner).getByLabelText(
+      "Swap 1 outgoing player",
+    );
+    const incomingTrigger = within(planner).getByLabelText(
+      "Swap 1 incoming player",
+    );
+
+    fireEvent.click(outgoingTrigger);
+    expect(screen.getAllByRole("menuitemradio")).not.toHaveLength(0);
+
+    fireEvent.click(incomingTrigger);
+    expect(screen.queryByRole("menuitemradio")).not.toBeInTheDocument();
+
+    fireEvent.click(incomingTrigger);
+    expect(screen.getAllByRole("menuitemradio")).not.toHaveLength(0);
+  });
+
   it("keeps planner chrome fixed around a scrollable dialog body", async () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -870,16 +941,33 @@ describe("Sideline app", () => {
         playerName(playerA).localeCompare(playerName(playerB)),
     );
     fireEvent.click(within(planner).getAllByLabelText(/outgoing player/)[0]);
+    const outgoingMenuItems = screen.getAllByRole("menuitemradio");
+    const disabledOutgoingIds = new Set(
+      outgoingMenuItems
+        .filter((item) => item.getAttribute("aria-disabled") === "true")
+        .map(
+          (item) =>
+            team.roster.find((player) =>
+              item.textContent?.startsWith(player.name),
+            )!.id,
+        ),
+    );
     expect(
-      screen
-        .getAllByRole("menuitemradio")
+      outgoingMenuItems
         .map((item) =>
           team.roster.find((player) =>
             item.textContent?.startsWith(player.name),
           ),
         )
         .map((player) => player?.id),
-    ).toEqual(expectedOutgoingOptions);
+    ).toEqual([
+      ...expectedOutgoingOptions.filter(
+        (playerId) => !disabledOutgoingIds.has(playerId),
+      ),
+      ...expectedOutgoingOptions.filter((playerId) =>
+        disabledOutgoingIds.has(playerId),
+      ),
+    ]);
     fireEvent.keyDown(document, { key: "Escape" });
 
     const expectedIncomingOptions = [...game.benchIds].sort(
@@ -888,16 +976,38 @@ describe("Sideline app", () => {
         playerName(playerA).localeCompare(playerName(playerB)),
     );
     fireEvent.click(within(planner).getAllByLabelText(/incoming player/)[0]);
+    const incomingMenuItems = screen.getAllByRole("menuitemradio");
     expect(
-      screen
-        .getAllByRole("menuitemradio")
+      incomingMenuItems.every(
+        (item) => item.getAttribute("aria-disabled") !== "true",
+      ),
+    ).toBe(true);
+    const plannedIncomingIds = new Set(
+      incomingMenuItems
+        .filter((item) => item.textContent?.includes("Planned to go IN for"))
+        .map(
+          (item) =>
+            team.roster.find((player) =>
+              item.textContent?.startsWith(player.name),
+            )!.id,
+        ),
+    );
+    expect(
+      incomingMenuItems
         .map((item) =>
           team.roster.find((player) =>
             item.textContent?.startsWith(player.name),
           ),
         )
         .map((player) => player?.id),
-    ).toEqual(expectedIncomingOptions);
+    ).toEqual([
+      ...expectedIncomingOptions.filter(
+        (playerId) => !plannedIncomingIds.has(playerId),
+      ),
+      ...expectedIncomingOptions.filter((playerId) =>
+        plannedIncomingIds.has(playerId),
+      ),
+    ]);
   });
 
   it("keeps a queued plan accessible from the live game until cancelled", () => {
@@ -957,8 +1067,8 @@ describe("Sideline app", () => {
     let queued = screen.getByRole("dialog", {
       name: "Review substitutions (1)",
     });
-    expect(queued).toHaveTextContent("#10 Simon");
-    expect(queued).toHaveTextContent("#4 Dylan");
+    expect(queued).toHaveTextContent("Simon #10");
+    expect(queued).toHaveTextContent("Dylan #4");
     fireEvent.click(within(queued).getByRole("button", { name: "Edit plan" }));
 
     const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
@@ -999,8 +1109,8 @@ describe("Sideline app", () => {
     queued = screen.getByRole("dialog", {
       name: "Review substitutions (1)",
     });
-    expect(queued).toHaveTextContent("#23 Ollie");
-    expect(queued).toHaveTextContent("#4 Dylan");
+    expect(queued).toHaveTextContent("Ollie #23");
+    expect(queued).toHaveTextContent("Dylan #4");
     expect(screen.getByText("1 substitution queued")).toBeInTheDocument();
     fireEvent.click(within(queued).getByRole("button", { name: "Close" }));
 
@@ -1530,9 +1640,9 @@ describe("Sideline app", () => {
       name: "Substitution ready",
     });
     expect(summary).toHaveTextContent("OUT");
-    expect(summary).toHaveTextContent("#10 Simon");
+    expect(summary).toHaveTextContent("Simon #10");
     expect(summary).toHaveTextContent("IN");
-    expect(summary).toHaveTextContent("#7 Noah");
+    expect(summary).toHaveTextContent("Noah #7");
     expect(screen.getByText("Simon out of game")).toBeInTheDocument();
     expect(
       screen.queryByRole("dialog", { name: "Change positions" }),
@@ -1616,12 +1726,10 @@ describe("Sideline app", () => {
     ).toHaveTextContent(
       "Open your browser menu and choose Install app or Add to Home screen.",
     );
-    expect(document.body.style.position).toBe("fixed");
-    expect(document.body.style.overflow).toBe("hidden");
+    expect(document.body).toHaveAttribute("data-dialog-scroll-disabled");
 
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
-    expect(document.body.style.position).toBe("");
-    expect(document.body.style.overflow).toBe("");
+    expect(document.body).not.toHaveAttribute("data-dialog-scroll-disabled");
   });
 
   it("uses the browser's native installation prompt when available", async () => {

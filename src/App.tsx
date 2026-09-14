@@ -1,4 +1,9 @@
-import { ActionList, ActionMenu, Dialog } from "@primer/react";
+import {
+  ActionList,
+  ActionMenu,
+  Dialog,
+  type DialogWidth,
+} from "@primer/react";
 import {
   ArrowLeft,
   ArrowRightLeft,
@@ -15,13 +20,13 @@ import {
   Pencil,
   Play,
   RotateCcw,
-  ShieldCheck,
   Square,
   Trash2,
   UserRoundX,
   X,
 } from "lucide-react";
 import {
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   useEffect,
@@ -52,6 +57,7 @@ import {
   movePlayer,
   queueBenchSubstitution,
   queueSubstitutions,
+  reassignIncomingSubstitution,
   recordGoal,
   removeQueuedSubstitution,
   removeQueuedSubstitutionForOutgoing,
@@ -123,18 +129,6 @@ const teamWithGameGuests = (team: Team, game: ActiveGame): Team =>
     ? { ...team, roster: [...team.roster, ...game.guestPlayers] }
     : team;
 
-let modalLockCount = 0;
-let modalScrollY = 0;
-let previousBodyStyles = {
-  overflow: "",
-  position: "",
-  top: "",
-  left: "",
-  right: "",
-  width: "",
-};
-let previousRootOverflow = "";
-
 function useClockNow(running: boolean) {
   const [now, setNow] = useState(Date.now());
 
@@ -147,55 +141,70 @@ function useClockNow(running: boolean) {
   return now;
 }
 
-function ModalBackdrop({
+function SidelineDialog({
+  title,
+  description,
   children,
-  onDismiss,
+  footer,
+  footerClassName = "sheet-actions",
+  onClose,
+  className = "",
+  width = "520px",
+  role = "dialog",
+  showClose = true,
+  bodyClassName,
 }: {
-  children: ReactNode;
-  onDismiss: () => void;
+  title: ReactNode;
+  description: ReactNode;
+  children?: ReactNode;
+  footer?: ReactNode;
+  footerClassName?: string;
+  onClose: () => void;
+  className?: string;
+  width?: DialogWidth;
+  role?: "dialog" | "alertdialog";
+  showClose?: boolean;
+  bodyClassName?: string;
 }) {
-  useEffect(() => {
-    if (modalLockCount === 0) {
-      modalScrollY = window.scrollY;
-      previousBodyStyles = {
-        overflow: document.body.style.overflow,
-        position: document.body.style.position,
-        top: document.body.style.top,
-        left: document.body.style.left,
-        right: document.body.style.right,
-        width: document.body.style.width,
-      };
-      previousRootOverflow = document.documentElement.style.overflow;
-      document.documentElement.style.overflow = "hidden";
-      document.body.style.overflow = "hidden";
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${modalScrollY}px`;
-      document.body.style.left = "0";
-      document.body.style.right = "0";
-      document.body.style.width = "100%";
-    }
-    modalLockCount += 1;
-
-    return () => {
-      modalLockCount = Math.max(0, modalLockCount - 1);
-      if (modalLockCount !== 0) return;
-
-      document.documentElement.style.overflow = previousRootOverflow;
-      Object.assign(document.body.style, previousBodyStyles);
-      window.scrollTo({ top: modalScrollY, left: 0, behavior: "auto" });
-    };
-  }, []);
-
   return (
-    <div
-      className="sheet-backdrop"
-      role="presentation"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onDismiss();
-      }}
+    <Dialog
+      title={title}
+      subtitle={description}
+      onClose={onClose}
+      position={{ narrow: "bottom", regular: "center" }}
+      width={width}
+      role={role}
+      className={`sideline-dialog ${className}`.trim()}
+      renderHeader={({
+        dialogLabelId,
+        dialogDescriptionId,
+        onClose: closeDialog,
+      }) => (
+        <Dialog.Header className="sheet-header">
+          <div>
+            <h2 id={dialogLabelId}>{title}</h2>
+            <p id={dialogDescriptionId}>{description}</p>
+          </div>
+          {showClose && (
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => closeDialog("close-button")}
+              aria-label="Close"
+            >
+              <X size={22} />
+            </button>
+          )}
+        </Dialog.Header>
+      )}
     >
-      {children}
-    </div>
+      {children && (
+        <Dialog.Body className={bodyClassName}>{children}</Dialog.Body>
+      )}
+      {footer && (
+        <Dialog.Footer className={footerClassName}>{footer}</Dialog.Footer>
+      )}
+    </Dialog>
   );
 }
 
@@ -315,10 +324,6 @@ function App() {
           <SidelineMark />
           <span>Sideline</span>
         </button>
-        <span className="local-status">
-          <ShieldCheck size={16} aria-hidden="true" />
-          Saved on this device
-        </span>
       </header>
 
       <main id="main">
@@ -484,25 +489,26 @@ function InstallHelpDialog({
   ios: boolean;
   onClose: () => void;
 }) {
+  const instructions = ios
+    ? "In Safari, tap the Share button, choose Add to Home Screen, then tap Add."
+    : "Open your browser menu and choose Install app or Add to Home screen.";
+
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet confirm-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="install-title"
-      >
-        <h2 id="install-title">Install Sideline</h2>
-        <p>
-          {ios
-            ? "In Safari, tap the Share button, choose Add to Home Screen, then tap Add."
-            : "Open your browser menu and choose Install app or Add to Home screen."}
-        </p>
+    <SidelineDialog
+      title="Install Sideline"
+      description={instructions}
+      className="confirm-sheet"
+      width="480px"
+      showClose={false}
+      onClose={onClose}
+      footer={
         <button className="primary-action" type="button" onClick={onClose}>
           Got it
         </button>
-      </section>
-    </ModalBackdrop>
+      }
+    >
+      <p>{instructions}</p>
+    </SidelineDialog>
   );
 }
 
@@ -518,82 +524,62 @@ function GuestPlayerSheet({
   const trimmedName = name.trim();
 
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet compact-sheet position-editor-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="guest-player-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="guest-player-title">Add guest player</h2>
-            <p>This player will exist only for this game.</p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={22} />
+    <SidelineDialog
+      title="Add guest player"
+      description="This player will exist only for this game."
+      className="compact-sheet position-editor-sheet"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="secondary-action" type="button" onClick={onClose}>
+            Cancel
           </button>
-        </header>
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!trimmedName) return;
-            onAdd(
-              trimmedName,
-              number ? Number.parseInt(number, 10) : undefined,
-            );
-          }}
-        >
-          <label className="field">
-            <span>Player name</span>
-            <input
-              autoFocus
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Guest player"
-              required
-            />
-          </label>
-          <label className="field">
-            <span>
-              Jersey number <small>Optional</small>
-            </span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="0"
-              max="99"
-              value={number}
-              onChange={(event) => setNumber(event.target.value)}
-              placeholder="—"
-            />
-          </label>
-          <div className="sheet-actions">
-            <button
-              className="secondary-action"
-              type="button"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-            <button
-              className="primary-action"
-              type="submit"
-              disabled={!trimmedName}
-            >
-              <CirclePlus size={18} aria-hidden="true" />
-              Add guest
-            </button>
-          </div>
-        </form>
-      </section>
-    </ModalBackdrop>
+          <button
+            className="primary-action"
+            type="submit"
+            form="guest-player-form"
+            disabled={!trimmedName}
+          >
+            <CirclePlus size={18} aria-hidden="true" />
+            Add guest
+          </button>
+        </>
+      }
+    >
+      <form
+        id="guest-player-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!trimmedName) return;
+          onAdd(trimmedName, number ? Number.parseInt(number, 10) : undefined);
+        }}
+      >
+        <label className="field">
+          <span>Player name</span>
+          <input
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Guest player"
+            required
+          />
+        </label>
+        <label className="field">
+          <span>
+            Jersey number <small>Optional</small>
+          </span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min="0"
+            max="99"
+            value={number}
+            onChange={(event) => setNumber(event.target.value)}
+            placeholder="—"
+          />
+        </label>
+      </form>
+    </SidelineDialog>
   );
 }
 
@@ -2384,79 +2370,13 @@ function StarterPicker({
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet compact-sheet starter-picker"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="starter-picker-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="starter-picker-title">
-              Choose {position?.label ?? "position"}
-            </h2>
-            <p>Choosing another starter swaps their positions.</p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={22} />
-          </button>
-        </header>
-
-        <div className="starter-choice-list">
-          {choices.map((player) => {
-            const assignedPosition = Object.entries(assignments).find(
-              ([, assignedPlayerId]) => assignedPlayerId === player.id,
-            )?.[0];
-            const assignedLabel = assignedPosition
-              ? formation.positions.find((item) => item.id === assignedPosition)
-                  ?.label
-              : null;
-            const assignedShortLabel = assignedPosition
-              ? formation.positions.find((item) => item.id === assignedPosition)
-                  ?.shortLabel
-              : null;
-            return (
-              <button
-                type="button"
-                key={player.id}
-                onClick={() => onSelect(player.id)}
-              >
-                <span className="starter-choice-player">
-                  <strong>{player.name}</strong>
-                  <span className="starter-preferences">
-                    <small>Prefers</small>
-                    <span>
-                      {player.preferredRoles
-                        .map(preferredRoleLabel)
-                        .join(" · ")}
-                    </span>
-                  </span>
-                </span>
-                <span
-                  className={`starter-current-assignment ${
-                    assignedPosition ? "" : "bench"
-                  }`}
-                  aria-label={
-                    assignedLabel
-                      ? `Currently ${assignedLabel}`
-                      : "Currently on starting bench"
-                  }
-                >
-                  <small>Current</small>
-                  <strong>{assignedShortLabel ?? "Bench"}</strong>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="sheet-actions">
+    <SidelineDialog
+      title={`Choose ${position?.label ?? "position"}`}
+      description="Choosing another starter swaps their positions."
+      className="compact-sheet starter-picker"
+      onClose={onClose}
+      footer={
+        <>
           <button className="secondary-action" type="button" onClick={onClose}>
             Cancel
           </button>
@@ -2465,9 +2385,55 @@ function StarterPicker({
               Leave open
             </button>
           )}
-        </div>
-      </section>
-    </ModalBackdrop>
+        </>
+      }
+    >
+      <div className="starter-choice-list">
+        {choices.map((player) => {
+          const assignedPosition = Object.entries(assignments).find(
+            ([, assignedPlayerId]) => assignedPlayerId === player.id,
+          )?.[0];
+          const assignedLabel = assignedPosition
+            ? formation.positions.find((item) => item.id === assignedPosition)
+                ?.label
+            : null;
+          const assignedShortLabel = assignedPosition
+            ? formation.positions.find((item) => item.id === assignedPosition)
+                ?.shortLabel
+            : null;
+          return (
+            <button
+              type="button"
+              key={player.id}
+              onClick={() => onSelect(player.id)}
+            >
+              <span className="starter-choice-player">
+                <strong>{player.name}</strong>
+                <span className="starter-preferences">
+                  <small>Prefers</small>
+                  <span>
+                    {player.preferredRoles.map(preferredRoleLabel).join(" · ")}
+                  </span>
+                </span>
+              </span>
+              <span
+                className={`starter-current-assignment ${
+                  assignedPosition ? "" : "bench"
+                }`}
+                aria-label={
+                  assignedLabel
+                    ? `Currently ${assignedLabel}`
+                    : "Currently on starting bench"
+                }
+              >
+                <small>Current</small>
+                <strong>{assignedShortLabel ?? "Bench"}</strong>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </SidelineDialog>
   );
 }
 
@@ -2488,50 +2454,16 @@ function GoalScorerPicker({
   onSelect: (playerId: string) => void;
   onOpponentGoal: () => void;
 }) {
+  const description = `${team.name} ${score.us} – ${score.opponent} Opponent`;
+
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet compact-sheet scorekeeper-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="scorekeeper-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="scorekeeper-title">Record a goal</h2>
-            <p>
-              {team.name} {score.us} – {score.opponent} Opponent
-            </p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={22} />
-          </button>
-        </header>
-
-        <h3>Who scored for us?</h3>
-        <div className="goal-scorer-grid">
-          {playerIds.map((playerId) => (
-            <button
-              className="secondary-action"
-              type="button"
-              key={playerId}
-              onClick={() => onSelect(playerId)}
-            >
-              <CirclePlus size={18} aria-hidden="true" />
-              <GoalMarkedPlayerName
-                label={playerLabel(team, playerId)}
-                goalCount={playerGoalCount(game, playerId)}
-                emphasized={false}
-              />
-            </button>
-          ))}
-        </div>
-
+    <SidelineDialog
+      title="Record a goal"
+      description={description}
+      className="compact-sheet scorekeeper-sheet"
+      onClose={onClose}
+      footerClassName="scorekeeper-footer"
+      footer={
         <button
           className="secondary-action opponent-goal-action"
           type="button"
@@ -2540,8 +2472,27 @@ function GoalScorerPicker({
           <CirclePlus size={19} aria-hidden="true" />
           Opponent scored
         </button>
-      </section>
-    </ModalBackdrop>
+      }
+    >
+      <h3>Who scored for us?</h3>
+      <div className="goal-scorer-grid">
+        {playerIds.map((playerId) => (
+          <button
+            className="secondary-action"
+            type="button"
+            key={playerId}
+            onClick={() => onSelect(playerId)}
+          >
+            <CirclePlus size={18} aria-hidden="true" />
+            <GoalMarkedPlayerName
+              label={playerLabel(team, playerId)}
+              goalCount={playerGoalCount(game, playerId)}
+              emphasized={false}
+            />
+          </button>
+        ))}
+      </div>
+    </SidelineDialog>
   );
 }
 
@@ -2556,47 +2507,32 @@ function GoalSummarySheet({
   score: number;
   onClose: () => void;
 }) {
-  return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet compact-sheet goal-summary-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="goal-summary-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="goal-summary-title">Our goals</h2>
-            <p>
-              {team.name} · {score} {score === 1 ? "goal" : "goals"}
-            </p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={22} />
-          </button>
-        </header>
+  const description = `${team.name} · ${score} ${
+    score === 1 ? "goal" : "goals"
+  }`;
 
-        {scorers.length ? (
-          <ul className="goal-summary-list">
-            {scorers.map((scorer) => (
-              <li key={scorer.playerId}>
-                <GoalMarkedPlayerName
-                  label={playerName(team, scorer.playerId)}
-                  goalCount={scorer.goals.length}
-                />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="empty-copy">No goals recorded yet.</p>
-        )}
-      </section>
-    </ModalBackdrop>
+  return (
+    <SidelineDialog
+      title="Our goals"
+      description={description}
+      className="compact-sheet goal-summary-sheet"
+      onClose={onClose}
+    >
+      {scorers.length ? (
+        <ul className="goal-summary-list">
+          {scorers.map((scorer) => (
+            <li key={scorer.playerId}>
+              <GoalMarkedPlayerName
+                label={playerName(team, scorer.playerId)}
+                goalCount={scorer.goals.length}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="empty-copy">No goals recorded yet.</p>
+      )}
+    </SidelineDialog>
   );
 }
 
@@ -2642,76 +2578,22 @@ function BenchSubstitutionPicker({
     );
 
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet compact-sheet bench-substitution-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="bench-substitution-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="bench-substitution-title">
-              Queue{" "}
-              <GoalMarkedPlayerName
-                label={playerLabel(team, playerId)}
-                goalCount={playerGoalCount(game, playerId)}
-                emphasized={false}
-              />
-            </h2>
-            <p>Choose the player they will replace.</p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={22} />
-          </button>
-        </header>
-
-        <div className="bench-player-preferences">
-          <small>Player status</small>
-          <strong>
-            {formatDuration(game.totals[playerId]?.fieldSeconds ?? 0)} played ·{" "}
-            {formatDuration(getCurrentBenchSeconds(game, playerId))} current
-            bench
-          </strong>
-          <small>Preferred roles</small>
-          <strong>
-            {player.preferredRoles.map(preferredRoleLabel).join(" · ")}
-          </strong>
-        </div>
-
-        <div className="bench-replacement-list">
-          {choices.map(({ position, outPlayerId, preferenceIndex }) => (
-            <button
-              className={
-                currentPair?.outPlayerId === outPlayerId ? "selected" : ""
-              }
-              type="button"
-              key={outPlayerId}
-              aria-pressed={currentPair?.outPlayerId === outPlayerId}
-              onClick={() => onSelect(outPlayerId)}
-            >
-              <span>
-                <GoalMarkedPlayerName
-                  label={playerLabel(team, outPlayerId)}
-                  goalCount={playerGoalCount(game, outPlayerId)}
-                />
-                <small>{position.label}</small>
-              </span>
-              <span className="replacement-fit">
-                {Number.isFinite(preferenceIndex)
-                  ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
-                  : "Other role"}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {currentPair && (
+    <SidelineDialog
+      title={
+        <>
+          Queue{" "}
+          <GoalMarkedPlayerName
+            label={playerLabel(team, playerId)}
+            goalCount={playerGoalCount(game, playerId)}
+            emphasized={false}
+          />
+        </>
+      }
+      description="Choose the player they will replace."
+      className="compact-sheet bench-substitution-sheet"
+      onClose={onClose}
+      footer={
+        currentPair ? (
           <div className="bench-picker-actions">
             <button
               className="secondary-action remove-from-plan-action"
@@ -2722,9 +2604,49 @@ function BenchSubstitutionPicker({
               Remove from queue
             </button>
           </div>
-        )}
-      </section>
-    </ModalBackdrop>
+        ) : undefined
+      }
+      footerClassName="bench-picker-footer"
+    >
+      <div className="bench-player-preferences">
+        <small>Player status</small>
+        <strong>
+          {formatDuration(game.totals[playerId]?.fieldSeconds ?? 0)} played ·{" "}
+          {formatDuration(getCurrentBenchSeconds(game, playerId))} current bench
+        </strong>
+        <small>Preferred roles</small>
+        <strong>
+          {player.preferredRoles.map(preferredRoleLabel).join(" · ")}
+        </strong>
+      </div>
+
+      <div className="bench-replacement-list">
+        {choices.map(({ position, outPlayerId, preferenceIndex }) => (
+          <button
+            className={
+              currentPair?.outPlayerId === outPlayerId ? "selected" : ""
+            }
+            type="button"
+            key={outPlayerId}
+            aria-pressed={currentPair?.outPlayerId === outPlayerId}
+            onClick={() => onSelect(outPlayerId)}
+          >
+            <span>
+              <GoalMarkedPlayerName
+                label={playerLabel(team, outPlayerId)}
+                goalCount={playerGoalCount(game, outPlayerId)}
+              />
+              <small>{position.label}</small>
+            </span>
+            <span className="replacement-fit">
+              {Number.isFinite(preferenceIndex)
+                ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
+                : "Other role"}
+            </span>
+          </button>
+        ))}
+      </div>
+    </SidelineDialog>
   );
 }
 
@@ -2775,79 +2697,23 @@ function FieldSubstitutionPicker({
     );
 
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet compact-sheet bench-substitution-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="field-substitution-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="field-substitution-title">
-              Queue{" "}
-              <GoalMarkedPlayerName
-                label={playerLabel(team, playerId)}
-                goalCount={playerGoalCount(game, playerId)}
-                emphasized={false}
-              />{" "}
-              out
-            </h2>
-            <p>Choose who will enter at {position.label}.</p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={22} />
-          </button>
-        </header>
-
-        <div className="bench-player-preferences">
-          <small>Player status</small>
-          <strong>
-            {formatDuration(game.totals[playerId]?.fieldSeconds ?? 0)} played ·{" "}
-            {formatDuration(getCurrentFieldSeconds(game, playerId))} playing now
-          </strong>
-          <small>Current position</small>
-          <strong>{position.label}</strong>
-        </div>
-
-        <div className="bench-replacement-list">
-          {choices.map(({ player: incoming, preferenceIndex }) => (
-            <button
-              className={
-                currentPair?.inPlayerId === incoming.id ? "selected" : ""
-              }
-              type="button"
-              key={incoming.id}
-              aria-pressed={currentPair?.inPlayerId === incoming.id}
-              onClick={() => onSelect(incoming.id)}
-            >
-              <span>
-                <GoalMarkedPlayerName
-                  label={playerLabel(team, incoming.id)}
-                  goalCount={playerGoalCount(game, incoming.id)}
-                />
-                <small>
-                  {formatDuration(game.totals[incoming.id]?.fieldSeconds ?? 0)}{" "}
-                  played ·{" "}
-                  {formatDuration(getCurrentBenchSeconds(game, incoming.id))}{" "}
-                  sitting
-                </small>
-              </span>
-              <span className="replacement-fit">
-                {Number.isFinite(preferenceIndex)
-                  ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
-                  : "Other role"}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {currentPair && (
+    <SidelineDialog
+      title={
+        <>
+          Queue{" "}
+          <GoalMarkedPlayerName
+            label={playerLabel(team, playerId)}
+            goalCount={playerGoalCount(game, playerId)}
+            emphasized={false}
+          />{" "}
+          out
+        </>
+      }
+      description={`Choose who will enter at ${position.label}.`}
+      className="compact-sheet bench-substitution-sheet"
+      onClose={onClose}
+      footer={
+        currentPair ? (
           <div className="bench-picker-actions">
             <button
               className="secondary-action remove-from-plan-action"
@@ -2858,9 +2724,52 @@ function FieldSubstitutionPicker({
               Remove from queue
             </button>
           </div>
-        )}
-      </section>
-    </ModalBackdrop>
+        ) : undefined
+      }
+      footerClassName="bench-picker-footer"
+    >
+      <div className="bench-player-preferences">
+        <small>Player status</small>
+        <strong>
+          {formatDuration(game.totals[playerId]?.fieldSeconds ?? 0)} played ·{" "}
+          {formatDuration(getCurrentFieldSeconds(game, playerId))} playing now
+        </strong>
+        <small>Current position</small>
+        <strong>{position.label}</strong>
+      </div>
+
+      <div className="bench-replacement-list">
+        {choices.map(({ player: incoming, preferenceIndex }) => (
+          <button
+            className={
+              currentPair?.inPlayerId === incoming.id ? "selected" : ""
+            }
+            type="button"
+            key={incoming.id}
+            aria-pressed={currentPair?.inPlayerId === incoming.id}
+            onClick={() => onSelect(incoming.id)}
+          >
+            <span>
+              <GoalMarkedPlayerName
+                label={playerLabel(team, incoming.id)}
+                goalCount={playerGoalCount(game, incoming.id)}
+              />
+              <small>
+                {formatDuration(game.totals[incoming.id]?.fieldSeconds ?? 0)}{" "}
+                played ·{" "}
+                {formatDuration(getCurrentBenchSeconds(game, incoming.id))}{" "}
+                sitting
+              </small>
+            </span>
+            <span className="replacement-fit">
+              {Number.isFinite(preferenceIndex)
+                ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
+                : "Other role"}
+            </span>
+          </button>
+        ))}
+      </div>
+    </SidelineDialog>
   );
 }
 
@@ -2885,63 +2794,47 @@ function FieldPlayerActionsSheet({
 }) {
   const label = playerName(team, playerId);
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet compact-sheet field-player-actions-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="field-player-actions-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="field-player-actions-title">
-              <GoalMarkedPlayerName
-                label={label}
-                goalCount={playerGoalCount(game, playerId)}
-                emphasized={false}
-              />
-            </h2>
-            <p>Choose another on-field action.</p>
-          </div>
+    <SidelineDialog
+      title={
+        <GoalMarkedPlayerName
+          label={label}
+          goalCount={playerGoalCount(game, playerId)}
+          emphasized={false}
+        />
+      }
+      description="Choose another on-field action."
+      className="compact-sheet field-player-actions-sheet"
+      onClose={onClose}
+    >
+      <div className="field-player-action-list">
+        {includeQueue && (
           <button
-            className="icon-button"
+            className="secondary-action queue-field-player-action"
             type="button"
-            onClick={onClose}
-            aria-label="Close"
+            onClick={onQueue}
           >
-            <X size={22} />
+            <ArrowRightLeft size={20} aria-hidden="true" />
+            Queue substitution
           </button>
-        </header>
-        <div className="field-player-action-list">
-          {includeQueue && (
-            <button
-              className="secondary-action queue-field-player-action"
-              type="button"
-              onClick={onQueue}
-            >
-              <ArrowRightLeft size={20} aria-hidden="true" />
-              Queue substitution
-            </button>
-          )}
-          <button
-            className="secondary-action"
-            type="button"
-            onClick={onChangePosition}
-          >
-            <Move size={20} aria-hidden="true" />
-            Change positions
-          </button>
-          <button
-            className="secondary-action remove-field-player-action"
-            type="button"
-            onClick={onUnavailable}
-          >
-            <UserRoundX size={20} aria-hidden="true" />
-            Take {label} out of game
-          </button>
-        </div>
-      </section>
-    </ModalBackdrop>
+        )}
+        <button
+          className="secondary-action"
+          type="button"
+          onClick={onChangePosition}
+        >
+          <Move size={20} aria-hidden="true" />
+          Change positions
+        </button>
+        <button
+          className="secondary-action remove-field-player-action"
+          type="button"
+          onClick={onUnavailable}
+        >
+          <UserRoundX size={20} aria-hidden="true" />
+          Take {label} out of game
+        </button>
+      </div>
+    </SidelineDialog>
   );
 }
 
@@ -3111,32 +3004,64 @@ type PlayerActionMenuOption = {
   id: string;
   label: string;
   description: string;
+  detailText?: string;
+  statusText?: string;
   trailing?: string;
   inactiveText?: string;
 };
 
+function moveInactiveOptionsLast(options: PlayerActionMenuOption[]) {
+  return [
+    ...options.filter((option) => !option.inactiveText),
+    ...options.filter((option) => option.inactiveText),
+  ];
+}
+
+function movePlannedOptionsLast(options: PlayerActionMenuOption[]) {
+  return [
+    ...options.filter((option) => !option.statusText),
+    ...options.filter((option) => option.statusText),
+  ];
+}
+
 function PlayerActionMenu({
+  id,
   label,
   value,
   options,
   align,
+  menuTitle,
+  menuDescription,
+  activeMenuId,
+  onActiveMenuChange,
   onChange,
 }: {
+  id: string;
   label: string;
   value: string;
   options: PlayerActionMenuOption[];
   align: "start" | "end";
+  menuTitle: string;
+  menuDescription?: string;
+  activeMenuId: string | null;
+  onActiveMenuChange: (menuId: string | null) => void;
   onChange: (value: string) => void;
 }) {
   const selected = options.find((option) => option.id === value);
 
   return (
-    <ActionMenu>
+    <ActionMenu
+      open={activeMenuId === id}
+      onOpenChange={(open) => {
+        onActiveMenuChange(open ? id : null);
+      }}
+    >
       <ActionMenu.Anchor>
         <button
           className="player-action-menu-trigger"
           type="button"
           aria-label={label}
+          data-player-menu-id={id}
         >
           <span>{selected?.label ?? "Choose player"}</span>
           <ChevronDown size={18} aria-hidden="true" />
@@ -3149,6 +3074,10 @@ function PlayerActionMenu({
         width="medium"
         className="sideline-player-action-menu"
       >
+        <div className="player-action-menu-header">
+          <strong>{menuTitle}</strong>
+          {menuDescription && <small>{menuDescription}</small>}
+        </div>
         <ActionList
           variant="inset"
           selectionVariant="single"
@@ -3167,7 +3096,17 @@ function PlayerActionMenu({
             >
               {option.label}
               <ActionList.Description variant="block">
-                {option.description}
+                <span>{option.description}</span>
+                {option.detailText && (
+                  <span className="player-action-menu-detail">
+                    {option.detailText}
+                  </span>
+                )}
+                {option.statusText && (
+                  <span className="player-action-menu-status">
+                    {option.statusText}
+                  </span>
+                )}
               </ActionList.Description>
               {option.trailing && (
                 <ActionList.TrailingVisual>
@@ -3212,6 +3151,44 @@ function SubstitutionPlanner({
   const [hasCoachSelections, setHasCoachSelections] = useState(
     Boolean(initialPairs?.length),
   );
+  const [activePlayerMenuId, setActivePlayerMenuId] = useState<string | null>(
+    null,
+  );
+  const blockedPlayerMenuId = useRef<string | null>(null);
+  const getPlayerMenuId = (target: EventTarget) =>
+    target instanceof Element
+      ? target.closest<HTMLElement>("[data-player-menu-id]")?.dataset
+          .playerMenuId
+      : undefined;
+  const dismissMenuOnSelectorPointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const targetMenuId = getPlayerMenuId(event.target);
+    if (
+      activePlayerMenuId &&
+      targetMenuId &&
+      targetMenuId !== activePlayerMenuId
+    ) {
+      blockedPlayerMenuId.current = targetMenuId;
+      event.preventDefault();
+      event.stopPropagation();
+      setActivePlayerMenuId(null);
+    }
+  };
+  const consumeDismissalClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const targetMenuId = getPlayerMenuId(event.target);
+    const switchingMenus =
+      targetMenuId &&
+      ((blockedPlayerMenuId.current === targetMenuId &&
+        blockedPlayerMenuId.current !== null) ||
+        (activePlayerMenuId && targetMenuId !== activePlayerMenuId));
+    if (!switchingMenus) return;
+
+    blockedPlayerMenuId.current = null;
+    event.preventDefault();
+    event.stopPropagation();
+    setActivePlayerMenuId(null);
+  };
   const formation = getFormation(game.formationId);
 
   const changeCount = (nextCount: number) => {
@@ -3255,6 +3232,12 @@ function SubstitutionPlanner({
       ),
     );
   };
+  const updateIncomingPlayer = (index: number, inPlayerId: string) => {
+    setHasCoachSelections(true);
+    setPairs((current) =>
+      reassignIncomingSubstitution(game, current, index, inPlayerId, team),
+    );
+  };
   const duplicateOuts =
     new Set(pairs.map((pair) => pair.outPlayerId)).size !== pairs.length;
   const duplicateIns =
@@ -3283,228 +3266,217 @@ function SubstitutionPlanner({
   );
 
   return (
-    <Dialog
+    <SidelineDialog
       title="Plan substitutions"
-      subtitle="Suggested for fairness. Queue the plan now, then execute it when the players enter."
+      description="Suggested for fairness. Queue the plan now, then execute it when the players enter."
       onClose={onClose}
-      position={{ narrow: "bottom", regular: "center" }}
       width="720px"
       className="substitution-dialog substitution-sheet"
-      renderHeader={({
-        dialogLabelId,
-        dialogDescriptionId,
-        onClose: closeDialog,
-      }) => (
-        <Dialog.Header className="sheet-header">
-          <div>
-            <h2 id={dialogLabelId}>Plan substitutions</h2>
-            <p id={dialogDescriptionId}>
-              Suggested for fairness. Queue the plan now, then execute it when
-              the players enter.
-            </p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => closeDialog("close-button")}
-            aria-label="Close"
-          >
-            <X size={22} />
+      footer={
+        <>
+          <button className="secondary-action" type="button" onClick={onClose}>
+            Cancel
           </button>
-        </Dialog.Header>
-      )}
+          <button
+            className="sub-confirm"
+            type="button"
+            disabled={!valid}
+            onClick={() => onConfirm(pairs)}
+          >
+            <Check size={21} aria-hidden="true" />
+            Queue {count} swap{count === 1 ? "" : "s"}
+          </button>
+        </>
+      }
     >
-      <div className="sub-count">
-        <span>Players to swap</span>
-        <div className="stepper">
-          {Array.from({ length: maxCount }, (_, index) => index + 1).map(
-            (value) => (
-              <button
-                type="button"
-                key={value}
-                className={count === value ? "active" : ""}
-                onClick={() => changeCount(value)}
-              >
-                {value}
-              </button>
-            ),
-          )}
+      <div
+        className="substitution-planner-content"
+        onPointerDownCapture={dismissMenuOnSelectorPointerDown}
+        onClickCapture={consumeDismissalClick}
+      >
+        <div className="sub-count">
+          <span>Players to swap</span>
+          <div className="stepper">
+            {Array.from({ length: maxCount }, (_, index) => index + 1).map(
+              (value) => (
+                <button
+                  type="button"
+                  key={value}
+                  className={count === value ? "active" : ""}
+                  onClick={() => changeCount(value)}
+                >
+                  {value}
+                </button>
+              ),
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="swap-list">
-        <div className="swap-column-headings" aria-hidden="true">
-          <span className="out-label">OUT</span>
-          <span className="in-label">IN</span>
-        </div>
-        {pairs.map((pair, index) => {
-          const position = formation.positions.find(
-            (item) => item.id === pair.positionId,
-          );
-          const outgoingOptions = outgoingChoices.map(
-            ([positionId, playerId]) => {
-              const usedInSwap = pairs.findIndex(
-                (otherPair, pairIndex) =>
-                  pairIndex !== index && otherPair.outPlayerId === playerId,
-              );
-              return {
-                id: playerId,
-                label: playerName(team, playerId),
-                description: `${formatDuration(
-                  getCurrentFieldSeconds(game, playerId),
-                )} playing · ${formatDuration(
-                  game.totals[playerId]?.fieldSeconds ?? 0,
-                )} total`,
-                trailing:
-                  formation.positions.find((item) => item.id === positionId)
-                    ?.shortLabel ?? "",
-                inactiveText:
-                  usedInSwap >= 0
-                    ? `Planned to come off for ${playerName(
-                        team,
-                        pairs[usedInSwap].inPlayerId,
-                      )}`
-                    : undefined,
-              };
-            },
-          );
-          const incomingOptions = incomingChoices.map((playerId) => {
-            const usedInSwap = pairs.findIndex(
-              (otherPair, pairIndex) =>
-                pairIndex !== index && otherPair.inPlayerId === playerId,
+        <div className="swap-list">
+          <div className="swap-column-headings" aria-hidden="true">
+            <span className="out-label">OUT</span>
+            <span className="in-label">IN</span>
+          </div>
+          {pairs.map((pair, index) => {
+            const position = formation.positions.find(
+              (item) => item.id === pair.positionId,
             );
-            const player = team.roster.find((item) => item.id === playerId);
-            return {
-              id: playerId,
-              label: playerName(team, playerId),
-              description: `${formatDuration(
-                getCurrentBenchSeconds(game, playerId),
-              )} sitting · ${formatDuration(
-                game.totals[playerId]?.fieldSeconds ?? 0,
-              )} played`,
-              trailing: player?.number ? `#${player.number}` : undefined,
-              inactiveText:
-                usedInSwap >= 0
-                  ? `Planned to go on for ${playerName(
+            const outgoingOptions = moveInactiveOptionsLast(
+              outgoingChoices.map(([positionId, playerId]) => {
+                const usedInSwap = pairs.findIndex(
+                  (otherPair, pairIndex) =>
+                    pairIndex !== index && otherPair.outPlayerId === playerId,
+                );
+                const player = team.roster.find((item) => item.id === playerId);
+                const positionLabel =
+                  formation.positions.find((item) => item.id === positionId)
+                    ?.shortLabel ?? "";
+                return {
+                  id: playerId,
+                  label: playerName(team, playerId),
+                  description: `${formatDuration(
+                    getCurrentFieldSeconds(game, playerId),
+                  )} playing · ${formatDuration(
+                    game.totals[playerId]?.fieldSeconds ?? 0,
+                  )} total`,
+                  trailing: [
+                    player?.number ? `#${player.number}` : undefined,
+                    positionLabel,
+                  ]
+                    .filter(Boolean)
+                    .join(" · "),
+                  inactiveText:
+                    usedInSwap >= 0
+                      ? `Planned to come OUT for ${playerName(
+                          team,
+                          pairs[usedInSwap].inPlayerId,
+                        )}`
+                      : undefined,
+                };
+              }),
+            );
+            const incomingOptions = movePlannedOptionsLast(
+              incomingChoices.map((playerId) => {
+                const usedInSwap = pairs.findIndex(
+                  (otherPair, pairIndex) =>
+                    pairIndex !== index && otherPair.inPlayerId === playerId,
+                );
+                const player = team.roster.find((item) => item.id === playerId);
+                return {
+                  id: playerId,
+                  label: playerName(team, playerId),
+                  description: `${formatDuration(
+                    getCurrentBenchSeconds(game, playerId),
+                  )} sitting · ${formatDuration(
+                    game.totals[playerId]?.fieldSeconds ?? 0,
+                  )} played`,
+                  detailText: player
+                    ? `Prefers: ${player.preferredRoles
+                        .map(preferredRoleLabel)
+                        .join(" · ")}`
+                    : undefined,
+                  statusText:
+                    usedInSwap >= 0
+                      ? `Planned to go IN for ${playerName(
+                          team,
+                          pairs[usedInSwap].outPlayerId,
+                        )}`
+                      : undefined,
+                  trailing: player?.number ? `#${player.number}` : undefined,
+                };
+              }),
+            );
+            return (
+              <div className="swap-row" key={index}>
+                <span className="swap-number">{index + 1}</span>
+                <div className="swap-player-choice">
+                  <PlayerActionMenu
+                    id={`out-${index}`}
+                    label={`Swap ${index + 1} outgoing player`}
+                    value={pair.outPlayerId}
+                    options={outgoingOptions}
+                    align="start"
+                    menuTitle="Who's coming OUT?"
+                    activeMenuId={activePlayerMenuId}
+                    onActiveMenuChange={setActivePlayerMenuId}
+                    onChange={(playerId) => {
+                      const positionId =
+                        Object.entries(game.assignments).find(
+                          ([, id]) => id === playerId,
+                        )?.[0] ?? pair.positionId;
+                      updatePair(index, {
+                        outPlayerId: playerId,
+                        positionId,
+                      });
+                    }}
+                  />
+                </div>
+                <span className="swap-transfer">
+                  <ArrowRightLeft size={22} aria-hidden="true" />
+                  <small>{position?.shortLabel}</small>
+                </span>
+                <div className="swap-player-choice">
+                  <PlayerActionMenu
+                    id={`in-${index}`}
+                    label={`Swap ${index + 1} incoming player`}
+                    value={pair.inPlayerId}
+                    options={incomingOptions}
+                    align="end"
+                    menuTitle="Who's going IN?"
+                    menuDescription={`For ${playerName(
                       team,
-                      pairs[usedInSwap].outPlayerId,
-                    )}`
-                  : undefined,
-            };
-          });
-          return (
-            <div className="swap-row" key={index}>
-              <span className="swap-number">{index + 1}</span>
-              <div className="swap-player-choice">
-                <PlayerActionMenu
-                  label={`Swap ${index + 1} outgoing player`}
-                  value={pair.outPlayerId}
-                  options={outgoingOptions}
-                  align="start"
-                  onChange={(playerId) => {
-                    const positionId =
-                      Object.entries(game.assignments).find(
-                        ([, id]) => id === playerId,
-                      )?.[0] ?? pair.positionId;
-                    updatePair(index, {
-                      outPlayerId: playerId,
-                      positionId,
-                    });
-                  }}
-                />
-                <small className="swap-player-status">
-                  {formatDuration(
-                    getCurrentFieldSeconds(game, pair.outPlayerId),
-                  )}{" "}
-                  playing ·{" "}
-                  {formatDuration(
-                    game.totals[pair.outPlayerId]?.fieldSeconds ?? 0,
-                  )}{" "}
-                  total
-                </small>
+                      pair.outPlayerId,
+                    )} at ${position?.label ?? "open position"}`}
+                    activeMenuId={activePlayerMenuId}
+                    onActiveMenuChange={setActivePlayerMenuId}
+                    onChange={(playerId) =>
+                      updateIncomingPlayer(index, playerId)
+                    }
+                  />
+                </div>
               </div>
-              <span className="swap-transfer">
-                <ArrowRightLeft size={22} aria-hidden="true" />
-                <small>{position?.shortLabel}</small>
-              </span>
-              <div className="swap-player-choice">
-                <PlayerActionMenu
-                  label={`Swap ${index + 1} incoming player`}
-                  value={pair.inPlayerId}
-                  options={incomingOptions}
-                  align="end"
-                  onChange={(playerId) =>
-                    updatePair(index, { inPlayerId: playerId })
-                  }
-                />
-                <small className="swap-player-status">
-                  {formatDuration(
-                    getCurrentBenchSeconds(game, pair.inPlayerId),
-                  )}{" "}
-                  sitting ·{" "}
-                  {formatDuration(
-                    game.totals[pair.inPlayerId]?.fieldSeconds ?? 0,
-                  )}{" "}
-                  played
-                </small>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {!valid && (
-        <p className="error-message">
-          {pairErrors[0] ??
-            "Choose a different outgoing and incoming player for every swap."}
-        </p>
-      )}
-
-      <div className="review-checklist">
-        <h3>Confirm together</h3>
-        <div className="review-column-headings" aria-hidden="true">
-          <span className="out-label">OUT</span>
-          <span className="in-label">IN</span>
+            );
+          })}
         </div>
-        {pairs.map((pair, index) => {
-          const position = formation.positions.find(
-            (item) => item.id === pair.positionId,
-          );
-          return (
-            <div className="review-row" key={index}>
-              <span className="review-number">{index + 1}</span>
-              <GoalMarkedPlayerName
-                label={playerName(team, pair.outPlayerId)}
-                goalCount={playerGoalCount(game, pair.outPlayerId)}
-              />
-              <span className="review-direction">
-                <ArrowRightLeft size={17} aria-hidden="true" />
-                <small>{position?.shortLabel}</small>
-              </span>
-              <GoalMarkedPlayerName
-                label={playerName(team, pair.inPlayerId)}
-                goalCount={playerGoalCount(game, pair.inPlayerId)}
-              />
-            </div>
-          );
-        })}
-      </div>
 
-      <Dialog.Footer className="sheet-actions">
-        <button className="secondary-action" type="button" onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          className="sub-confirm"
-          type="button"
-          disabled={!valid}
-          onClick={() => onConfirm(pairs)}
-        >
-          <Check size={21} aria-hidden="true" />
-          Queue {count} swap{count === 1 ? "" : "s"}
-        </button>
-      </Dialog.Footer>
-    </Dialog>
+        {!valid && (
+          <p className="error-message">
+            {pairErrors[0] ??
+              "Choose a different outgoing and incoming player for every swap."}
+          </p>
+        )}
+
+        <div className="review-checklist">
+          <h3>Confirm together</h3>
+          <div className="review-column-headings" aria-hidden="true">
+            <span className="out-label">OUT</span>
+            <span className="in-label">IN</span>
+          </div>
+          {pairs.map((pair, index) => {
+            const position = formation.positions.find(
+              (item) => item.id === pair.positionId,
+            );
+            return (
+              <div className="review-row" key={index}>
+                <span className="review-number">{index + 1}</span>
+                <GoalMarkedPlayerName
+                  label={playerName(team, pair.outPlayerId)}
+                  goalCount={playerGoalCount(game, pair.outPlayerId)}
+                />
+                <span className="review-direction">
+                  <ArrowRightLeft size={17} aria-hidden="true" />
+                  <small>{position?.shortLabel}</small>
+                </span>
+                <GoalMarkedPlayerName
+                  label={playerName(team, pair.inPlayerId)}
+                  goalCount={playerGoalCount(game, pair.inPlayerId)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </SidelineDialog>
   );
 }
 
@@ -3533,8 +3505,9 @@ function ReadySwapList({
           <div className="ready-swap" key={index}>
             <span className="ready-swap-number">{index + 1}</span>
             <span className="ready-player out">
-              <GoalMarkedPlayerName
-                label={playerLabel(team, pair.outPlayerId)}
+              <ReadyPlayerIdentity
+                team={team}
+                playerId={pair.outPlayerId}
                 goalCount={playerGoalCount(game, pair.outPlayerId)}
               />
             </span>
@@ -3543,8 +3516,9 @@ function ReadySwapList({
               <small>{position?.shortLabel}</small>
             </span>
             <span className="ready-player in">
-              <GoalMarkedPlayerName
-                label={playerLabel(team, pair.inPlayerId)}
+              <ReadyPlayerIdentity
+                team={team}
+                playerId={pair.inPlayerId}
                 goalCount={playerGoalCount(game, pair.inPlayerId)}
               />
             </span>
@@ -3552,6 +3526,30 @@ function ReadySwapList({
         );
       })}
     </div>
+  );
+}
+
+function ReadyPlayerIdentity({
+  team,
+  playerId,
+  goalCount,
+}: {
+  team: Team;
+  playerId: string;
+  goalCount: number;
+}) {
+  const player = team.roster.find((item) => item.id === playerId);
+
+  return (
+    <span className="ready-player-identity">
+      <GoalMarkedPlayerName
+        label={player?.name ?? "Unknown player"}
+        goalCount={goalCount}
+      />{" "}
+      {player?.number && (
+        <span className="ready-player-number">#{player.number}</span>
+      )}
+    </span>
   );
 }
 
@@ -3593,51 +3591,15 @@ function QueuedSubstitutionSummary({
   }
 
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet substitution-ready-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="queued-substitution-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="queued-substitution-title">
-              Review substitutions ({pairs.length})
-            </h2>
-            <p>
-              Get these players ready. Timers and positions change only when you
-              execute.
-            </p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={22} />
-          </button>
-        </header>
-
-        <ReadySwapList
-          pairs={pairs}
-          formation={formation}
-          team={team}
-          game={game}
-        />
-
-        {errors.length > 0 && (
-          <div className="queued-plan-error" role="alert">
-            <CircleAlert size={20} aria-hidden="true" />
-            <span>
-              <strong>Plan needs attention</strong>
-              <small>{errors.join(". ")}</small>
-            </span>
-          </div>
-        )}
-
-        <div className="queued-plan-actions">
+    <SidelineDialog
+      title={`Review substitutions (${pairs.length})`}
+      description="Get these players ready. Timers and positions change only when you execute."
+      className="substitution-ready-sheet"
+      width="620px"
+      onClose={onClose}
+      footerClassName="queued-plan-actions"
+      footer={
+        <>
           <button className="secondary-action" type="button" onClick={onEdit}>
             <Pencil size={18} aria-hidden="true" />
             Edit plan
@@ -3659,9 +3621,26 @@ function QueuedSubstitutionSummary({
             <Check size={21} aria-hidden="true" />
             Execute subs
           </button>
+        </>
+      }
+    >
+      <ReadySwapList
+        pairs={pairs}
+        formation={formation}
+        team={team}
+        game={game}
+      />
+
+      {errors.length > 0 && (
+        <div className="queued-plan-error" role="alert">
+          <CircleAlert size={20} aria-hidden="true" />
+          <span>
+            <strong>Plan needs attention</strong>
+            <small>{errors.join(". ")}</small>
+          </span>
         </div>
-      </section>
-    </ModalBackdrop>
+      )}
+    </SidelineDialog>
   );
 }
 
@@ -3679,40 +3658,26 @@ function SubstitutionSummary({
   onClose: () => void;
 }) {
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet substitution-ready-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="substitution-ready-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="substitution-ready-title">Substitution ready</h2>
-            <p>The game is updated. Organize these players together.</p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={22} />
-          </button>
-        </header>
-
-        <ReadySwapList
-          pairs={pairs}
-          formation={formation}
-          team={team}
-          game={game}
-        />
-
+    <SidelineDialog
+      title="Substitution ready"
+      description="The game is updated. Organize these players together."
+      className="substitution-ready-sheet"
+      width="620px"
+      onClose={onClose}
+      footerClassName="single-action-footer"
+      footer={
         <button className="primary-action" type="button" onClick={onClose}>
           Done
         </button>
-      </section>
-    </ModalBackdrop>
+      }
+    >
+      <ReadySwapList
+        pairs={pairs}
+        formation={formation}
+        team={team}
+        game={game}
+      />
+    </SidelineDialog>
   );
 }
 
@@ -3734,47 +3699,33 @@ function PlayerEntrySummary({
   );
 
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet substitution-ready-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="player-ready-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="player-ready-title">Player ready</h2>
-            <p>The game is updated. Send this player onto the field.</p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={22} />
-          </button>
-        </header>
-
-        <div className="ready-entry">
-          <span className="ready-player in">
-            <small>IN</small>
-            <GoalMarkedPlayerName
-              label={playerLabel(team, entry.playerId)}
-              goalCount={playerGoalCount(game, entry.playerId)}
-            />
-          </span>
-          <span className="ready-position">
-            <small>POSITION</small>
-            <strong>{position?.label ?? "Open position"}</strong>
-          </span>
-        </div>
-
+    <SidelineDialog
+      title="Player ready"
+      description="The game is updated. Send this player onto the field."
+      className="substitution-ready-sheet"
+      width="620px"
+      onClose={onClose}
+      footerClassName="single-action-footer"
+      footer={
         <button className="primary-action" type="button" onClick={onClose}>
           Done
         </button>
-      </section>
-    </ModalBackdrop>
+      }
+    >
+      <div className="ready-entry">
+        <span className="ready-player in">
+          <small>IN</small>
+          <GoalMarkedPlayerName
+            label={playerLabel(team, entry.playerId)}
+            goalCount={playerGoalCount(game, entry.playerId)}
+          />
+        </span>
+        <span className="ready-position">
+          <small>POSITION</small>
+          <strong>{position?.label ?? "Open position"}</strong>
+        </span>
+      </div>
+    </SidelineDialog>
   );
 }
 
@@ -4047,75 +3998,13 @@ function PositionEditor({
   const [positionId, setPositionId] = useState(targetPositions[0]?.id ?? "");
 
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet compact-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="position-title"
-      >
-        <header className="sheet-header">
-          <div>
-            <h2 id="position-title">Change positions</h2>
-            <p>
-              Position changes do not count as substitutions. You can also drag
-              players directly on the field.
-            </p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={22} />
-          </button>
-        </header>
-        <div className="position-player-summary">
-          <span>
-            <small>Player</small>
-            <GoalMarkedPlayerName
-              label={playerName(team, playerId)}
-              goalCount={playerGoalCount(game, playerId)}
-            />
-          </span>
-          <span>
-            <small>Current position</small>
-            <strong>{currentPosition?.label ?? "Open"}</strong>
-          </span>
-        </div>
-        <div className="bench-replacement-list position-swap-list">
-          {targetPositions.map((position) => {
-            const occupant = game.assignments[position.id];
-            const label = occupant ? playerName(team, occupant) : "Open";
-            return (
-              <button
-                className={positionId === position.id ? "selected" : ""}
-                type="button"
-                key={position.id}
-                aria-label={`${label} (${position.label})`}
-                aria-pressed={positionId === position.id}
-                onClick={() => setPositionId(position.id)}
-              >
-                <span>
-                  {occupant ? (
-                    <GoalMarkedPlayerName
-                      label={label}
-                      goalCount={playerGoalCount(game, occupant)}
-                    />
-                  ) : (
-                    <strong>Open</strong>
-                  )}
-                  <small>{position.label}</small>
-                </span>
-                <span className="replacement-fit">
-                  {occupant ? "Swap" : "Move"}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="sheet-actions">
+    <SidelineDialog
+      title="Change positions"
+      description="Position changes do not count as substitutions. You can also drag players directly on the field."
+      className="compact-sheet"
+      onClose={onClose}
+      footer={
+        <>
           <button className="secondary-action" type="button" onClick={onClose}>
             Cancel
           </button>
@@ -4126,9 +4015,54 @@ function PositionEditor({
           >
             Save positions
           </button>
-        </div>
-      </section>
-    </ModalBackdrop>
+        </>
+      }
+    >
+      <div className="position-player-summary">
+        <span>
+          <small>Player</small>
+          <GoalMarkedPlayerName
+            label={playerName(team, playerId)}
+            goalCount={playerGoalCount(game, playerId)}
+          />
+        </span>
+        <span>
+          <small>Current position</small>
+          <strong>{currentPosition?.label ?? "Open"}</strong>
+        </span>
+      </div>
+      <div className="bench-replacement-list position-swap-list">
+        {targetPositions.map((position) => {
+          const occupant = game.assignments[position.id];
+          const label = occupant ? playerName(team, occupant) : "Open";
+          return (
+            <button
+              className={positionId === position.id ? "selected" : ""}
+              type="button"
+              key={position.id}
+              aria-label={`${label} (${position.label})`}
+              aria-pressed={positionId === position.id}
+              onClick={() => setPositionId(position.id)}
+            >
+              <span>
+                {occupant ? (
+                  <GoalMarkedPlayerName
+                    label={label}
+                    goalCount={playerGoalCount(game, occupant)}
+                  />
+                ) : (
+                  <strong>Open</strong>
+                )}
+                <small>{position.label}</small>
+              </span>
+              <span className="replacement-fit">
+                {occupant ? "Swap" : "Move"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </SidelineDialog>
   );
 }
 
@@ -4152,17 +4086,16 @@ function ConfirmSheet({
   onConfirm: () => void;
 }) {
   return (
-    <ModalBackdrop onDismiss={onCancel}>
-      <section
-        className="bottom-sheet confirm-sheet"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="confirm-title"
-        aria-describedby="confirm-body"
-      >
-        <h2 id="confirm-title">{title}</h2>
-        <p id="confirm-body">{body}</p>
-        <div className="sheet-actions">
+    <SidelineDialog
+      title={title}
+      description={body}
+      className="confirm-sheet"
+      width="480px"
+      role="alertdialog"
+      showClose={false}
+      onClose={onCancel}
+      footer={
+        <>
           <button className="secondary-action" type="button" onClick={onCancel}>
             {cancelLabel}
           </button>
@@ -4173,9 +4106,9 @@ function ConfirmSheet({
           >
             {confirmIcon} {confirmLabel}
           </button>
-        </div>
-      </section>
-    </ModalBackdrop>
+        </>
+      }
+    />
   );
 }
 

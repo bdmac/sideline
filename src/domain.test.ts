@@ -22,6 +22,7 @@ import {
   movePlayer,
   queueBenchSubstitution,
   queueSubstitutions,
+  reassignIncomingSubstitution,
   recordGoal,
   removeQueuedSubstitution,
   removeQueuedSubstitutionForOutgoing,
@@ -776,6 +777,64 @@ describe("substitutions", () => {
     const [pair] = suggestSubstitutions(game, 1, team);
 
     expect(pair.inPlayerId).toBe(leastPlayed);
+  });
+
+  it("recommends a fresh player only for the row displaced by an incoming conflict", () => {
+    const team = structuredClone(INITIAL_TEAMS.u8);
+    team.roster.forEach((player) => {
+      player.preferredRoles = ["midfielder"];
+    });
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.benchIds.forEach((playerId, index) => {
+      game.totals[playerId].fieldSeconds = index * 60;
+    });
+    const formation = FORMATIONS.find((item) => item.id === game.formationId)!;
+    const defender = formation.positions.find(
+      (position) => position.role === "defender",
+    )!;
+    const midfielder = formation.positions.find(
+      (position) => position.role === "midfielder",
+    )!;
+    const forward = formation.positions.find(
+      (position) => position.role === "forward",
+    )!;
+    const [recommended, chosen, unchanged, displaced] = game.benchIds;
+    team.roster.find((player) => player.id === recommended)!.preferredRoles = [
+      "defender",
+    ];
+    game.totals[recommended].fieldSeconds = 600;
+    game.totals[displaced].fieldSeconds = 0;
+    const pairs = [
+      {
+        positionId: defender.id,
+        outPlayerId: game.assignments[defender.id],
+        inPlayerId: chosen,
+      },
+      {
+        positionId: midfielder.id,
+        outPlayerId: game.assignments[midfielder.id],
+        inPlayerId: displaced,
+      },
+      {
+        positionId: forward.id,
+        outPlayerId: game.assignments[forward.id],
+        inPlayerId: unchanged,
+      },
+    ];
+
+    const updated = reassignIncomingSubstitution(game, pairs, 1, chosen, team);
+
+    expect(updated[1].inPlayerId).toBe(chosen);
+    expect(updated[0].inPlayerId).toBe(recommended);
+    expect(updated[0].inPlayerId).not.toBe(displaced);
+    expect(updated[2]).toEqual(pairs[2]);
+    expect(new Set(updated.map((pair) => pair.inPlayerId)).size).toBe(3);
   });
 
   it("selects a late arrival by played time rather than their short bench stint", () => {

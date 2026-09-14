@@ -565,11 +565,7 @@ export const assignPlayersByPreference = (
   );
 };
 
-export const suggestSubstitutions = (
-  game: ActiveGame,
-  count: number,
-  team: Team,
-): SubstitutionPair[] => {
+const getIncomingCandidateOrder = (game: ActiveGame, team: Team) => {
   const formation = getFormation(game.formationId);
   const goalkeeperPosition = formation.positions.find(
     (positionItem) => positionItem.role === "goalkeeper",
@@ -598,11 +594,6 @@ export const suggestSubstitutions = (
           (game.totals[a]?.benchSeconds ?? 0) ||
         a.localeCompare(b),
     );
-  const substitutionCount = Math.min(
-    Math.max(0, count),
-    Object.keys(game.assignments).length,
-    bench.length,
-  );
   const benchGoalkeepers = bench.filter(isGoalkeeper);
   const goalkeeperCandidate = benchGoalkeepers[0];
   const shouldRotateGoalkeeper =
@@ -636,10 +627,35 @@ export const suggestSubstitutions = (
   const fallbackIncomingIds = bench.filter(
     (playerId) => !preferredIncomingIds.includes(playerId),
   );
-  const incomingIds = [...preferredIncomingIds, ...fallbackIncomingIds].slice(
-    0,
-    substitutionCount,
+  return {
+    formation,
+    goalkeeperPosition,
+    goalkeeperId,
+    goalkeeperCandidate,
+    shouldRotateGoalkeeper,
+    incomingIds: [...preferredIncomingIds, ...fallbackIncomingIds],
+  };
+};
+
+export const suggestSubstitutions = (
+  game: ActiveGame,
+  count: number,
+  team: Team,
+): SubstitutionPair[] => {
+  const {
+    formation,
+    goalkeeperPosition,
+    goalkeeperId,
+    goalkeeperCandidate,
+    shouldRotateGoalkeeper,
+    incomingIds: orderedIncomingIds,
+  } = getIncomingCandidateOrder(game, team);
+  const substitutionCount = Math.min(
+    Math.max(0, count),
+    Object.keys(game.assignments).length,
+    orderedIncomingIds.length,
   );
+  const incomingIds = orderedIncomingIds.slice(0, substitutionCount);
   const roleByPosition = new Map(
     formation.positions.map((positionItem) => [
       positionItem.id,
@@ -710,6 +726,65 @@ export const suggestSubstitutions = (
       inPlayerId: incomingAssignments[positionId],
     })),
   ];
+};
+
+export const reassignIncomingSubstitution = (
+  game: ActiveGame,
+  pairs: SubstitutionPair[],
+  pairIndex: number,
+  inPlayerId: string,
+  team: Team,
+): SubstitutionPair[] => {
+  const currentPair = pairs[pairIndex];
+  if (!currentPair || currentPair.inPlayerId === inPlayerId) return pairs;
+
+  const existingPairIndex = pairs.findIndex(
+    (pair, index) => index !== pairIndex && pair.inPlayerId === inPlayerId,
+  );
+  if (existingPairIndex === -1) {
+    return pairs.map((pair, index) =>
+      index === pairIndex ? { ...pair, inPlayerId } : pair,
+    );
+  }
+
+  const reassignedPairs = pairs.map((pair, index) =>
+    index === pairIndex ? { ...pair, inPlayerId } : pair,
+  );
+  const usedIncomingIds = new Set(
+    reassignedPairs
+      .filter((_, index) => index !== existingPairIndex)
+      .map((pair) => pair.inPlayerId),
+  );
+  const pairToRefill = reassignedPairs[existingPairIndex];
+  const candidateGame: ActiveGame = {
+    ...game,
+    assignments: {
+      [pairToRefill.positionId]: pairToRefill.outPlayerId,
+    },
+    benchIds: game.benchIds.filter(
+      (playerId) => !usedIncomingIds.has(playerId),
+    ),
+  };
+  const targetPosition = getFormation(game.formationId).positions.find(
+    (position) => position.id === pairToRefill.positionId,
+  );
+  if (!targetPosition) return pairs;
+  const { incomingIds } = getIncomingCandidateOrder(candidateGame, team);
+  const recommendedPlayerId = assignPlayersByPreference(
+    {
+      ...getFormation(game.formationId),
+      positions: [targetPosition],
+    },
+    incomingIds,
+    team.roster,
+  )[targetPosition.id];
+
+  if (!recommendedPlayerId) return pairs;
+  return reassignedPairs.map((pair, index) =>
+    index === existingPairIndex
+      ? { ...pair, inPlayerId: recommendedPlayerId }
+      : pair,
+  );
 };
 
 export const getRecommendedSubstitutionCount = (
