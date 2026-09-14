@@ -421,7 +421,7 @@ h3 {
 }
 
 .resume-strip small {
-  color: var(--turf-dark);
+  color: var(--ink);
   margin-top: 0.25rem;
 }
 
