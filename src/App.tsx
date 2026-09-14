@@ -4469,6 +4469,7 @@ function GoalMarkedPlayerName({
   emphasized?: boolean;
 }) {
   const hatTrick = goalCount >= 3;
+  const visibleMarkerCount = goalCount === 3 ? 3 : 1;
 
   return (
     <span className="player-name-with-goals">
@@ -4480,13 +4481,13 @@ function GoalMarkedPlayerName({
             goalCount === 1 ? "goal" : "goals"
           }`}
         >
-          {hatTrick ? (
-            <HatTrickBallIcon />
-          ) : (
-            Array.from({ length: goalCount }, (_, index) => (
-              <SoccerBallIcon key={index} />
-            ))
-          )}
+          {hatTrick
+            ? Array.from({ length: visibleMarkerCount }, (_, index) => (
+                <HatTrickBallIcon key={index} />
+              ))
+            : Array.from({ length: goalCount }, (_, index) => (
+                <SoccerBallIcon key={index} />
+              ))}
           {goalCount > 3 && (
             <span className="goal-count-overflow" aria-hidden="true">
               ×{goalCount}

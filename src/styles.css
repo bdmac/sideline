@@ -1467,7 +1467,7 @@ select:hover {
 
 .pitch-player {
   position: absolute;
-  width: clamp(76px, 22%, 138px);
+  width: clamp(80px, 23%, 146px);
   min-height: 62px;
   transform: translate(-50%, -50%);
   background: var(--paper);
@@ -3321,7 +3321,7 @@ select:hover {
   }
 
   .pitch-player {
-    width: 26%;
+    width: 28%;
     min-height: 50px;
     padding: 0.28rem 0.3rem;
     display: grid;

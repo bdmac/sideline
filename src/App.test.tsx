@@ -1921,8 +1921,8 @@ describe("Sideline app", () => {
     const goalTotal = within(pitchCard).getByLabelText(
       `${scorerName} scored 3 goals`,
     );
-    expect(goalTotal.querySelectorAll(".soccer-ball-icon")).toHaveLength(1);
-    expect(goalTotal.querySelector(".hat-trick-icon")).toBeInTheDocument();
+    expect(goalTotal.querySelectorAll(".soccer-ball-icon")).toHaveLength(3);
+    expect(goalTotal.querySelectorAll(".hat-trick-icon")).toHaveLength(3);
     expect(goalTotal).not.toHaveTextContent("×3");
 
     fireEvent.click(screen.getByRole("tab", { name: /On field/ }));
@@ -1931,7 +1931,7 @@ describe("Sideline app", () => {
     );
     expect(visibleMarkers).toHaveLength(2);
     visibleMarkers.forEach((marker) => {
-      expect(marker.querySelector(".hat-trick-icon")).toBeInTheDocument();
+      expect(marker.querySelectorAll(".hat-trick-icon")).toHaveLength(3);
     });
   });
 
@@ -1964,7 +1964,7 @@ describe("Sideline app", () => {
     const goalTotal = within(pitchCard).getByLabelText(
       `${scorerName} scored 4 goals`,
     );
-    expect(goalTotal.querySelector(".hat-trick-icon")).toBeInTheDocument();
+    expect(goalTotal.querySelectorAll(".hat-trick-icon")).toHaveLength(1);
     expect(goalTotal).toHaveTextContent("×4");
   });
 
