@@ -1690,12 +1690,25 @@ select:hover {
 
 .pitch-player:not(.empty) .position-label {
   position: static;
-  grid-area: position;
   width: auto;
   min-width: 22px;
   height: 22px;
   padding: 0 0.2rem;
   transform: none;
+}
+
+.pitch-position-meta {
+  grid-area: position;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+  justify-self: start;
+}
+
+.pitch-plan-icon {
+  flex: none;
+  color: var(--warm-dark);
+  stroke-width: 2.5;
 }
 
 .starter-slot.empty .position-label {
@@ -1943,19 +1956,36 @@ select:hover {
   gap: 0.25rem;
 }
 
-.field-player-action-list {
-  display: grid;
-  gap: 0.65rem;
-}
-
 .field-player-actions-sheet .sheet-header {
   padding-bottom: 0.85rem;
   border-bottom: 0;
 }
 
-.field-player-action-list button {
+.field-player-action-list {
+  padding-bottom: 0.25rem;
+}
+
+.player-action-toolbar {
   width: 100%;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.player-action-toolbar.two-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.player-action-toolbar [data-component="Button"] {
+  min-width: 0;
+  min-height: 56px;
+  justify-content: center;
+  padding-inline: 0.45rem;
+  white-space: nowrap;
+}
+
+.player-action-toolbar [data-component="text"] {
+  font-size: 0.76rem;
 }
 
 .queue-player-button.primary-action {
@@ -2158,27 +2188,6 @@ select:hover {
   white-space: nowrap;
 }
 
-.position-player-summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  margin-top: 0;
-  padding: 0.85rem 0;
-}
-
-.position-player-summary > span,
-.position-player-summary > span > small,
-.position-player-summary > span > strong {
-  display: block;
-}
-
-.position-player-summary small {
-  margin-bottom: 0.2rem;
-  color: var(--ink-soft);
-  font-size: 0.68rem;
-  font-weight: 850;
-}
-
 .position-swap-list {
   min-height: 0;
   max-height: min(20rem, 42vh);
@@ -2271,11 +2280,6 @@ select:hover {
   margin: 0;
   padding: 0;
   border-top: 0;
-}
-
-.bench-picker-footer .remove-from-plan-action {
-  width: 100%;
-  justify-content: center;
 }
 
 .sub-count {
@@ -2778,26 +2782,44 @@ select:hover {
   margin: 1rem 0 0.7rem;
 }
 
-.bench-player-preferences {
+.player-context-panel {
   flex: 0 0 auto;
   margin: 1rem 0;
-  padding: 0.75rem;
-  border-left: 4px solid var(--turf);
+  border-color: var(--turf);
   background: var(--turf-pale);
+  box-shadow: none;
 }
 
-.bench-player-preferences small,
-.bench-player-preferences strong {
-  display: block;
+.player-context-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+  column-gap: 1.25rem;
+  row-gap: 0.75rem;
+  margin: 0;
 }
 
-.bench-player-preferences small {
+.player-context-item {
+  min-width: 0;
+}
+
+.player-context-panel dt {
   margin-bottom: 0.2rem;
   color: var(--turf-dark);
   font-size: 0.65rem;
   font-weight: 950;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+}
+
+.player-context-panel dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.player-context-panel dd.warm {
+  color: var(--warm-dark);
 }
 
 .bench-replacement-list {
@@ -2821,13 +2843,17 @@ select:hover {
   border: 0;
   border-bottom: 1px solid var(--line);
   background: transparent;
-  padding: 0.65rem 0.25rem;
+  padding: 0.65rem 0.75rem;
   text-align: left;
 }
 
-.bench-replacement-list button:hover,
-.bench-replacement-list button.selected {
+.bench-replacement-list button:hover {
   background: var(--wash);
+}
+
+.bench-replacement-list button.selected {
+  background: var(--turf-pale);
+  box-shadow: inset 4px 0 var(--turf);
 }
 
 .bench-replacement-list button > span:first-child,
@@ -2843,23 +2869,49 @@ select:hover {
 }
 
 .replacement-fit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
   color: var(--turf-dark);
   font-size: 0.68rem;
   font-weight: 900;
   text-align: right;
 }
 
+.replacement-selected-icon {
+  flex: none;
+  stroke-width: 3;
+}
+
 .bench-picker-actions {
   flex: 0 0 auto;
-  display: flex;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--line);
 }
 
-.bench-picker-actions .remove-from-plan-action {
+.bench-picker-actions.editing {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bench-picker-actions button {
+  min-width: 0;
+  justify-content: center;
   white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .bench-picker-actions.editing {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bench-picker-actions.editing .remove-from-plan-action {
+    grid-column: 1 / -1;
+  }
 }
 
 .goal-scorer-grid {

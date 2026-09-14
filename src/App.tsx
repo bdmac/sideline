@@ -8,6 +8,7 @@ import {
   ToggleSwitch,
   type DialogWidth,
 } from "@primer/react";
+import { Card } from "@primer/react/experimental";
 import { ThemeProvider } from "@primer/react/next";
 import {
   ArrowLeft,
@@ -2770,9 +2771,30 @@ function Pitch({
         const playedSeconds = player
           ? (totals[player.id]?.fieldSeconds ?? 0)
           : 0;
+        const plannedPair = player
+          ? game.queuedSubstitutions?.find(
+              (pair) => pair.outPlayerId === player.id,
+            )
+          : undefined;
+        const plannedIncomingName = plannedPair
+          ? playerName(team, plannedPair.inPlayerId)
+          : null;
         const content = (
           <>
-            <span className="position-label">{position.shortLabel}</span>
+            {player ? (
+              <span className="pitch-position-meta">
+                <span className="position-label">{position.shortLabel}</span>
+                {plannedIncomingName && (
+                  <ArrowRightLeft
+                    className="pitch-plan-icon"
+                    size={13}
+                    aria-hidden="true"
+                  />
+                )}
+              </span>
+            ) : (
+              <span className="position-label">{position.shortLabel}</span>
+            )}
             {player ? (
               <span className="pitch-player-name">
                 <GoalMarkedPlayerName
@@ -2820,8 +2842,16 @@ function Pitch({
             key={position.id}
             style={style}
             data-position-id={position.id}
-            aria-label={`Open actions for ${player.name}`}
-            title="Tap for actions or drag to another position"
+            aria-label={`Open actions for ${player.name}${
+              plannedIncomingName
+                ? `. Coming out for ${plannedIncomingName}`
+                : ""
+            }`}
+            title={
+              plannedIncomingName
+                ? `Coming out for ${plannedIncomingName}. Tap for actions or drag to another position`
+                : "Tap for actions or drag to another position"
+            }
             onPointerDown={(event) => {
               if (event.button !== 0) return;
               event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -3142,6 +3172,31 @@ function GoalSummarySheet({
   );
 }
 
+function PlayerContextPanel({
+  items,
+}: {
+  items: Array<{ label: string; value: ReactNode; emphasis?: "warm" }>;
+}) {
+  return (
+    <Card
+      className="player-context-panel"
+      padding="condensed"
+      borderRadius="medium"
+    >
+      <dl className="player-context-grid">
+        {items.map((item) => (
+          <div className="player-context-item" key={item.label}>
+            <dt>{item.label}</dt>
+            <dd className={item.emphasis === "warm" ? "warm" : undefined}>
+              {item.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+}
+
 function BenchSubstitutionPicker({
   playerId,
   game,
@@ -3157,12 +3212,23 @@ function BenchSubstitutionPicker({
   onSelect: (outPlayerId: string) => void;
   onRemove: () => void;
 }) {
-  const player = team.roster.find((item) => item.id === playerId);
-  if (!player) return null;
-  const formation = getFormation(game.formationId);
   const currentPair = game.queuedSubstitutions?.find(
     (pair) => pair.inPlayerId === playerId,
   );
+  const [selectedOutPlayerId, setSelectedOutPlayerId] = useState(
+    currentPair?.outPlayerId ?? "",
+  );
+  const player = team.roster.find((item) => item.id === playerId);
+  if (!player) return null;
+  const formation = getFormation(game.formationId);
+  const selectedPositionEntry = Object.entries(game.assignments).find(
+    ([, outPlayerId]) => outPlayerId === selectedOutPlayerId,
+  );
+  const selectedPosition = selectedPositionEntry
+    ? formation.positions.find(
+        (position) => position.id === selectedPositionEntry[0],
+      )
+    : null;
   const choices = Object.entries(game.assignments)
     .map(([positionId, outPlayerId], formationIndex) => {
       const position = formation.positions.find(
@@ -3192,15 +3258,16 @@ function BenchSubstitutionPicker({
             label={playerLabel(team, playerId)}
             goalCount={playerGoalCount(game, playerId)}
             emphasized={false}
-          />
+          />{" "}
+          in
         </>
       }
       description="Choose the player they will replace."
       className="compact-sheet bench-substitution-sheet"
       onClose={onClose}
       footer={
-        currentPair ? (
-          <div className="bench-picker-actions">
+        <div className={`bench-picker-actions ${currentPair ? "editing" : ""}`}>
+          {currentPair && (
             <Button
               className="danger-action remove-from-plan-action"
               variant="danger"
@@ -3210,48 +3277,89 @@ function BenchSubstitutionPicker({
             >
               Remove from plan
             </Button>
-          </div>
-        ) : undefined
+          )}
+          <Button variant="default" size="large" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            className="primary-action"
+            variant="primary"
+            size="large"
+            disabled={
+              !selectedOutPlayerId ||
+              selectedOutPlayerId === currentPair?.outPlayerId
+            }
+            onClick={() => onSelect(selectedOutPlayerId)}
+          >
+            {currentPair ? "Update plan" : "Add to plan"}
+          </Button>
+        </div>
       }
       footerClassName="bench-picker-footer"
     >
-      <div className="bench-player-preferences">
-        <small>Player status</small>
-        <strong>
-          {formatDuration(game.totals[playerId]?.fieldSeconds ?? 0)} played ·{" "}
-          {formatDuration(getCurrentBenchSeconds(game, playerId))} current bench
-        </strong>
-        <small>Preferred roles</small>
-        <strong>
-          {player.preferredRoles.map(preferredRoleLabel).join(" · ")}
-        </strong>
-      </div>
+      <PlayerContextPanel
+        items={[
+          {
+            label: "Bench stint",
+            value: formatDuration(getCurrentBenchSeconds(game, playerId)),
+          },
+          {
+            label: "Playing total",
+            value: formatDuration(game.totals[playerId]?.fieldSeconds ?? 0),
+          },
+          {
+            label: "Preferred roles",
+            value: player.preferredRoles.map(preferredRoleLabel).join(" · "),
+          },
+          ...(selectedOutPlayerId
+            ? [
+                {
+                  label: "Next rotation",
+                  value: `Going in at ${
+                    selectedPosition?.shortLabel ?? selectedPositionEntry?.[0]
+                  } for ${playerName(team, selectedOutPlayerId)}`,
+                  emphasis: "warm" as const,
+                },
+              ]
+            : []),
+        ]}
+      />
 
       <div className="bench-replacement-list">
-        {choices.map(({ position, outPlayerId, preferenceIndex }) => (
-          <button
-            className={
-              currentPair?.outPlayerId === outPlayerId ? "selected" : ""
-            }
-            type="button"
-            key={outPlayerId}
-            aria-pressed={currentPair?.outPlayerId === outPlayerId}
-            onClick={() => onSelect(outPlayerId)}
-          >
-            <span>
-              <GoalMarkedPlayerName
-                label={playerLabel(team, outPlayerId)}
-                goalCount={playerGoalCount(game, outPlayerId)}
-              />
-              <small>{position.label}</small>
-            </span>
-            <span className="replacement-fit">
-              {Number.isFinite(preferenceIndex)
-                ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
-                : "Other role"}
-            </span>
-          </button>
-        ))}
+        {choices.map(({ position, outPlayerId, preferenceIndex }) => {
+          const selected = selectedOutPlayerId === outPlayerId;
+          return (
+            <button
+              className={selected ? "selected" : ""}
+              type="button"
+              key={outPlayerId}
+              aria-pressed={selected}
+              onClick={() => setSelectedOutPlayerId(outPlayerId)}
+            >
+              <span>
+                <GoalMarkedPlayerName
+                  label={playerLabel(team, outPlayerId)}
+                  goalCount={playerGoalCount(game, outPlayerId)}
+                />
+                <small>{position.label}</small>
+              </span>
+              <span className="replacement-fit">
+                {selected && (
+                  <Check
+                    className="replacement-selected-icon"
+                    size={15}
+                    aria-hidden="true"
+                  />
+                )}
+                <span>
+                  {Number.isFinite(preferenceIndex)
+                    ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
+                    : "Other role"}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </SidelineDialog>
   );
@@ -3272,6 +3380,12 @@ function FieldSubstitutionPicker({
   onSelect: (inPlayerId: string) => void;
   onRemove: () => void;
 }) {
+  const currentPair = game.queuedSubstitutions?.find(
+    (pair) => pair.outPlayerId === playerId,
+  );
+  const [selectedInPlayerId, setSelectedInPlayerId] = useState(
+    currentPair?.inPlayerId ?? "",
+  );
   const player = team.roster.find((item) => item.id === playerId);
   if (!player) return null;
   const formation = getFormation(game.formationId);
@@ -3282,9 +3396,6 @@ function FieldSubstitutionPicker({
   const position = formation.positions.find(
     (item) => item.id === positionEntry[0],
   )!;
-  const currentPair = game.queuedSubstitutions?.find(
-    (pair) => pair.outPlayerId === playerId,
-  );
   const choices = game.benchIds
     .map((inPlayerId) => {
       const incoming = team.roster.find((item) => item.id === inPlayerId)!;
@@ -3320,8 +3431,8 @@ function FieldSubstitutionPicker({
       className="compact-sheet bench-substitution-sheet"
       onClose={onClose}
       footer={
-        currentPair ? (
-          <div className="bench-picker-actions">
+        <div className={`bench-picker-actions ${currentPair ? "editing" : ""}`}>
+          {currentPair && (
             <Button
               className="danger-action remove-from-plan-action"
               variant="danger"
@@ -3331,51 +3442,92 @@ function FieldSubstitutionPicker({
             >
               Remove from plan
             </Button>
-          </div>
-        ) : undefined
+          )}
+          <Button variant="default" size="large" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            className="primary-action"
+            variant="primary"
+            size="large"
+            disabled={
+              !selectedInPlayerId ||
+              selectedInPlayerId === currentPair?.inPlayerId
+            }
+            onClick={() => onSelect(selectedInPlayerId)}
+          >
+            {currentPair ? "Update plan" : "Add to plan"}
+          </Button>
+        </div>
       }
       footerClassName="bench-picker-footer"
     >
-      <div className="bench-player-preferences">
-        <small>Player status</small>
-        <strong>
-          {formatDuration(game.totals[playerId]?.fieldSeconds ?? 0)} played ·{" "}
-          {formatDuration(getCurrentFieldSeconds(game, playerId))} playing now
-        </strong>
-        <small>Current position</small>
-        <strong>{position.label}</strong>
-      </div>
+      <PlayerContextPanel
+        items={[
+          {
+            label: "Position",
+            value: position.label,
+          },
+          {
+            label: "Playing total",
+            value: formatDuration(game.totals[playerId]?.fieldSeconds ?? 0),
+          },
+          {
+            label: "Field stint",
+            value: formatDuration(getCurrentFieldSeconds(game, playerId)),
+          },
+          ...(selectedInPlayerId
+            ? [
+                {
+                  label: "Next rotation",
+                  value: `Coming out for ${playerName(team, selectedInPlayerId)}`,
+                  emphasis: "warm" as const,
+                },
+              ]
+            : []),
+        ]}
+      />
 
       <div className="bench-replacement-list">
-        {choices.map(({ player: incoming, preferenceIndex }) => (
-          <button
-            className={
-              currentPair?.inPlayerId === incoming.id ? "selected" : ""
-            }
-            type="button"
-            key={incoming.id}
-            aria-pressed={currentPair?.inPlayerId === incoming.id}
-            onClick={() => onSelect(incoming.id)}
-          >
-            <span>
-              <GoalMarkedPlayerName
-                label={playerLabel(team, incoming.id)}
-                goalCount={playerGoalCount(game, incoming.id)}
-              />
-              <small>
-                {formatDuration(game.totals[incoming.id]?.fieldSeconds ?? 0)}{" "}
-                played ·{" "}
-                {formatDuration(getCurrentBenchSeconds(game, incoming.id))}{" "}
-                sitting
-              </small>
-            </span>
-            <span className="replacement-fit">
-              {Number.isFinite(preferenceIndex)
-                ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
-                : "Other role"}
-            </span>
-          </button>
-        ))}
+        {choices.map(({ player: incoming, preferenceIndex }) => {
+          const selected = selectedInPlayerId === incoming.id;
+          return (
+            <button
+              className={selected ? "selected" : ""}
+              type="button"
+              key={incoming.id}
+              aria-pressed={selected}
+              onClick={() => setSelectedInPlayerId(incoming.id)}
+            >
+              <span>
+                <GoalMarkedPlayerName
+                  label={playerLabel(team, incoming.id)}
+                  goalCount={playerGoalCount(game, incoming.id)}
+                />
+                <small>
+                  {formatDuration(game.totals[incoming.id]?.fieldSeconds ?? 0)}{" "}
+                  played ·{" "}
+                  {formatDuration(getCurrentBenchSeconds(game, incoming.id))}{" "}
+                  sitting
+                </small>
+              </span>
+              <span className="replacement-fit">
+                {selected && (
+                  <Check
+                    className="replacement-selected-icon"
+                    size={15}
+                    aria-hidden="true"
+                  />
+                )}
+                <span>
+                  {Number.isFinite(preferenceIndex)
+                    ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
+                    : "Other role"}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </SidelineDialog>
   );
@@ -3401,6 +3553,19 @@ function FieldPlayerActionsSheet({
   onUnavailable: () => void;
 }) {
   const label = playerName(team, playerId);
+  const formation = getFormation(game.formationId);
+  const positionEntry = Object.entries(game.assignments).find(
+    ([, assignedPlayerId]) => assignedPlayerId === playerId,
+  );
+  const position = formation.positions.find(
+    (item) => item.id === positionEntry?.[0],
+  );
+  const currentPair = game.queuedSubstitutions?.find(
+    (pair) => pair.outPlayerId === playerId,
+  );
+  const incomingName = currentPair
+    ? playerName(team, currentPair.inPlayerId)
+    : null;
   return (
     <SidelineDialog
       title={
@@ -3410,40 +3575,76 @@ function FieldPlayerActionsSheet({
           emphasized={false}
         />
       }
-      description="Choose another on-field action."
+      description="Choose an on-field action."
       className="compact-sheet field-player-actions-sheet"
       onClose={onClose}
     >
+      <PlayerContextPanel
+        items={[
+          {
+            label: "Position",
+            value: position?.label ?? "Open",
+          },
+          {
+            label: "Playing total",
+            value: formatDuration(game.totals[playerId]?.fieldSeconds ?? 0),
+          },
+          {
+            label: "Field stint",
+            value: formatDuration(getCurrentFieldSeconds(game, playerId)),
+          },
+          ...(incomingName
+            ? [
+                {
+                  label: "Next rotation",
+                  value: `Coming out for ${incomingName}`,
+                  emphasis: "warm" as const,
+                },
+              ]
+            : []),
+        ]}
+      />
       <div className="field-player-action-list">
-        {includeQueue && (
+        <div
+          className={`player-action-toolbar ${
+            includeQueue ? "" : "two-actions"
+          }`}
+          role="toolbar"
+          aria-label={`Actions for ${label}`}
+        >
           <Button
-            className="secondary-action queue-field-player-action"
+            className="danger-action remove-field-player-action"
+            variant="danger"
+            size="large"
+            leadingVisual={UserRoundX}
+            aria-label={`Take ${label} out of game`}
+            onClick={onUnavailable}
+          >
+            Take out
+          </Button>
+          <Button
+            className="secondary-action"
             variant="default"
             size="large"
-            leadingVisual={ArrowRightLeft}
-            onClick={onQueue}
+            leadingVisual={Move}
+            aria-label="Change positions"
+            onClick={onChangePosition}
           >
-            Plan substitution
+            Positions
           </Button>
-        )}
-        <Button
-          className="secondary-action"
-          variant="default"
-          size="large"
-          leadingVisual={Move}
-          onClick={onChangePosition}
-        >
-          Change positions
-        </Button>
-        <Button
-          className="remove-field-player-action"
-          variant="danger"
-          size="large"
-          leadingVisual={UserRoundX}
-          onClick={onUnavailable}
-        >
-          Take {label} out of game
-        </Button>
+          {includeQueue && (
+            <Button
+              className="primary-action queue-field-player-action"
+              variant="primary"
+              size="large"
+              leadingVisual={ArrowRightLeft}
+              aria-label="Plan substitution"
+              onClick={onQueue}
+            >
+              Plan sub
+            </Button>
+          )}
+        </div>
       </div>
     </SidelineDialog>
   );
@@ -3617,7 +3818,9 @@ function PlayerTimeRow({
           size="medium"
           icon={queued ? Pencil : ArrowRightLeft}
           onClick={onQueue}
-          aria-label={`${queued ? "Edit planned substitution for" : "Plan"} ${player.name}`}
+          aria-label={
+            queued ? `Edit ${player.name} going in` : `Plan ${player.name} in`
+          }
         />
         <IconButton
           className="icon-button"
@@ -4777,6 +4980,9 @@ function PositionEditor({
   const currentPosition = formation.positions.find(
     (position) => game.assignments[position.id] === playerId,
   );
+  const currentPair = game.queuedSubstitutions?.find(
+    (pair) => pair.outPlayerId === playerId,
+  );
   const targetPositions = formation.positions.filter(
     (position) => game.assignments[position.id] !== playerId,
   );
@@ -4810,19 +5016,43 @@ function PositionEditor({
         </>
       }
     >
-      <div className="position-player-summary">
-        <span>
-          <small>Player</small>
-          <GoalMarkedPlayerName
-            label={playerName(team, playerId)}
-            goalCount={playerGoalCount(game, playerId)}
-          />
-        </span>
-        <span>
-          <small>Current position</small>
-          <strong>{currentPosition?.label ?? "Open"}</strong>
-        </span>
-      </div>
+      <PlayerContextPanel
+        items={[
+          {
+            label: "Player",
+            value: (
+              <GoalMarkedPlayerName
+                label={playerName(team, playerId)}
+                goalCount={playerGoalCount(game, playerId)}
+              />
+            ),
+          },
+          {
+            label: "Position",
+            value: currentPosition?.label ?? "Open",
+          },
+          {
+            label: "Playing total",
+            value: formatDuration(game.totals[playerId]?.fieldSeconds ?? 0),
+          },
+          {
+            label: "Field stint",
+            value: formatDuration(getCurrentFieldSeconds(game, playerId)),
+          },
+          ...(currentPair
+            ? [
+                {
+                  label: "Next rotation",
+                  value: `Coming out for ${playerName(
+                    team,
+                    currentPair.inPlayerId,
+                  )}`,
+                  emphasis: "warm" as const,
+                },
+              ]
+            : []),
+        ]}
+      />
       <div className="bench-replacement-list position-swap-list">
         {targetPositions.map((position) => {
           const occupant = game.assignments[position.id];
