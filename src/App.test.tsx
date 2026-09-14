@@ -1,11 +1,12 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import {
   applySubstitutions,
@@ -13,6 +14,7 @@ import {
   INITIAL_STATE,
   queueSubstitutions,
   recordGoal,
+  setClockRunning,
   suggestSubstitutions,
 } from "./domain";
 import { STORAGE_KEY } from "./storage";
@@ -31,6 +33,10 @@ const openPositionEditor = (playerName: string) => {
 };
 
 describe("Sideline app", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -43,10 +49,51 @@ describe("Sideline app", () => {
   it("keeps teams visibly separate from the first screen", () => {
     render(<App />);
     expect(
-      screen.getByRole("heading", { name: "Which team are you coaching?" }),
+      screen.getByRole("heading", { name: "Which team is playing?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Choose a team to start a game. Each team’s game state stays separate.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("Golden Dragons")).toBeInTheDocument();
     expect(screen.getByText("Fireballers")).toBeInTheDocument();
+  });
+
+  it("keeps the active-game timer live on team selection", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-13T20:00:00Z"));
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    state.activeGame = setClockRunning(
+      createGame(
+        team,
+        "5-1-2-1",
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        Date.now(),
+      ),
+      true,
+      Date.now(),
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Go to team selection" }),
+    );
+    expect(
+      screen.getByText(
+        "Resume the game in progress. Each team’s game state stays separate.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Clock running · 0:00")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(2_000);
+    });
+
+    expect(screen.getByText("Clock running · 0:02")).toBeInTheDocument();
   });
 
   it("keeps the roster fixed while allowing attendance selection", () => {
@@ -290,7 +337,7 @@ describe("Sideline app", () => {
     expect(backButton).toBeInTheDocument();
     fireEvent.click(backButton);
     expect(
-      screen.getByRole("heading", { name: "Which team are you coaching?" }),
+      screen.getByRole("heading", { name: "Which team is playing?" }),
     ).toBeInTheDocument();
   });
 
@@ -406,7 +453,7 @@ describe("Sideline app", () => {
     expect(gameLog).toHaveTextContent("0 events");
     fireEvent.click(screen.getByRole("button", { name: "Return to teams" }));
     expect(
-      screen.getByRole("heading", { name: "Which team are you coaching?" }),
+      screen.getByRole("heading", { name: "Which team is playing?" }),
     ).toBeInTheDocument();
   });
 

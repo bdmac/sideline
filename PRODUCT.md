@@ -12,7 +12,8 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 
 ## Durable behavior
 
-- Team choice is explicit and team state never mixes.
+- Team selection asks which team is playing and keeps team state explicitly separate. Its helper copy mentions starting a game normally and switches to resuming only while a game is in progress.
+- When a game is active, team selection shows its current clock state and a live elapsed timer in the resume strip rather than a stale snapshot.
 - Team names, rosters, and game durations are fixed product data.
 - Game setup is a three-step linear flow for attendance, formation (including U8 period format), and starters/bench. Navigation buttons name their destination, and step selections remain intact when moving backward. Attendance below the team’s side size changes the count to a danger state and explicitly states the current count, required count, and shortfall.
 - Starter assignment uses the selected formation as a tactics board. Tapping a position opens the present-player picker; choosing an assigned player swaps positions, while choosing a bench player replaces the current starter. Auto-fill restores the default roster-order assignment after positions are opened or reset and is disabled when the board is already full.

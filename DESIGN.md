@@ -41,6 +41,7 @@ Use one practical system sans stack: `Inter, ui-sans-serif, system-ui, -apple-sy
 - The Starters step reuses the pitch as the primary assignment surface. Large position magnets open a bottom-sheet player picker, and the derived starting bench is shown as a compact name tray below the field.
 - Critical live controls sit inside an opaque, edge-to-edge bottom surface with safe-area padding and individually rounded, inset touch targets. Content never shows through or around the navigation surface while scrolling.
 - The game clock remains sticky below the app header on phones.
+- The Game in progress strip on team selection shares the live game’s one-second clock cadence, including accurate paused and period-boundary states.
 
 ## Controls
 

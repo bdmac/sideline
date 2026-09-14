@@ -38,7 +38,6 @@ import {
   formatDuration,
   getCurrentBenchSeconds,
   getCurrentFieldSeconds,
-  getDisplayedSeconds,
   getFormation,
   getFormationsForTeam,
   getPeriodStatus,
@@ -132,6 +131,18 @@ let previousBodyStyles = {
   width: "",
 };
 let previousRootOverflow = "";
+
+function useClockNow(running: boolean) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [running]);
+
+  return now;
+}
 
 function ModalBackdrop({
   children,
@@ -381,25 +392,31 @@ function HomeScreen({
   const activeTeam = state.activeGame
     ? state.teams[state.activeGame.teamId]
     : null;
+  const now = useClockNow(Boolean(state.activeGame?.clock.running));
+  const displayedGame = state.activeGame
+    ? materializeGame(state.activeGame, now)
+    : null;
   return (
     <div className="page home-page">
       <section className="page-heading">
         <div>
-          <h1>Which team are you coaching?</h1>
-          <p>Choose the squad you are with today. Game state stays separate.</p>
+          <h1>Which team is playing?</h1>
+          <p>
+            {state.activeGame
+              ? "Resume the game in progress. Each team’s game state stays separate."
+              : "Choose a team to start a game. Each team’s game state stays separate."}
+          </p>
         </div>
       </section>
 
-      {state.activeGame && activeTeam && (
+      {displayedGame && activeTeam && (
         <button className="resume-strip" type="button" onClick={onResume}>
           <span className="resume-pulse" aria-hidden="true" />
           <span>
             <strong>Game in progress · {activeTeam.name}</strong>
             <small>
-              {state.activeGame.clock.running
-                ? "Clock running"
-                : "Clock paused"}{" "}
-              · {formatDuration(getDisplayedSeconds(state.activeGame))}
+              {displayedGame.clock.running ? "Clock running" : "Clock paused"} ·{" "}
+              {formatDuration(displayedGame.clock.elapsedSeconds)}
             </small>
           </span>
           <span className="resume-action">
@@ -1061,7 +1078,7 @@ function LiveGameScreen({
   onChange: (game: ActiveGame) => void;
   onEnd: () => void;
 }) {
-  const [now, setNow] = useState(Date.now());
+  const now = useClockNow(game.clock.running);
   const [headerCollapseProgress, setHeaderCollapseProgress] = useState(0);
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [queuedPlanOpen, setQueuedPlanOpen] = useState(false);
@@ -1094,11 +1111,6 @@ function LiveGameScreen({
   const [endedGame, setEndedGame] = useState<ActiveGame | null>(null);
   const [error, setError] = useState("");
   const formation = getFormation(game.formationId);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     const updateHeader = () =>
