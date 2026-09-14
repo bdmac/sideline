@@ -2205,7 +2205,7 @@ select:hover {
 }
 
 .game-log li.period-timeline-marker {
-  border-top: 2px solid var(--rule-strong);
+  border-bottom: 2px solid var(--rule-strong);
   background: var(--wash);
 }
 
