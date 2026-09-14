@@ -1397,6 +1397,10 @@ select:hover {
   padding: 0.55rem 0.8rem;
 }
 
+.period-review-copy-short {
+  display: none;
+}
+
 .period-break-banner.final {
   border-color: var(--danger);
   background: var(--danger-pale);
@@ -3395,6 +3399,19 @@ select:hover {
 
   .period-break-banner > div > :only-child {
     grid-column: 1 / -1;
+  }
+
+  .period-break-review-action {
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .period-review-copy-long {
+    display: none;
+  }
+
+  .period-review-copy-short {
+    display: inline;
   }
 
   .queued-substitution-banner > div {

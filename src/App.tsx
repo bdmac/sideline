@@ -1911,15 +1911,25 @@ function LiveGameScreen({
             {!periodBreak.final &&
               (queuedPairs.length > 0 ? (
                 <Button
-                  className="secondary-action"
+                  className="secondary-action period-break-review-action"
                   variant="default"
                   size="large"
                   leadingVisual={ArrowRightLeft}
+                  aria-label="Review substitutions"
                   onClick={() => setQueuedPlanOpen(true)}
                 >
-                  {queuedPlanErrors.length
-                    ? "Review plan"
-                    : "Review & send 'em in"}
+                  {queuedPlanErrors.length ? (
+                    "Review plan"
+                  ) : (
+                    <>
+                      <span className="period-review-copy-long">
+                        Review & send 'em in
+                      </span>
+                      <span className="period-review-copy-short">
+                        Review subs
+                      </span>
+                    </>
+                  )}
                 </Button>
               ) : game.benchIds.length > 0 ? (
                 <Button

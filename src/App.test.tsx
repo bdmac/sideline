@@ -2327,7 +2327,7 @@ describe("Sideline app", () => {
     expect(breakBanner).toHaveTextContent("2 substitutions ready");
     expect(
       within(breakBanner).getByRole("button", {
-        name: "Review & send 'em in",
+        name: "Review substitutions",
       }),
     ).toBeInTheDocument();
     expect(
