@@ -1255,9 +1255,18 @@ export const movePlayer = (
   assignments[targetPositionId] = playerId;
   if (targetPlayer) assignments[sourceEntry[0]] = targetPlayer;
   else delete assignments[sourceEntry[0]];
+  const queuedSubstitutions = current.queuedSubstitutions?.map((pair) => {
+    const currentPositionId = Object.entries(assignments).find(
+      ([, assignedPlayerId]) => assignedPlayerId === pair.outPlayerId,
+    )?.[0];
+    return currentPositionId
+      ? { ...pair, positionId: currentPositionId }
+      : { ...pair };
+  });
   return {
     ...current,
     assignments,
+    queuedSubstitutions,
     history: [
       ...current.history,
       {
@@ -1273,6 +1282,9 @@ export const movePlayer = (
         beforeBenchIds: current.benchIds,
         beforeUnavailableIds: current.unavailableIds,
         beforePresentIds: current.presentIds,
+        beforeQueuedSubstitutions: current.queuedSubstitutions?.map((pair) => ({
+          ...pair,
+        })),
       },
     ],
   };

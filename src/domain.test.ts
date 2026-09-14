@@ -6,7 +6,6 @@ import {
   applySubstitutions,
   assignPlayerToPosition,
   assignPlayersByPreference,
-  cancelQueuedSubstitutions,
   createGame,
   FORMATIONS,
   getCurrentBenchSeconds,
@@ -749,7 +748,7 @@ describe("substitutions", () => {
     expect(fiveSecondsLater.totals[pairs[0].inPlayerId].fieldSeconds).toBe(5);
   });
 
-  it("keeps stale queued substitutions visible but blocks execution", () => {
+  it("keeps ready substitutions attached to outgoing players after position changes", () => {
     const team = INITIAL_TEAMS.u8;
     const game = createGame(
       team,
@@ -760,23 +759,63 @@ describe("substitutions", () => {
     );
     const pairs = suggestSubstitutions(game, 1, team);
     const queued = queueSubstitutions(game, pairs);
+    const originalPositionId = pairs[0].positionId;
+    const targetPositionId = originalPositionId === "m" ? "f" : "m";
     const changed = movePlayer(
       queued,
       pairs[0].outPlayerId,
-      pairs[0].positionId === "m" ? "f" : "m",
+      targetPositionId,
       2_000,
     );
 
-    expect(validateSubstitutionPairs(changed, pairs)).toContain(
-      "An outgoing player no longer occupies the planned position",
-    );
-    expect(() =>
-      applySubstitutions(changed, pairs, team.sideSize, 3_000),
-    ).toThrow("An outgoing player no longer occupies the planned position");
+    expect(changed.queuedSubstitutions).toEqual([
+      { ...pairs[0], positionId: targetPositionId },
+    ]);
     expect(
-      cancelQueuedSubstitutions(changed).queuedSubstitutions,
-    ).toBeUndefined();
+      validateSubstitutionPairs(changed, changed.queuedSubstitutions!),
+    ).toEqual([]);
+
+    const applied = applySubstitutions(
+      changed,
+      changed.queuedSubstitutions!,
+      team.sideSize,
+      3_000,
+    );
+    expect(applied.assignments[targetPositionId]).toBe(pairs[0].inPlayerId);
+    expect(applied.benchIds).toContain(pairs[0].outPlayerId);
+
+    const undoneMove = undoLastEvent(changed, 3_000);
+    expect(undoneMove.assignments).toEqual(queued.assignments);
+    expect(undoneMove.queuedSubstitutions).toEqual(pairs);
   });
+
+  it("updates both ready positions when planned outgoing players swap", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const pairs = suggestSubstitutions(game, 2, team);
+    const queued = queueSubstitutions(game, pairs);
+    const changed = movePlayer(
+      queued,
+      pairs[0].outPlayerId,
+      pairs[1].positionId,
+      2_000,
+    );
+
+    expect(changed.queuedSubstitutions).toEqual([
+      { ...pairs[0], positionId: pairs[1].positionId },
+      { ...pairs[1], positionId: pairs[0].positionId },
+    ]);
+    expect(
+      validateSubstitutionPairs(changed, changed.queuedSubstitutions!),
+    ).toEqual([]);
+  });
+
   it("suggests the least-played players and confirms swaps atomically", () => {
     const team = INITIAL_TEAMS.u8;
     const game = createGame(

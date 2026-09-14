@@ -11,6 +11,7 @@ import App from "./App";
 import {
   applySubstitutions,
   createGame,
+  getFormation,
   INITIAL_STATE,
   queueSubstitutions,
   recordGoal,
@@ -1028,6 +1029,56 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("dialog", { name: /Review substitutions/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps a ready plan valid when its outgoing player changes positions", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const pair = suggestSubstitutions(game, 1, team)[0];
+    state.activeGame = queueSubstitutions(game, [pair]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    const outgoing = team.roster.find(
+      (player) => player.id === pair.outPlayerId,
+    )!;
+    const formation = getFormation(game.formationId);
+    const targetPosition = formation.positions.find(
+      (position) => position.id !== pair.positionId,
+    )!;
+    const targetPlayerId = game.assignments[targetPosition.id];
+    const targetPlayer = team.roster.find(
+      (player) => player.id === targetPlayerId,
+    )!;
+
+    openPositionEditor(outgoing.name);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: `${targetPlayer.name} (${targetPosition.label})`,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review substitutions" }),
+    );
+
+    const review = screen.getByRole("dialog", {
+      name: "Review substitutions (1)",
+    });
+    expect(within(review).getByText(targetPosition.shortLabel)).toBeVisible();
+    expect(
+      within(review).getByRole("button", { name: "Send 'em in" }),
+    ).toBeEnabled();
+    expect(
+      within(review).queryByText("Plan needs attention"),
     ).not.toBeInTheDocument();
   });
 
