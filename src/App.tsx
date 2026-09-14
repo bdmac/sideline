@@ -3186,6 +3186,22 @@ function SubstitutionPlanner({
     !duplicateOuts &&
     !duplicateIns &&
     pairErrors.length === 0;
+  const outgoingChoices = Object.entries(game.assignments).sort(
+    ([, playerA], [, playerB]) =>
+      getCurrentFieldSeconds(game, playerB) -
+        getCurrentFieldSeconds(game, playerA) ||
+      (game.totals[playerB]?.fieldSeconds ?? 0) -
+        (game.totals[playerA]?.fieldSeconds ?? 0) ||
+      playerName(team, playerA).localeCompare(playerName(team, playerB)),
+  );
+  const incomingChoices = [...game.benchIds].sort(
+    (playerA, playerB) =>
+      (game.totals[playerA]?.fieldSeconds ?? 0) -
+        (game.totals[playerB]?.fieldSeconds ?? 0) ||
+      getCurrentBenchSeconds(game, playerB) -
+        getCurrentBenchSeconds(game, playerA) ||
+      playerName(team, playerA).localeCompare(playerName(team, playerB)),
+  );
 
   return (
     <ModalBackdrop onDismiss={onClose}>
@@ -3232,60 +3248,102 @@ function SubstitutionPlanner({
         </div>
 
         <div className="swap-list">
-          {pairs.map((pair, index) => (
-            <div className="swap-row" key={index}>
-              <span className="swap-number">{index + 1}</span>
-              <label>
-                <span>OUT</span>
-                <select
-                  value={pair.outPlayerId}
-                  onChange={(event) => {
-                    const positionId =
-                      Object.entries(game.assignments).find(
-                        ([, id]) => id === event.target.value,
-                      )?.[0] ?? pair.positionId;
-                    updatePair(index, {
-                      outPlayerId: event.target.value,
-                      positionId,
-                    });
-                  }}
-                >
-                  {Object.entries(game.assignments).map(([positionId, id]) => (
-                    <option value={id} key={id}>
-                      {playerName(team, id)} ·{" "}
-                      {
-                        formation.positions.find(
-                          (item) => item.id === positionId,
-                        )?.shortLabel
-                      }
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <ArrowRightLeft
-                className="swap-direction"
-                size={22}
-                aria-hidden="true"
-              />
-              <label>
-                <span>IN</span>
-                <select
-                  value={pair.inPlayerId}
-                  onChange={(event) =>
-                    updatePair(index, { inPlayerId: event.target.value })
-                  }
-                >
-                  {game.benchIds.map((id) => (
-                    <option value={id} key={id}>
-                      {playerName(team, id)} ·{" "}
-                      {formatDuration(game.totals[id]?.fieldSeconds ?? 0)}{" "}
-                      played
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          ))}
+          <div className="swap-column-headings" aria-hidden="true">
+            <span className="out-label">OUT</span>
+            <span className="in-label">IN</span>
+          </div>
+          {pairs.map((pair, index) => {
+            const position = formation.positions.find(
+              (item) => item.id === pair.positionId,
+            );
+            return (
+              <div className="swap-row" key={index}>
+                <span className="swap-number">{index + 1}</span>
+                <label>
+                  <span className="sr-only">OUT</span>
+                  <select
+                    aria-label={`Swap ${index + 1} outgoing player`}
+                    value={pair.outPlayerId}
+                    onChange={(event) => {
+                      const positionId =
+                        Object.entries(game.assignments).find(
+                          ([, id]) => id === event.target.value,
+                        )?.[0] ?? pair.positionId;
+                      updatePair(index, {
+                        outPlayerId: event.target.value,
+                        positionId,
+                      });
+                    }}
+                  >
+                    {outgoingChoices.map(([positionId, id]) => (
+                      <option
+                        value={id}
+                        key={id}
+                        disabled={pairs.some(
+                          (otherPair, pairIndex) =>
+                            pairIndex !== index && otherPair.outPlayerId === id,
+                        )}
+                      >
+                        {playerName(team, id)} ·{" "}
+                        {
+                          formation.positions.find(
+                            (item) => item.id === positionId,
+                          )?.shortLabel
+                        }
+                      </option>
+                    ))}
+                  </select>
+                  <small className="swap-player-status">
+                    {formatDuration(
+                      getCurrentFieldSeconds(game, pair.outPlayerId),
+                    )}{" "}
+                    playing ·{" "}
+                    {formatDuration(
+                      game.totals[pair.outPlayerId]?.fieldSeconds ?? 0,
+                    )}{" "}
+                    total
+                  </small>
+                </label>
+                <span className="swap-transfer">
+                  <ArrowRightLeft size={22} aria-hidden="true" />
+                  <small>{position?.shortLabel}</small>
+                </span>
+                <label>
+                  <span className="sr-only">IN</span>
+                  <select
+                    aria-label={`Swap ${index + 1} incoming player`}
+                    value={pair.inPlayerId}
+                    onChange={(event) =>
+                      updatePair(index, { inPlayerId: event.target.value })
+                    }
+                  >
+                    {incomingChoices.map((id) => (
+                      <option
+                        value={id}
+                        key={id}
+                        disabled={pairs.some(
+                          (otherPair, pairIndex) =>
+                            pairIndex !== index && otherPair.inPlayerId === id,
+                        )}
+                      >
+                        {playerName(team, id)}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="swap-player-status">
+                    {formatDuration(
+                      getCurrentBenchSeconds(game, pair.inPlayerId),
+                    )}{" "}
+                    sitting ·{" "}
+                    {formatDuration(
+                      game.totals[pair.inPlayerId]?.fieldSeconds ?? 0,
+                    )}{" "}
+                    played
+                  </small>
+                </label>
+              </div>
+            );
+          })}
         </div>
 
         {!valid && (
@@ -3297,25 +3355,32 @@ function SubstitutionPlanner({
 
         <div className="review-checklist">
           <h3>Confirm together</h3>
-          {pairs.map((pair, index) => (
-            <div key={index}>
-              <span className="out-label">OUT</span>
-              <GoalMarkedPlayerName
-                label={playerName(team, pair.outPlayerId)}
-                goalCount={playerGoalCount(game, pair.outPlayerId)}
-              />
-              <ArrowRightLeft
-                className="review-direction"
-                size={17}
-                aria-hidden="true"
-              />
-              <span className="in-label">IN</span>
-              <GoalMarkedPlayerName
-                label={playerName(team, pair.inPlayerId)}
-                goalCount={playerGoalCount(game, pair.inPlayerId)}
-              />
-            </div>
-          ))}
+          <div className="review-column-headings" aria-hidden="true">
+            <span className="out-label">OUT</span>
+            <span className="in-label">IN</span>
+          </div>
+          {pairs.map((pair, index) => {
+            const position = formation.positions.find(
+              (item) => item.id === pair.positionId,
+            );
+            return (
+              <div className="review-row" key={index}>
+                <span className="review-number">{index + 1}</span>
+                <GoalMarkedPlayerName
+                  label={playerName(team, pair.outPlayerId)}
+                  goalCount={playerGoalCount(game, pair.outPlayerId)}
+                />
+                <span className="review-direction">
+                  <ArrowRightLeft size={17} aria-hidden="true" />
+                  <small>{position?.shortLabel}</small>
+                </span>
+                <GoalMarkedPlayerName
+                  label={playerName(team, pair.inPlayerId)}
+                  goalCount={playerGoalCount(game, pair.inPlayerId)}
+                />
+              </div>
+            );
+          })}
         </div>
 
         <div className="sheet-actions">
@@ -3350,14 +3415,18 @@ function ReadySwapList({
 }) {
   return (
     <div className="ready-swap-list">
+      <div className="ready-swap-headings" aria-hidden="true">
+        <span className="out-label">OUT</span>
+        <span className="in-label">IN</span>
+      </div>
       {pairs.map((pair, index) => {
         const position = formation.positions.find(
           (item) => item.id === pair.positionId,
         );
         return (
           <div className="ready-swap" key={index}>
+            <span className="ready-swap-number">{index + 1}</span>
             <span className="ready-player out">
-              <small>OUT</small>
               <GoalMarkedPlayerName
                 label={playerLabel(team, pair.outPlayerId)}
                 goalCount={playerGoalCount(game, pair.outPlayerId)}
@@ -3368,7 +3437,6 @@ function ReadySwapList({
               <small>{position?.shortLabel}</small>
             </span>
             <span className="ready-player in">
-              <small>IN</small>
               <GoalMarkedPlayerName
                 label={playerLabel(team, pair.inPlayerId)}
                 goalCount={playerGoalCount(game, pair.inPlayerId)}

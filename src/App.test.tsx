@@ -660,6 +660,31 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
     fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    const planner = screen.getByRole("dialog", {
+      name: "Plan substitutions",
+    });
+    expect(planner.querySelector(".swap-column-headings")).toHaveTextContent(
+      "OUTIN",
+    );
+    expect(planner.querySelectorAll(".swap-player-status")).toHaveLength(6);
+    expect(planner.querySelectorAll(".swap-transfer svg")).toHaveLength(3);
+    expect(planner.querySelectorAll(".review-direction small")).toHaveLength(3);
+    const outgoingPlayers = within(planner).getAllByLabelText(
+      /outgoing player/,
+    ) as HTMLSelectElement[];
+    const incomingPlayers = within(planner).getAllByLabelText(
+      /incoming player/,
+    ) as HTMLSelectElement[];
+    expect(
+      outgoingPlayers[1].querySelector(
+        `option[value="${outgoingPlayers[0].value}"]`,
+      ),
+    ).toBeDisabled();
+    expect(
+      incomingPlayers[1].querySelector(
+        `option[value="${incomingPlayers[0].value}"]`,
+      ),
+    ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Queue 3 swaps" }),
     ).toBeInTheDocument();
@@ -671,6 +696,9 @@ describe("Sideline app", () => {
 
     expect(summary).toHaveTextContent("OUT");
     expect(summary).toHaveTextContent("IN");
+    expect(within(summary).getAllByText("OUT")).toHaveLength(1);
+    expect(within(summary).getAllByText("IN")).toHaveLength(1);
+    expect(summary.querySelectorAll(".ready-direction svg")).toHaveLength(3);
     expect(summary).not.toHaveTextContent("#12 Henry");
     expect(
       screen.getByRole("button", { name: "Open actions for Simon" }),
@@ -742,6 +770,9 @@ describe("Sideline app", () => {
       game.totals[playerId].fieldSeconds = 300;
     });
     game.totals[game.benchIds[0]].fieldSeconds = 300;
+    Object.values(game.assignments).forEach((playerId, index) => {
+      game.totals[playerId].fieldSeconds = index * 60;
+    });
     state.activeGame = game;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     render(<App />);
@@ -752,9 +783,44 @@ describe("Sideline app", () => {
 
     expect(
       within(planner)
-        .getAllByLabelText("IN")
+        .getAllByLabelText(/incoming player/)
         .map((select) => (select as HTMLSelectElement).value),
     ).toEqual(expect.arrayContaining([firstLeastPlayed, secondLeastPlayed]));
+    const outgoingOptions = Array.from(
+      (
+        within(planner).getAllByLabelText(
+          /outgoing player/,
+        )[0] as HTMLSelectElement
+      ).options,
+    ).map((option) => option.value);
+    const expectedOutgoingOptions = Object.values(game.assignments).sort(
+      (playerA, playerB) =>
+        game.totals[playerB].fieldSeconds - game.totals[playerA].fieldSeconds ||
+        team.roster
+          .find((player) => player.id === playerA)!
+          .name.localeCompare(
+            team.roster.find((player) => player.id === playerB)!.name,
+          ),
+    );
+    expect(outgoingOptions).toEqual(expectedOutgoingOptions);
+
+    const incomingOptions = Array.from(
+      (
+        within(planner).getAllByLabelText(
+          /incoming player/,
+        )[0] as HTMLSelectElement
+      ).options,
+    ).map((option) => option.value);
+    const expectedIncomingOptions = [...game.benchIds].sort(
+      (playerA, playerB) =>
+        game.totals[playerA].fieldSeconds - game.totals[playerB].fieldSeconds ||
+        team.roster
+          .find((player) => player.id === playerA)!
+          .name.localeCompare(
+            team.roster.find((player) => player.id === playerB)!.name,
+          ),
+    );
+    expect(incomingOptions).toEqual(expectedIncomingOptions);
   });
 
   it("keeps a queued plan accessible from the live game until cancelled", () => {
@@ -819,16 +885,20 @@ describe("Sideline app", () => {
     fireEvent.click(within(queued).getByRole("button", { name: "Edit plan" }));
 
     const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
-    expect(within(planner).getByLabelText("OUT")).toHaveDisplayValue(
-      /Simon · CB/,
-    );
-    expect(within(planner).getByLabelText("IN")).toHaveDisplayValue(/Dylan ·/);
+    expect(
+      within(planner).getByLabelText("Swap 1 outgoing player"),
+    ).toHaveDisplayValue(/Simon · CB/);
+    expect(
+      within(planner).getByLabelText("Swap 1 incoming player"),
+    ).toHaveDisplayValue("Dylan");
     fireEvent.click(within(planner).getByRole("button", { name: "2" }));
     fireEvent.click(within(planner).getByRole("button", { name: "1" }));
-    expect(within(planner).getByLabelText("OUT")).toHaveDisplayValue(
-      /Simon · CB/,
-    );
-    expect(within(planner).getByLabelText("IN")).toHaveDisplayValue(/Dylan ·/);
+    expect(
+      within(planner).getByLabelText("Swap 1 outgoing player"),
+    ).toHaveDisplayValue(/Simon · CB/);
+    expect(
+      within(planner).getByLabelText("Swap 1 incoming player"),
+    ).toHaveDisplayValue("Dylan");
     fireEvent.click(within(planner).getByRole("button", { name: "Close" }));
 
     expect(screen.getByText("Queued for CB")).toBeInTheDocument();
@@ -1429,12 +1499,12 @@ describe("Sideline app", () => {
     startGame();
 
     expect(
-      container.querySelector(".mobile-control-dock .swap-direction"),
+      container.querySelector(".mobile-control-dock .swap-transfer"),
     ).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
     expect(
-      container.querySelector(".swap-row .swap-direction"),
+      container.querySelector(".swap-row .swap-transfer svg"),
     ).toBeInTheDocument();
   });
 
