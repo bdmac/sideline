@@ -2489,57 +2489,112 @@ select:hover {
 }
 
 .sideline-player-action-item {
+  position: relative;
+  margin: 0 0.5rem !important;
+  padding-block: 0 !important;
+  border-bottom: 1px solid var(--line);
   border-radius: 0;
 }
 
-.sideline-player-action-item[data-inactive="true"] {
-  cursor: not-allowed;
+.sideline-player-action-item:last-child {
+  border-bottom: 0;
 }
 
-.sideline-player-action-item[data-inactive="true"]
-  [data-component="ActionList.Item.Label"],
-.sideline-player-action-item[data-inactive="true"]
-  [data-component="ActionList.Description"],
-.sideline-player-action-item[data-inactive="true"]
-  [data-component="ActionList.TrailingVisual"] {
-  color: var(--ink-soft);
-  opacity: 0.62;
+.sideline-player-action-item
+  [data-component="ActionList.Item--Content"]
+  > span:first-child,
+.sideline-player-action-item [data-component="ActionList.Selection"] {
+  display: none;
 }
 
-.sideline-player-action-item[data-inactive="true"]
-  [data-component="ActionList.TrailingVisual"] {
-  margin-inline-end: 0;
+.sideline-player-action-item[aria-checked="true"],
+.sideline-player-action-item[aria-checked="true"]:hover,
+.sideline-player-action-item[aria-checked="true"]:focus-visible {
+  background: var(--turf-pale) !important;
 }
 
-.sideline-player-action-item[data-inactive="true"] [id$="--warning-message"] {
-  color: var(--warm-dark);
-  font-weight: 850;
+.sideline-player-action-item[aria-checked="true"]::before {
+  position: absolute;
+  z-index: 1;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  background: var(--turf);
+  content: "";
+  pointer-events: none;
+}
+
+.sideline-player-action-item[aria-checked="true"]
+  [data-component="ActionList.Item--Content"],
+.sideline-player-action-item[aria-checked="true"]:hover
+  [data-component="ActionList.Item--Content"],
+.sideline-player-action-item[aria-checked="true"]:focus-visible
+  [data-component="ActionList.Item--Content"] {
+  background: var(--turf-pale) !important;
+  border-radius: 0;
 }
 
 .sideline-player-action-item [data-component="ActionList.Item--Content"] {
   min-height: 52px;
 }
 
-.player-action-menu-meta {
-  color: var(--ink);
-  font-size: 0.72rem;
-  font-weight: 950;
+.sideline-player-action-item [data-component="ActionList.Item.Label"] {
+  width: 100%;
+  min-width: 0;
 }
 
-.sideline-player-action-item [data-component="ActionList.Description"] > span {
-  display: block;
+.player-action-menu-row {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.3rem 1rem;
 }
 
-.player-action-menu-detail {
-  margin-top: 0.15rem;
-  color: var(--ink-soft);
-  font-weight: 700;
+.player-action-menu-row .replacement-player-summary,
+.player-action-menu-row .player-name-with-goals {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.player-action-menu-row .replacement-player-times {
+  justify-self: end;
+  text-align: right;
+}
+
+.player-action-menu-row .player-name-with-goals > :first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .player-action-menu-status {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+  color: var(--turf-dark);
+  font-weight: 850;
+}
+
+.replacement-player-status {
   margin-top: 0.2rem;
   color: var(--warm-dark);
   font-weight: 850;
+}
+
+.replacement-player-status {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+}
+
+.replacement-player-status.incoming-status {
+  color: var(--turf-dark);
 }
 
 .swap-number {

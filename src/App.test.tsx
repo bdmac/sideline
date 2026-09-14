@@ -798,6 +798,11 @@ describe("Sideline app", () => {
     const actions = screen.getByRole("dialog", { name: "#10 Simon" });
     expect(actions).not.toHaveClass("sideline-dialog-bodyless");
     expect(
+      within(actions)
+        .getByRole("heading", { name: "#10 Simon" })
+        .querySelector(".soccer-ball-icon"),
+    ).not.toBeInTheDocument();
+    expect(
       within(actions).getByRole("button", { name: "Plan Simon out" }),
     ).toBeInTheDocument();
     expect(
@@ -861,8 +866,12 @@ describe("Sideline app", () => {
       name: "#14 Maddox - Change position",
     });
     expect(positionDialog).toBeInTheDocument();
+    expect(
+      within(positionDialog)
+        .getByRole("heading", { name: "#14 Maddox - Change position" })
+        .querySelector(".soccer-ball-icon"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Player")).not.toBeInTheDocument();
-    expect(within(positionDialog).getByText("#14 Maddox")).toBeInTheDocument();
     expect(
       within(positionDialog).queryByText("Player", { selector: "dt" }),
     ).not.toBeInTheDocument();
@@ -983,14 +992,13 @@ describe("Sideline app", () => {
     expect(screen.getByText("Who's coming OUT?")).toBeInTheDocument();
     const repeatedOutgoing = screen
       .getAllByRole("menuitemradio")
-      .find((item) => item.textContent?.startsWith(firstOutgoingName));
-    expect(repeatedOutgoing).toHaveAttribute("data-inactive", "true");
-    expect(repeatedOutgoing).toHaveAttribute("aria-disabled", "true");
-    expect(repeatedOutgoing).toHaveAccessibleDescription(
-      expect.stringContaining("Planned to come OUT for Noah"),
-    );
-    expect(repeatedOutgoing).not.toHaveTextContent("Prefers");
-    expect(repeatedOutgoing).toHaveTextContent(/#\d+ · \w+/);
+      .find((item) => item.textContent?.includes(firstOutgoingName));
+    expect(repeatedOutgoing).toBeUndefined();
+    expect(
+      screen
+        .getAllByRole("menuitemradio")
+        .every((item) => item.getAttribute("aria-disabled") !== "true"),
+    ).toBe(true);
     fireEvent.keyDown(document, { key: "Escape" });
 
     const firstIncomingName = incomingPlayers[0].textContent?.trim() ?? "";
@@ -999,12 +1007,27 @@ describe("Sideline app", () => {
     expect(screen.getByText(/^For .+ at .+$/)).toBeInTheDocument();
     const repeatedIncoming = screen
       .getAllByRole("menuitemradio")
-      .find((item) => item.textContent?.startsWith(firstIncomingName));
+      .find((item) => item.textContent?.includes(firstIncomingName));
     expect(repeatedIncoming).not.toHaveAttribute("data-inactive", "true");
     expect(repeatedIncoming).not.toHaveAttribute("aria-disabled", "true");
-    expect(repeatedIncoming).toHaveTextContent(/Prefers: .+/);
-    expect(repeatedIncoming).toHaveTextContent(/#\d+/);
-    expect(repeatedIncoming).toHaveTextContent("Planned to go IN for Simon");
+    expect(repeatedIncoming).toHaveTextContent(/#\d+ .+/);
+    expect(repeatedIncoming).toHaveTextContent(
+      /Prefers.+Bench0:00PlayedNot played yet/,
+    );
+    expect(
+      repeatedIncoming?.querySelector(".replacement-fit"),
+    ).toHaveTextContent(/preference|Outside preferences/);
+    expect(repeatedIncoming).toHaveTextContent("Going in for Simon");
+    expect(
+      repeatedIncoming?.querySelector(
+        ".player-action-menu-status.incoming-status",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      repeatedIncoming?.querySelector(
+        ".player-action-menu-status .lucide-arrow-right-left",
+      ),
+    ).toBeInTheDocument();
     fireEvent.click(repeatedIncoming!);
     expect(incomingPlayers[1]).toHaveTextContent(firstIncomingName);
     expect(incomingPlayers[0]).not.toHaveTextContent(firstIncomingName);
@@ -1134,7 +1157,7 @@ describe("Sideline app", () => {
 
     fireEvent.click(
       choices.find((choice) =>
-        choice.textContent?.startsWith(firstIncomingName),
+        choice.textContent?.includes(firstIncomingName),
       )!,
     );
     expect(incomingPlayers[0]).toHaveTextContent(secondIncomingName);
@@ -1223,9 +1246,15 @@ describe("Sideline app", () => {
     fireEvent.click(outgoingTrigger);
 
     const options = screen.getAllByRole("menuitemradio");
-    expect(options[0]).toHaveAccessibleDescription(
-      "0:00 current stint · Not played yet",
+    expect(options[0]).toHaveTextContent(/Stint0:00TotalNot played yet/);
+    expect(options[0].querySelector(".replacement-fit")).toHaveTextContent(
+      /preference|Outside preferences/,
     );
+    expect(
+      options
+        .find((option) => option.getAttribute("aria-checked") === "true")
+        ?.querySelector(".replacement-selected-icon"),
+    ).toBeInTheDocument();
     const replacement = options.find(
       (option) =>
         option.getAttribute("aria-checked") === "false" &&
@@ -1233,10 +1262,13 @@ describe("Sideline app", () => {
     );
     expect(replacement).toBeDefined();
     const replacementName =
-      replacement!.querySelector('[id$="--label"]')?.textContent ?? "";
+      replacement!.querySelector(".replacement-player-summary")?.textContent ??
+      "";
     fireEvent.click(replacement!);
 
-    expect(outgoingTrigger).toHaveTextContent(replacementName);
+    expect(outgoingTrigger).toHaveTextContent(
+      replacementName.replace(/^#\d+\s+/, ""),
+    );
     expect(outgoingTrigger).not.toHaveTextContent(originalPlayer ?? "");
     expect(outgoingTrigger).toHaveFocus();
   });
@@ -1339,34 +1371,25 @@ describe("Sideline app", () => {
         game.totals[playerB].fieldSeconds - game.totals[playerA].fieldSeconds ||
         playerName(playerA).localeCompare(playerName(playerB)),
     );
+    const unavailableOutgoingNames = within(planner)
+      .getAllByLabelText(/outgoing player/)
+      .slice(1)
+      .map((button) => button.textContent?.trim());
     fireEvent.click(within(planner).getAllByLabelText(/outgoing player/)[0]);
     const outgoingMenuItems = screen.getAllByRole("menuitemradio");
-    const disabledOutgoingIds = new Set(
-      outgoingMenuItems
-        .filter((item) => item.getAttribute("aria-disabled") === "true")
-        .map(
-          (item) =>
-            team.roster.find((player) =>
-              item.textContent?.startsWith(player.name),
-            )!.id,
-        ),
-    );
     expect(
-      outgoingMenuItems
-        .map((item) =>
-          team.roster.find((player) =>
-            item.textContent?.startsWith(player.name),
-          ),
-        )
-        .map((player) => player?.id),
-    ).toEqual([
-      ...expectedOutgoingOptions.filter(
-        (playerId) => !disabledOutgoingIds.has(playerId),
+      outgoingMenuItems.every(
+        (item) => item.getAttribute("aria-disabled") !== "true",
       ),
-      ...expectedOutgoingOptions.filter((playerId) =>
-        disabledOutgoingIds.has(playerId),
+    ).toBe(true);
+    const visibleOutgoingIds = outgoingMenuItems.map((item) =>
+      item.getAttribute("data-player-id"),
+    );
+    expect(visibleOutgoingIds).toEqual(
+      expectedOutgoingOptions.filter(
+        (playerId) => !unavailableOutgoingNames.includes(playerName(playerId)),
       ),
-    ]);
+    );
     fireEvent.keyDown(document, { key: "Escape" });
 
     const expectedIncomingOptions = [...game.benchIds].sort(
@@ -1383,22 +1406,11 @@ describe("Sideline app", () => {
     ).toBe(true);
     const plannedIncomingIds = new Set(
       incomingMenuItems
-        .filter((item) => item.textContent?.includes("Planned to go IN for"))
-        .map(
-          (item) =>
-            team.roster.find((player) =>
-              item.textContent?.startsWith(player.name),
-            )!.id,
-        ),
+        .filter((item) => item.textContent?.includes("Going in for"))
+        .map((item) => item.getAttribute("data-player-id")),
     );
     expect(
-      incomingMenuItems
-        .map((item) =>
-          team.roster.find((player) =>
-            item.textContent?.startsWith(player.name),
-          ),
-        )
-        .map((player) => player?.id),
+      incomingMenuItems.map((item) => item.getAttribute("data-player-id")),
     ).toEqual([
       ...expectedIncomingOptions.filter(
         (playerId) => !plannedIncomingIds.has(playerId),
@@ -1526,6 +1538,11 @@ describe("Sideline app", () => {
     const firstPicker = screen.getByRole("dialog", {
       name: "#4 Dylan - Plan in",
     });
+    expect(
+      within(firstPicker)
+        .getByRole("heading", { name: "#4 Dylan - Plan in" })
+        .querySelector(".soccer-ball-icon"),
+    ).not.toBeInTheDocument();
     expect(firstPicker).toHaveTextContent("Bench stint0:00");
     expect(firstPicker).toHaveTextContent(
       "Playing totalNot played yetPreferred rolesDefense · Midfield",
@@ -2340,6 +2357,21 @@ describe("Sideline app", () => {
     expect(selectedIncoming).toHaveAttribute("aria-pressed", "true");
     expect(
       selectedIncoming.querySelector(".replacement-selected-icon"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(editPicker).getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Plan Ollie out" }));
+    const otherPicker = screen.getByRole("dialog", {
+      name: "#23 Ollie - Plan out",
+    });
+    const alreadyPlannedIncoming = within(otherPicker).getByRole("button", {
+      name: /Dylan/,
+    });
+    expect(alreadyPlannedIncoming).toHaveTextContent("Going in for Simon");
+    expect(
+      alreadyPlannedIncoming.querySelector(
+        ".replacement-player-status.incoming-status .lucide-arrow-right-left",
+      ),
     ).toBeInTheDocument();
   });
 
