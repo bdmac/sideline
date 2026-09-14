@@ -1903,7 +1903,7 @@ function LiveGameScreen({
             {!periodBreak.final && queuedPairs.length > 0 && (
               <small className="period-break-queue-status">
                 {queuedPairs.length} substitution
-                {queuedPairs.length === 1 ? "" : "s"} queued
+                {queuedPairs.length === 1 ? "" : "s"} ready
               </small>
             )}
           </span>
@@ -1917,7 +1917,9 @@ function LiveGameScreen({
                   leadingVisual={ArrowRightLeft}
                   onClick={() => setQueuedPlanOpen(true)}
                 >
-                  {queuedPlanErrors.length ? "Review plan" : "Review & execute"}
+                  {queuedPlanErrors.length
+                    ? "Review plan"
+                    : "Review & send 'em in"}
                 </Button>
               ) : game.benchIds.length > 0 ? (
                 <Button
@@ -1998,16 +2000,16 @@ function LiveGameScreen({
           className={`queued-substitution-banner ${
             queuedPlanErrors.length ? "invalid" : ""
           }`}
-          aria-label="Queued substitutions"
+          aria-label="Ready substitutions"
         >
           <span>
             <strong>
               {queuedPairs.length} substitution
-              {queuedPairs.length === 1 ? "" : "s"} queued
+              {queuedPairs.length === 1 ? "" : "s"} ready
             </strong>
             <small>
               {queuedPlanErrors.length
-                ? "Plan needs attention before execution"
+                ? "Plan needs attention before players go in"
                 : "Lineup and timers have not changed"}
             </small>
           </span>
@@ -2029,7 +2031,7 @@ function LiveGameScreen({
               disabled={queuedPlanErrors.length > 0}
               onClick={executeQueuedSubstitutions}
             >
-              Execute
+              Send 'em in
             </Button>
           </div>
         </section>
@@ -3175,7 +3177,7 @@ function BenchSubstitutionPicker({
     <SidelineDialog
       title={
         <>
-          Queue{" "}
+          Plan{" "}
           <GoalMarkedPlayerName
             label={playerLabel(team, playerId)}
             goalCount={playerGoalCount(game, playerId)}
@@ -3196,7 +3198,7 @@ function BenchSubstitutionPicker({
               leadingVisual={Trash2}
               onClick={onRemove}
             >
-              Remove from queue
+              Remove from plan
             </Button>
           </div>
         ) : undefined
@@ -3295,7 +3297,7 @@ function FieldSubstitutionPicker({
     <SidelineDialog
       title={
         <>
-          Queue{" "}
+          Plan{" "}
           <GoalMarkedPlayerName
             label={playerLabel(team, playerId)}
             goalCount={playerGoalCount(game, playerId)}
@@ -3317,7 +3319,7 @@ function FieldSubstitutionPicker({
               leadingVisual={Trash2}
               onClick={onRemove}
             >
-              Remove from queue
+              Remove from plan
             </Button>
           </div>
         ) : undefined
@@ -3411,7 +3413,7 @@ function FieldPlayerActionsSheet({
             leadingVisual={ArrowRightLeft}
             onClick={onQueue}
           >
-            Queue substitution
+            Plan substitution
           </Button>
         )}
         <Button
@@ -3496,7 +3498,7 @@ function FieldPlayerTimeRow({
         {queued ? (
           <span className="bench-queue-status">
             <Check size={12} aria-hidden="true" />
-            Queued out for {queuedIncomingName}
+            Coming out for {queuedIncomingName}
           </span>
         ) : (
           hasEarlierFieldTime && (
@@ -3520,7 +3522,7 @@ function FieldPlayerTimeRow({
           icon={queued ? Pencil : ArrowRightLeft}
           disabled={!queued && !canQueue}
           onClick={onQueue}
-          aria-label={`${queued ? "Edit queued substitution for" : "Queue"} ${player.name} out`}
+          aria-label={`${queued ? "Edit planned substitution for" : "Plan"} ${player.name} out`}
         />
         <IconButton
           className="icon-button"
@@ -3577,7 +3579,7 @@ function PlayerTimeRow({
         {queued ? (
           <span className="bench-queue-status">
             <Check size={12} aria-hidden="true" />
-            Queued for {queuedPositionLabel}
+            Going in at {queuedPositionLabel}
           </span>
         ) : belowMinimumPace ? (
           <span className="minimum-play-warning">
@@ -3605,7 +3607,7 @@ function PlayerTimeRow({
           size="medium"
           icon={queued ? Pencil : ArrowRightLeft}
           onClick={onQueue}
-          aria-label={`${queued ? "Edit queued substitution for" : "Queue"} ${player.name}`}
+          aria-label={`${queued ? "Edit planned substitution for" : "Plan"} ${player.name}`}
         />
         <IconButton
           className="icon-button"
@@ -3890,7 +3892,7 @@ function SubstitutionPlanner({
   return (
     <SidelineDialog
       title="Plan substitutions"
-      description="Suggested for fairness. Queue the plan now, then execute it when the players enter."
+      description="Suggested for fairness. Ready the plan now, then send the players in when the change happens."
       onClose={onClose}
       width="720px"
       className="substitution-dialog substitution-sheet"
@@ -3912,7 +3914,7 @@ function SubstitutionPlanner({
             disabled={!valid}
             onClick={() => onConfirm(pairs)}
           >
-            Queue {count} swap{count === 1 ? "" : "s"}
+            Ready {count} swap{count === 1 ? "" : "s"}
           </Button>
         </>
       }
@@ -4288,8 +4290,8 @@ function QueuedSubstitutionSummary({
   if (deleteConfirm) {
     return (
       <ConfirmSheet
-        title="Delete queued plan?"
-        body="This removes every queued swap. Players and playing time will not change."
+        title="Delete substitution plan?"
+        body="This removes every ready swap. Players and playing time will not change."
         cancelLabel="Keep plan"
         confirmLabel="Delete plan"
         confirmIcon={<Trash2 size={18} aria-hidden="true" />}
@@ -4304,7 +4306,7 @@ function QueuedSubstitutionSummary({
       title={`Review substitutions (${pairs.length})`}
       description={
         <>
-          Get these players ready. Nothing changes until you execute.
+          Get these players ready. Nothing changes until you send them in.
           <span className="mobile-inline-instruction">
             {" "}
             Swipe a substitution to remove it.
@@ -4343,7 +4345,7 @@ function QueuedSubstitutionSummary({
             disabled={errors.length > 0}
             onClick={onExecute}
           >
-            Execute subs
+            Send 'em in
           </Button>
         </>
       }
@@ -4384,8 +4386,8 @@ function SubstitutionSummary({
 }) {
   return (
     <SidelineDialog
-      title="Substitution ready"
-      description="The game is updated. Organize these players together."
+      title="Players are in"
+      description="The lineup and timers are updated."
       className="substitution-ready-sheet"
       width="620px"
       onClose={onClose}
@@ -4663,7 +4665,7 @@ function GameLog({
     <details className="game-log">
       <summary className="disclosure-summary">
         <span>
-          <strong>Game log</strong>
+          <strong>Game timeline</strong>
           <small>Review confirmed game changes</small>
         </span>
         <span>{game.history.length} events</span>
