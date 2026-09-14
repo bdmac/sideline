@@ -17,6 +17,7 @@ import {
   setClockRunning,
   suggestSubstitutions,
 } from "./domain";
+import { DEVICE_PREFERENCES_STORAGE_KEY } from "./devicePreferences";
 import { STORAGE_KEY } from "./storage";
 import { THEME_STORAGE_KEY } from "./theme";
 
@@ -36,6 +37,8 @@ const openPositionEditor = (playerName: string) => {
 describe("Sideline app", () => {
   afterEach(() => {
     vi.useRealTimers();
+    Reflect.deleteProperty(navigator, "wakeLock");
+    Reflect.deleteProperty(navigator, "vibrate");
   });
 
   beforeEach(() => {
@@ -82,6 +85,147 @@ describe("Sideline app", () => {
     expect(
       screen.getByRole("button", { name: "Use light mode" }),
     ).toBeInTheDocument();
+  });
+
+  it("persists game-day settings from an anchored settings menu", async () => {
+    const wakeLockRequest = vi.fn();
+    Object.defineProperty(navigator, "wakeLock", {
+      value: { request: wakeLockRequest },
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "vibrate", {
+      value: vi.fn(),
+      configurable: true,
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+
+    const wakeLockSwitch = await screen.findByRole("button", {
+      name: "Keep screen awake",
+    });
+    const alertSwitch = screen.getByRole("button", {
+      name: "Substitution alerts",
+    });
+    expect(wakeLockSwitch).toHaveAttribute("aria-pressed", "false");
+    expect(alertSwitch).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(wakeLockSwitch);
+    fireEvent.click(alertSwitch);
+
+    expect(
+      JSON.parse(localStorage.getItem(DEVICE_PREFERENCES_STORAGE_KEY) ?? "{}"),
+    ).toEqual({
+      keepScreenAwake: true,
+      substitutionAlerts: true,
+    });
+    expect(wakeLockRequest).not.toHaveBeenCalled();
+    expect(
+      document
+        .querySelector(".settings-menu")
+        ?.getAttribute("data-position-regular"),
+    ).not.toBe("bottom");
+  });
+
+  it("keeps the screen awake when a saved preference has an active game", async () => {
+    const release = vi.fn().mockResolvedValue(undefined);
+    const sentinel = {
+      released: false,
+      release,
+      addEventListener: vi.fn(),
+    };
+    const request = vi.fn().mockResolvedValue(sentinel);
+    Object.defineProperty(navigator, "wakeLock", {
+      value: { request },
+      configurable: true,
+    });
+    localStorage.setItem(
+      DEVICE_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        keepScreenAwake: true,
+        substitutionAlerts: false,
+      }),
+    );
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    state.activeGame = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      team.defaultDurationMinutes,
+      1_000,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+
+    await waitFor(() => expect(request).toHaveBeenCalledWith("screen"));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(
+      await screen.findByText(/Active for the current game\./),
+    ).toBeInTheDocument();
+  });
+
+  it("plays one alert for each due substitution-reminder cycle", async () => {
+    const vibrate = vi.fn();
+    Object.defineProperty(navigator, "vibrate", {
+      value: vibrate,
+      configurable: true,
+    });
+    localStorage.setItem(
+      DEVICE_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        keepScreenAwake: false,
+        substitutionAlerts: true,
+      }),
+    );
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    state.activeGame = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      team.defaultDurationMinutes,
+      1_000,
+    );
+    state.activeGame.clock.elapsedSeconds = 300;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+
+    await waitFor(() => expect(vibrate).toHaveBeenCalledWith([160, 80, 160]));
+    fireEvent.click(screen.getByRole("button", { name: "Use dark mode" }));
+    expect(vibrate).toHaveBeenCalledTimes(1);
+  });
+
+  it("materializes a running game immediately when returning to Sideline", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-14T12:00:00Z"));
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    state.activeGame = setClockRunning(
+      createGame(
+        team,
+        "5-1-2-1",
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        Date.now(),
+      ),
+      true,
+      Date.now(),
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    vi.setSystemTime(new Date("2026-09-14T12:05:01Z"));
+    act(() => window.dispatchEvent(new Event("pageshow")));
+
+    const recovered = JSON.parse(
+      localStorage.getItem(STORAGE_KEY) ?? "{}",
+    ).activeGame;
+    expect(recovered.clock.elapsedSeconds).toBe(301);
+    expect(recovered.clock.lastStartedAt).toBe(Date.now());
+    expect(screen.getByLabelText("Substitution reminder")).toBeInTheDocument();
   });
 
   it("keeps the active-game timer live on team selection", () => {

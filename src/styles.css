@@ -259,10 +259,90 @@ h3 {
   z-index: 20;
 }
 
-.theme-toggle {
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.theme-toggle,
+.settings-button {
   min-width: 44px;
   min-height: 44px;
   color: var(--ink);
+}
+
+.settings-menu {
+  --control-checked-bgColor-rest: var(--turf-fill);
+  --control-checked-bgColor-hover: var(--turf-fill-hover);
+  --control-checked-bgColor-active: var(--turf-fill-hover);
+  --control-checked-borderColor-rest: var(--turf-fill);
+  --controlKnob-borderColor-checked: var(--turf-fill);
+  z-index: 90;
+  width: min(22rem, calc(100vw - 1.5rem));
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--control-border);
+  border-radius: 0;
+  box-shadow: var(--shadow);
+  font-family: inherit;
+}
+
+.settings-menu-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-menu-header strong {
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.settings-menu-header small {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.settings-options {
+  display: grid;
+}
+
+.settings-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-option:last-child {
+  border-bottom: 0;
+}
+
+.settings-option > span,
+.settings-option strong,
+.settings-option small {
+  display: block;
+}
+
+.settings-option strong {
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+.settings-option small {
+  margin-top: 0.28rem;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.4;
 }
 
 .brand {

@@ -48,6 +48,8 @@ npm run build
 
 An interrupted active game reopens automatically. The live timestamp and accumulated time recover from the last persisted state.
 
+The header settings menu can keep the screen awake during an active visible game and play a chime plus supported vibration when a substitution reminder becomes due. Both features are optional and depend on browser/device capabilities.
+
 ## Data
 
-Game data is stored in `localStorage` under `sideline-state-v1`, and the device-local color mode is stored under `sideline-color-mode`. There is no backend or authentication. Clearing browser site data removes all Sideline data and preferences.
+Game data is stored in `localStorage` under `sideline-state-v1`. Device-local color mode is stored under `sideline-color-mode`, and game-day settings are stored under `sideline-device-preferences`. There is no backend or authentication. Clearing browser site data removes all Sideline data and preferences.

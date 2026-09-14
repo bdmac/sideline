@@ -19,9 +19,11 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 - Starter assignment uses the selected formation as a tactics board. Tapping a position opens the present-player picker; choosing an assigned player swaps positions, while choosing a bench player replaces the current starter. Manual player choices and the Starting bench list are alphabetical for quick scanning. Auto-fill preserves manually assigned starters and optimizes the remaining present players only for open positions. It is disabled when the board is already full.
 - Formations include an explicit goalkeeper plus the correct number of field positions.
 - The game clock can pause and resume. Persisted timestamps allow safe recovery after refresh or relaunch.
+- Returning to a running game after Sideline was hidden immediately materializes elapsed time, persists the recovered clock, honors period boundaries, and surfaces an overdue substitution reminder without waiting for the next ordinary timer tick.
 - Player field and bench time accrue only while the game clock runs.
 - Fair substitution suggestions prioritize players with the least total playing time coming in and players with the most playing time going out, so late arrivals are not penalized for having a short current bench stint. When several outgoing candidates are reasonably close in playing time, the planner spreads changes across defensive, midfield, and attacking lines and avoids replacing an entire line at once when possible. A substantial playing-time gap still takes precedence over line continuity.
 - During live play, a non-modal reminder appears when too much scheduled game time passes without an executed substitution: 12.5% for U8 (5 minutes in a 40-minute game) and 25% for U12 (15 minutes in a 60-minute game). Executing an OUT/IN substitution resets the hidden game-time tracker; an automatic bench replacement for a departing player also resets it because the on-field personnel changed. Merely queueing a plan does not reset the timer, though the queued plan suppresses the reminder. Pauses do not advance it, and period-break actions take precedence.
+- Device-local game-day settings optionally keep the screen awake while an active game is visible and play one two-note chime per newly due substitution reminder, with vibration where the browser supports it. Wake lock is a progressive enhancement: it releases when Sideline is hidden, reacquires on return, reports failure rather than pretending to be active, and remains disabled on unsupported browsers.
 - Substitution reminders are team-level and do not require a goalkeeper change. Existing goalkeeper-reserve safeguards and coach overrides continue to control goalkeeper rotation without a second competing reminder timer.
 - Goalkeeper-capable players use a protected rotation: when possible, one goalkeeper remains in reserve rather than being suggested at an outfield position. With three or more goalkeeper options, one may play outfield while another remains reserved. Coaches may override every suggestion.
 - Substitution planning defaults to the full recommended rotation after applying the goalkeeper reserve, capped by the number of players on the field. Changing the requested swap count re-optimizes untouched suggestions; once the coach has selected or queued specific pairs, count changes preserve those choices and add or trim only the surrounding suggestions.
@@ -79,7 +81,7 @@ Auto-fill maximizes these preferences deterministically. Substitution planning c
 
 ## Data and privacy
 
-All data is stored in browser `localStorage`. Roster and game state use a versioned key; the local light/dark appearance choice uses a separate preference key. Sideline does not transmit names or game data. Clearing browser site data removes the data and appearance preference.
+All data is stored in browser `localStorage`. Roster and game state use a versioned key; light/dark appearance and game-day device preferences use separate keys. Sideline does not transmit names or game data. Clearing browser site data removes the data and preferences.
 
 ## MVP boundaries
 

@@ -5,6 +5,7 @@ import {
   Dialog,
   IconButton,
   Label,
+  ToggleSwitch,
   type DialogWidth,
 } from "@primer/react";
 import { ThemeProvider } from "@primer/react/next";
@@ -27,6 +28,7 @@ import {
   Pencil,
   Play,
   RotateCcw,
+  Settings,
   Square,
   Sun,
   Trash2,
@@ -79,6 +81,16 @@ import {
   validateGame,
   validateSubstitutionPairs,
 } from "./domain";
+import {
+  type DevicePreferences,
+  loadDevicePreferences,
+  saveDevicePreferences,
+} from "./devicePreferences";
+import {
+  playSubstitutionAlert,
+  prepareSubstitutionAlert,
+  supportsSubstitutionAlert,
+} from "./gameAlert";
 import { loadState, saveState } from "./storage";
 import { type ColorMode, loadColorMode, saveColorMode } from "./theme";
 import type {
@@ -253,10 +265,127 @@ const isIos = () =>
   /iphone|ipad|ipod/i.test(navigator.userAgent) ||
   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
+type WakeLockSentinelLike = {
+  released: boolean;
+  release: () => Promise<void>;
+  addEventListener: (type: "release", listener: () => void) => void;
+};
+
+type WakeLockNavigator = Navigator & {
+  wakeLock?: {
+    request: (type: "screen") => Promise<WakeLockSentinelLike>;
+  };
+};
+
+type WakeLockStatus = "unsupported" | "inactive" | "active" | "error";
+
+function SettingsMenu({
+  preferences,
+  wakeLockSupported,
+  wakeLockStatus,
+  substitutionAlertSupported,
+  onPreferenceChange,
+}: {
+  preferences: DevicePreferences;
+  wakeLockSupported: boolean;
+  wakeLockStatus: WakeLockStatus;
+  substitutionAlertSupported: boolean;
+  onPreferenceChange: (
+    preference: keyof DevicePreferences,
+    enabled: boolean,
+  ) => void;
+}) {
+  const wakeLockStatusText = !wakeLockSupported
+    ? "Not supported by this browser."
+    : preferences.keepScreenAwake && wakeLockStatus === "active"
+      ? "Active for the current game."
+      : preferences.keepScreenAwake && wakeLockStatus === "error"
+        ? "Enabled, but the device could not keep the screen awake."
+        : "Turns on automatically while a game is active.";
+
+  return (
+    <ActionMenu>
+      <ActionMenu.Anchor>
+        <IconButton
+          className="settings-button"
+          variant="invisible"
+          size="large"
+          icon={Settings}
+          aria-label="Settings"
+        />
+      </ActionMenu.Anchor>
+      <ActionMenu.Overlay
+        className="settings-menu"
+        align="end"
+        side="outside-bottom"
+        displayInViewport
+        width="medium"
+      >
+        <div className="settings-menu-header">
+          <strong>Game-day settings</strong>
+          <small>Saved on this device</small>
+        </div>
+        <div className="settings-options">
+          <div className="settings-option">
+            <span>
+              <strong id="keep-screen-awake-label">Keep screen awake</strong>
+              <small id="keep-screen-awake-description">
+                Prevents auto-lock while Sideline is visible during an active
+                game. {wakeLockStatusText}
+              </small>
+            </span>
+            <ToggleSwitch
+              checked={preferences.keepScreenAwake}
+              disabled={!wakeLockSupported}
+              onChange={(enabled) =>
+                onPreferenceChange("keepScreenAwake", enabled)
+              }
+              aria-labelledby="keep-screen-awake-label"
+              aria-describedby="keep-screen-awake-description"
+            />
+          </div>
+          <div className="settings-option">
+            <span>
+              <strong id="substitution-alerts-label">
+                Substitution alerts
+              </strong>
+              <small id="substitution-alerts-description">
+                Plays a two-note chime when a rotation reminder becomes due,
+                plus vibration when supported.
+                {!substitutionAlertSupported &&
+                  " Not supported by this browser."}
+              </small>
+            </span>
+            <ToggleSwitch
+              checked={preferences.substitutionAlerts}
+              disabled={!substitutionAlertSupported}
+              onChange={(enabled) =>
+                onPreferenceChange("substitutionAlerts", enabled)
+              }
+              aria-labelledby="substitution-alerts-label"
+              aria-describedby="substitution-alerts-description"
+            />
+          </div>
+        </div>
+      </ActionMenu.Overlay>
+    </ActionMenu>
+  );
+}
+
 function App() {
   const [state, setState] = useState<AppState>(() => loadState());
   const [colorMode, setColorMode] = useState<ColorMode>(() => loadColorMode());
+  const [devicePreferences, setDevicePreferences] = useState<DevicePreferences>(
+    () => loadDevicePreferences(),
+  );
+  const wakeLockSupported = Boolean((navigator as WakeLockNavigator).wakeLock);
+  const substitutionAlertSupported = supportsSubstitutionAlert();
+  const [wakeLockStatus, setWakeLockStatus] = useState<WakeLockStatus>(
+    wakeLockSupported ? "inactive" : "unsupported",
+  );
+  const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
   const stateRef = useRef(state);
+  const hasActiveGame = Boolean(state.activeGame);
   const [screen, setScreen] = useState<Screen>(() =>
     state.activeGame ? { name: "live" } : { name: "home" },
   );
@@ -304,6 +433,80 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const manager = (navigator as WakeLockNavigator).wakeLock;
+    if (!manager) {
+      setWakeLockStatus("unsupported");
+      return;
+    }
+
+    let disposed = false;
+    const releaseCurrent = async () => {
+      const current = wakeLockRef.current;
+      wakeLockRef.current = null;
+      if (current && !current.released) {
+        try {
+          await current.release();
+        } catch (error) {
+          console.error(
+            "Sideline could not release the screen wake lock.",
+            error,
+          );
+        }
+      }
+      if (!disposed) setWakeLockStatus("inactive");
+    };
+    const acquire = async () => {
+      if (
+        disposed ||
+        !devicePreferences.keepScreenAwake ||
+        !hasActiveGame ||
+        document.visibilityState !== "visible"
+      ) {
+        return;
+      }
+      if (wakeLockRef.current && !wakeLockRef.current.released) {
+        setWakeLockStatus("active");
+        return;
+      }
+      try {
+        const sentinel = await manager.request("screen");
+        if (disposed) {
+          await sentinel.release();
+          return;
+        }
+        wakeLockRef.current = sentinel;
+        setWakeLockStatus("active");
+        sentinel.addEventListener("release", () => {
+          if (wakeLockRef.current === sentinel) {
+            wakeLockRef.current = null;
+            setWakeLockStatus("inactive");
+          }
+        });
+      } catch (error) {
+        console.error("Sideline could not keep the screen awake.", error);
+        if (!disposed) setWakeLockStatus("error");
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void acquire();
+      }
+    };
+
+    if (devicePreferences.keepScreenAwake && hasActiveGame) {
+      void acquire();
+    } else {
+      void releaseCurrent();
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      void releaseCurrent();
+    };
+  }, [devicePreferences.keepScreenAwake, hasActiveGame]);
+
+  useEffect(() => {
     const captureInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
@@ -342,6 +545,17 @@ function App() {
   const activeTeam = state.activeGame
     ? teamWithGameGuests(state.teams[state.activeGame.teamId], state.activeGame)
     : null;
+  const updateDevicePreference = (
+    preference: keyof DevicePreferences,
+    enabled: boolean,
+  ) => {
+    const next = { ...devicePreferences, [preference]: enabled };
+    if (preference === "substitutionAlerts" && enabled) {
+      void prepareSubstitutionAlert();
+    }
+    setDevicePreferences(next);
+    saveDevicePreferences(next);
+  };
 
   return (
     <ThemeProvider
@@ -363,18 +577,29 @@ function App() {
             <SidelineMark />
             <span>Sideline</span>
           </button>
-          <IconButton
-            className="theme-toggle"
-            variant="invisible"
-            size="large"
-            icon={colorMode === "dark" ? Sun : Moon}
-            aria-label={
-              colorMode === "dark" ? "Use light mode" : "Use dark mode"
-            }
-            onClick={() =>
-              setColorMode((current) => (current === "dark" ? "light" : "dark"))
-            }
-          />
+          <div className="topbar-actions">
+            <IconButton
+              className="theme-toggle"
+              variant="invisible"
+              size="large"
+              icon={colorMode === "dark" ? Sun : Moon}
+              aria-label={
+                colorMode === "dark" ? "Use light mode" : "Use dark mode"
+              }
+              onClick={() =>
+                setColorMode((current) =>
+                  current === "dark" ? "light" : "dark",
+                )
+              }
+            />
+            <SettingsMenu
+              preferences={devicePreferences}
+              wakeLockSupported={wakeLockSupported}
+              wakeLockStatus={wakeLockStatus}
+              substitutionAlertSupported={substitutionAlertSupported}
+              onPreferenceChange={updateDevicePreference}
+            />
+          </div>
         </header>
 
         <main id="main">
@@ -407,6 +632,7 @@ function App() {
             <LiveGameScreen
               game={state.activeGame}
               team={activeTeam}
+              substitutionAlertsEnabled={devicePreferences.substitutionAlerts}
               onChange={(game) =>
                 commitState((current) => ({ ...current, activeGame: game }))
               }
@@ -1190,11 +1416,13 @@ function SetupScreen({
 function LiveGameScreen({
   game,
   team,
+  substitutionAlertsEnabled,
   onChange,
   onEnd,
 }: {
   game: ActiveGame;
   team: Team;
+  substitutionAlertsEnabled: boolean;
   onChange: (game: ActiveGame) => void;
   onEnd: () => void;
 }) {
@@ -1233,6 +1461,7 @@ function LiveGameScreen({
   const [endConfirm, setEndConfirm] = useState(false);
   const [endedGame, setEndedGame] = useState<ActiveGame | null>(null);
   const [error, setError] = useState("");
+  const alertedReminderCycle = useRef<string | null>(null);
   const formation = getFormation(game.formationId);
 
   useEffect(() => {
@@ -1244,6 +1473,27 @@ function LiveGameScreen({
     window.addEventListener("scroll", updateHeader, { passive: true });
     return () => window.removeEventListener("scroll", updateHeader);
   }, []);
+
+  useEffect(() => {
+    const recoverVisibleGame = () => {
+      if (
+        document.visibilityState !== "visible" ||
+        !game.clock.running ||
+        game.clock.lastStartedAt === null
+      ) {
+        return;
+      }
+      const recovered = materializeGame(game, Date.now());
+      if (recovered !== game) onChange(recovered);
+    };
+
+    document.addEventListener("visibilitychange", recoverVisibleGame);
+    window.addEventListener("pageshow", recoverVisibleGame);
+    return () => {
+      document.removeEventListener("visibilitychange", recoverVisibleGame);
+      window.removeEventListener("pageshow", recoverVisibleGame);
+    };
+  }, [game, onChange]);
 
   const displayed = materializeGame(game, now);
   const fieldIds = Object.values(game.assignments);
@@ -1276,6 +1526,14 @@ function LiveGameScreen({
     game.benchIds.length > 0 &&
     queuedPairs.length === 0 &&
     !periodBreak;
+  const latestRotationEvent = game.history
+    .filter(
+      (event) =>
+        event.type === "substitution" ||
+        (event.type === "unavailable" && event.pairs.length > 0),
+    )
+    .at(-1);
+  const reminderCycleKey = `${game.id}:${latestRotationEvent?.id ?? "start"}`;
   const compactHeaderInteractive = headerCollapseProgress > 0.8;
   const clockActionLabel = game.clock.running
     ? "Pause"
@@ -1290,6 +1548,24 @@ function LiveGameScreen({
       onChange(displayed);
     }
   }, [displayed, game.clock.running, onChange, periodBreak]);
+
+  useEffect(() => {
+    if (
+      !substitutionAlertsEnabled ||
+      !showSubstitutionReminder ||
+      endedGame ||
+      alertedReminderCycle.current === reminderCycleKey
+    ) {
+      return;
+    }
+    alertedReminderCycle.current = reminderCycleKey;
+    void playSubstitutionAlert();
+  }, [
+    endedGame,
+    reminderCycleKey,
+    showSubstitutionReminder,
+    substitutionAlertsEnabled,
+  ]);
 
   const safeChange = (change: () => ActiveGame) => {
     try {
