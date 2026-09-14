@@ -1477,6 +1477,52 @@ export const addGuestPlayer = (
   return next;
 };
 
+export const addGuestPlayerToBench = (
+  game: ActiveGame,
+  player: Player,
+  sideSize: number,
+  now = Date.now(),
+): ActiveGame => {
+  const current = materializeGame(game, now);
+  if (!player.guest) throw new Error("Guest player is not marked as a guest");
+  if (
+    current.presentIds.includes(player.id) ||
+    current.guestPlayers?.some((guest) => guest.id === player.id)
+  ) {
+    throw new Error("That guest player is already in the game");
+  }
+
+  const next: ActiveGame = {
+    ...current,
+    guestPlayers: [...(current.guestPlayers ?? []), { ...player }],
+    presentIds: [...current.presentIds, player.id],
+    benchIds: [...current.benchIds, player.id],
+    totals: {
+      ...current.totals,
+      [player.id]: { fieldSeconds: 0, benchSeconds: 0 },
+    },
+    history: [
+      ...current.history,
+      {
+        id: `guest-bench-${now}`,
+        type: "available",
+        atSeconds: current.clock.elapsedSeconds,
+        pairs: [],
+        playerId: player.id,
+        note: "Guest player joined the bench",
+        beforeAssignments: current.assignments,
+        beforeBenchIds: current.benchIds,
+        beforeUnavailableIds: current.unavailableIds,
+        beforePresentIds: current.presentIds,
+        beforeGuestPlayers: current.guestPlayers ?? [],
+      },
+    ],
+  };
+  const errors = validateGame(next, sideSize);
+  if (errors.length) throw new Error(errors.join(". "));
+  return next;
+};
+
 export const formatDuration = (seconds: number) => {
   const safe = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(safe / 60);

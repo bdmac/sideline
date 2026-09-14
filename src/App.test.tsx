@@ -271,10 +271,19 @@ describe("Sideline app", () => {
       screen.queryByRole("button", { name: /edit roster/i }),
     ).not.toBeInTheDocument();
     const simon = screen.getByRole("button", { name: /Simon Present/i });
+    expect(simon.querySelector(".attendance-player-number")).toHaveTextContent(
+      "#10",
+    );
+    expect(simon.querySelector(".attendance-player-number")).toHaveAttribute(
+      "data-variant",
+      "success",
+    );
     fireEvent.click(simon);
+    const absentSimon = screen.getByRole("button", { name: /Simon Absent/i });
+    expect(absentSimon).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Simon Absent/i }),
-    ).toBeInTheDocument();
+      absentSimon.querySelector(".attendance-player-number"),
+    ).toHaveAttribute("data-variant", "danger");
   });
 
   it("moves through focused setup steps while preserving selections", () => {
@@ -349,8 +358,13 @@ describe("Sideline app", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     expect(
-      screen.queryByRole("button", { name: "Add guest player" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Add guest player" }),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("button", { name: "Add guest player" })
+        .closest(".guest-attendance-section"),
+    ).toBeInTheDocument();
 
     ["Simon", "Noah", "Maddox", "Ollie", "Malik"].forEach((name) => {
       fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
@@ -369,22 +383,25 @@ describe("Sideline app", () => {
       screen
         .getByRole("button", { name: "Add guest player" })
         .closest('[role="alert"]'),
-    ).toBe(screen.getByRole("alert"));
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add guest player" }),
+    ).toHaveClass("guest-add-button");
+    expect(
+      screen.getByRole("button", { name: "Add guest player" }),
+    ).toHaveAttribute("data-variant", "default");
 
     fireEvent.click(screen.getByRole("button", { name: "Simon Absent" }));
     expect(container.querySelector(".attendance-count.short")).toBeNull();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Add guest player" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Add guest player" }),
+    ).toBeInTheDocument();
   });
 
   it("adds a guest player for one game without changing the team roster", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    ["Simon", "Noah", "Maddox", "Ollie", "Malik"].forEach((name) => {
-      fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
-    });
 
     fireEvent.click(screen.getByRole("button", { name: "Add guest player" }));
     const guestDialog = screen.getByRole("dialog", {
@@ -400,11 +417,29 @@ describe("Sideline app", () => {
       within(guestDialog).getByRole("button", { name: "Add guest" }),
     );
 
+    const guestRow = screen.getByRole("group", {
+      name: "Borrowed Alex, guest player",
+    });
+    expect(guestRow).toHaveTextContent("Borrowed Alex");
+    expect(guestRow).toHaveTextContent("Guest · Present");
     expect(
-      screen.getByRole("button", {
+      guestRow.querySelector(".attendance-player-number"),
+    ).toHaveTextContent("#31");
+    expect(
+      within(guestRow).queryByRole("button", {
         name: /Borrowed Alex Guest · Present/,
       }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Guest players" }),
     ).toBeInTheDocument();
+    expect(guestRow.closest(".attendance-grid")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove guest Borrowed Alex" }),
+    ).toHaveClass("guest-remove-button");
+    expect(
+      screen.getByRole("button", { name: "Remove guest Borrowed Alex" }),
+    ).toHaveAttribute("data-variant", "invisible");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
@@ -661,7 +696,7 @@ describe("Sideline app", () => {
     const firstRender = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Start clock" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start Q1" }));
 
     const savedGame = JSON.parse(
       window.localStorage.getItem(STORAGE_KEY) ?? "{}",
@@ -1544,7 +1579,7 @@ describe("Sideline app", () => {
 
     const goalButton = screen.getByRole("button", { name: "Record a goal" });
     expect(goalButton).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Start clock" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start Q1" }));
     expect(goalButton).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Record a goal" }));
@@ -1636,6 +1671,9 @@ describe("Sideline app", () => {
       within(compactHeader as HTMLElement).getByText("40:00 left"),
     ).toBeInTheDocument();
     expect(
+      within(compactHeader as HTMLElement).getByText("Q1 / 4"),
+    ).toBeInTheDocument();
+    expect(
       within(compactHeader as HTMLElement).getByRole("button", {
         name: "End game",
       }),
@@ -1649,13 +1687,49 @@ describe("Sideline app", () => {
 
     expect(
       container.querySelector(".mobile-control-dock .clock-button"),
-    ).toHaveAccessibleName("Start clock");
+    ).toHaveAccessibleName("Start Q1");
     expect(
       container.querySelector(".mobile-control-dock .undo-button"),
     ).toHaveAccessibleName("Undo last change");
     expect(
       screen.queryByRole("button", { name: "Positions" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("adds a game-only guest directly to the live bench", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add guest player to bench" }),
+    );
+    const guestDialog = screen.getByRole("dialog", {
+      name: "Add guest player",
+    });
+    fireEvent.change(within(guestDialog).getByLabelText("Player name"), {
+      target: { value: "Borrowed Casey" },
+    });
+    fireEvent.click(
+      within(guestDialog).getByRole("button", { name: "Add guest" }),
+    );
+
+    expect(screen.getByRole("tab", { name: "Bench 5" })).toBeInTheDocument();
+    expect(screen.getByText("Borrowed Casey")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo last change" }));
+    expect(screen.getByRole("tab", { name: "Bench 4" })).toBeInTheDocument();
+    expect(screen.queryByText("Borrowed Casey")).not.toBeInTheDocument();
+  });
+
+  it("labels the initial U12 clock action as the first half", () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByText("Fireballers"));
+    startGame();
+
+    expect(
+      container.querySelector(".mobile-control-dock .clock-button"),
+    ).toHaveAccessibleName("Start H1");
   });
 
   it("prioritizes the below-pace warning over total bench time", () => {

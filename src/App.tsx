@@ -50,6 +50,7 @@ import {
 } from "react";
 import {
   addGuestPlayer,
+  addGuestPlayerToBench,
   applySubstitutions,
   assignPlayerToPosition,
   assignPlayersByPreference,
@@ -1107,6 +1108,43 @@ function SetupScreen({
     onStart(game);
   };
 
+  const teamPlayers = activePlayers.filter((player) => !player.guest);
+  const activeGuestPlayers = activePlayers.filter((player) => player.guest);
+  const renderAttendanceButton = (player: Player) => {
+    const present = presentIds.includes(player.id);
+    return (
+      <button
+        className={`attendance-button ${present ? "selected" : ""}`}
+        type="button"
+        key={player.id}
+        aria-pressed={present}
+        onClick={() => toggleAttendance(player.id)}
+      >
+        <span className="attendance-check" aria-hidden="true">
+          {present ? <Check size={17} /> : <X size={17} />}
+        </span>
+        <span>
+          <span className="attendance-player-heading">
+            <strong>{player.name}</strong>
+            {player.number && (
+              <Label
+                className="attendance-player-number"
+                variant={present ? "success" : "danger"}
+                aria-hidden="true"
+              >
+                #{player.number}
+              </Label>
+            )}
+          </span>
+          <small>
+            {player.guest ? "Guest · " : ""}
+            {present ? "Present" : "Absent"}
+          </small>
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="page setup-page">
       <PageBack onClick={onBack}>Team selection</PageBack>
@@ -1159,64 +1197,78 @@ function SetupScreen({
                   Short {attendanceShortfall}{" "}
                   {attendanceShortfall === 1 ? "player" : "players"}:{" "}
                   {presentIds.length} present for this {team.sideSize}v
-                  {team.sideSize} game. Add a guest or prepare to play
-                  short-sided.
+                  {team.sideSize} game. Add a guest or prepare to have very
+                  tired kids playing short-sided.
                 </span>
-              </div>
-              <div className="attendance-support-actions">
-                <Button
-                  className="attendance-guest-action"
-                  variant="danger"
-                  size="large"
-                  leadingVisual={CirclePlus}
-                  onClick={() => setGuestPlayerOpen(true)}
-                >
-                  Add guest player
-                </Button>
-                <small>Guest players are saved only with this game.</small>
               </div>
             </div>
           )}
           <div className="attendance-grid">
-            {activePlayers.map((player) => {
-              const present = presentIds.includes(player.id);
-              const attendanceButton = (
-                <button
-                  className={`attendance-button ${present ? "selected" : ""}`}
-                  type="button"
-                  key={player.id}
-                  aria-pressed={present}
-                  onClick={() => toggleAttendance(player.id)}
-                >
-                  <span className="attendance-check" aria-hidden="true">
-                    {present ? <Check size={17} /> : <X size={17} />}
-                  </span>
-                  <span>
-                    <strong>{player.name}</strong>
-                    <small>
-                      {player.guest ? "Guest · " : ""}
-                      {present ? "Present" : "Absent"}
-                    </small>
-                  </span>
-                </button>
-              );
-              return player.guest ? (
-                <div className="guest-attendance-row" key={player.id}>
-                  {attendanceButton}
-                  <IconButton
-                    className="icon-button"
-                    variant="default"
-                    size="large"
-                    icon={Trash2}
-                    onClick={() => removeGuestPlayer(player.id)}
-                    aria-label={`Remove guest ${player.name}`}
-                  />
-                </div>
-              ) : (
-                attendanceButton
-              );
-            })}
+            {teamPlayers.map((player) => renderAttendanceButton(player))}
           </div>
+          <section
+            className="guest-attendance-section"
+            aria-labelledby="guest-attendance-title"
+          >
+            <div className="section-title">
+              <h3 id="guest-attendance-title">Guest players</h3>
+              <div className="guest-attendance-meta">
+                <span>
+                  {activeGuestPlayers.length}{" "}
+                  {activeGuestPlayers.length === 1 ? "guest" : "guests"}
+                </span>
+                <IconButton
+                  className="guest-add-button"
+                  variant="default"
+                  size="large"
+                  icon={CirclePlus}
+                  onClick={() => setGuestPlayerOpen(true)}
+                  aria-label="Add guest player"
+                />
+              </div>
+            </div>
+            {activeGuestPlayers.length > 0 && (
+              <div className="guest-attendance-list">
+                {activeGuestPlayers.map((player) => (
+                  <div
+                    className="guest-attendance-row"
+                    role="group"
+                    aria-label={`${player.name}, guest player`}
+                    key={player.id}
+                  >
+                    <div className="guest-attendance-player">
+                      <span className="attendance-check" aria-hidden="true">
+                        <Check size={17} />
+                      </span>
+                      <span>
+                        <span className="attendance-player-heading">
+                          <strong>{player.name}</strong>
+                          {player.number && (
+                            <Label
+                              className="attendance-player-number"
+                              variant="success"
+                              aria-hidden="true"
+                            >
+                              #{player.number}
+                            </Label>
+                          )}
+                        </span>
+                        <small>Guest · Present</small>
+                      </span>
+                    </div>
+                    <IconButton
+                      className="guest-remove-button"
+                      variant="invisible"
+                      size="large"
+                      icon={Trash2}
+                      onClick={() => removeGuestPlayer(player.id)}
+                      aria-label={`Remove guest ${player.name}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </section>
       )}
 
@@ -1437,6 +1489,7 @@ function LiveGameScreen({
   const [goalScorerOpen, setGoalScorerOpen] = useState(false);
   const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
   const [guestPositionId, setGuestPositionId] = useState<string | null>(null);
+  const [guestBenchOpen, setGuestBenchOpen] = useState(false);
   const [benchQueuePlayerId, setBenchQueuePlayerId] = useState<string | null>(
     null,
   );
@@ -1565,7 +1618,7 @@ function LiveGameScreen({
         }`
       : periodBreak?.final
         ? "Resume"
-        : "Start clock";
+        : `Start ${period.count === 4 ? "Q1" : "H1"}`;
 
   useEffect(() => {
     if (game.clock.running && !displayed.clock.running && periodBreak) {
@@ -1788,6 +1841,13 @@ function LiveGameScreen({
         aria-hidden={!compactHeaderInteractive}
       >
         <strong className="compact-match-team">{team.name}</strong>
+        <span
+          className="compact-match-period"
+          aria-label={`${period.label} ${period.current} of ${period.count}`}
+        >
+          {period.count === 4 ? "Q" : "H"}
+          {period.current} / {period.count}
+        </span>
         <span className="compact-match-clock">
           <strong>{formatDuration(displayed.clock.elapsedSeconds)}</strong>
           <small>{formatDuration(remaining)} left</small>
@@ -2029,55 +2089,67 @@ function LiveGameScreen({
               </strong>
             </div>
           )}
-          <div
-            className="roster-tabs"
-            role="tablist"
-            aria-label="Player status"
-            onKeyDown={(event) => {
-              let nextView: "field" | "bench" | null = null;
-              if (event.key === "ArrowRight") {
-                nextView = rosterView === "bench" ? "field" : "bench";
-              } else if (event.key === "ArrowLeft") {
-                nextView = rosterView === "field" ? "bench" : "field";
-              } else if (event.key === "Home") {
-                nextView = "bench";
-              } else if (event.key === "End") {
-                nextView = "field";
-              }
-              if (nextView) {
-                event.preventDefault();
-                moveRosterTabFocus(nextView);
-              }
-            }}
-          >
-            <button
-              id="roster-bench-tab"
-              type="button"
-              role="tab"
-              aria-selected={rosterView === "bench"}
-              aria-controls="roster-status-panel"
-              tabIndex={rosterView === "bench" ? 0 : -1}
-              onClick={() => setRosterView("bench")}
+          <div className="roster-tabs-shell">
+            <div
+              className="roster-tabs"
+              role="tablist"
+              aria-label="Player status"
+              onKeyDown={(event) => {
+                let nextView: "field" | "bench" | null = null;
+                if (event.key === "ArrowRight") {
+                  nextView = rosterView === "bench" ? "field" : "bench";
+                } else if (event.key === "ArrowLeft") {
+                  nextView = rosterView === "field" ? "bench" : "field";
+                } else if (event.key === "Home") {
+                  nextView = "bench";
+                } else if (event.key === "End") {
+                  nextView = "field";
+                }
+                if (nextView) {
+                  event.preventDefault();
+                  moveRosterTabFocus(nextView);
+                }
+              }}
             >
-              <span className="roster-tab-label">
-                Bench{" "}
-                <span className="roster-tab-count">{game.benchIds.length}</span>
-              </span>
-            </button>
-            <button
-              id="roster-field-tab"
-              type="button"
-              role="tab"
-              aria-selected={rosterView === "field"}
-              aria-controls="roster-status-panel"
-              tabIndex={rosterView === "field" ? 0 : -1}
-              onClick={() => setRosterView("field")}
-            >
-              <span className="roster-tab-label">
-                On field{" "}
-                <span className="roster-tab-count">{fieldIds.length}</span>
-              </span>
-            </button>
+              <button
+                id="roster-bench-tab"
+                type="button"
+                role="tab"
+                aria-selected={rosterView === "bench"}
+                aria-controls="roster-status-panel"
+                tabIndex={rosterView === "bench" ? 0 : -1}
+                onClick={() => setRosterView("bench")}
+              >
+                <span className="roster-tab-label">
+                  Bench{" "}
+                  <span className="roster-tab-count">
+                    {game.benchIds.length}
+                  </span>
+                </span>
+              </button>
+              <button
+                id="roster-field-tab"
+                type="button"
+                role="tab"
+                aria-selected={rosterView === "field"}
+                aria-controls="roster-status-panel"
+                tabIndex={rosterView === "field" ? 0 : -1}
+                onClick={() => setRosterView("field")}
+              >
+                <span className="roster-tab-label">
+                  On field{" "}
+                  <span className="roster-tab-count">{fieldIds.length}</span>
+                </span>
+              </button>
+            </div>
+            <IconButton
+              className="live-guest-add-button"
+              variant="invisible"
+              size="large"
+              icon={CirclePlus}
+              onClick={() => setGuestBenchOpen(true)}
+              aria-label="Add guest player to bench"
+            />
           </div>
 
           <div
@@ -2404,6 +2476,27 @@ function LiveGameScreen({
               )
             ) {
               setGuestPositionId(null);
+            }
+          }}
+        />
+      )}
+      {guestBenchOpen && (
+        <GuestPlayerSheet
+          onClose={() => setGuestBenchOpen(false)}
+          onAdd={(name, number) => {
+            const guest = buildGuestPlayer(
+              team.id,
+              name,
+              number,
+              (game.guestPlayers?.length ?? 0) + 1,
+            );
+            if (
+              safeChange(() =>
+                addGuestPlayerToBench(game, guest, team.sideSize, Date.now()),
+              )
+            ) {
+              setGuestBenchOpen(false);
+              setRosterView("bench");
             }
           }}
         />

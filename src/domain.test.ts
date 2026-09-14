@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Player } from "./types";
 import {
   addGuestPlayer,
+  addGuestPlayerToBench,
   applySubstitutions,
   assignPlayerToPosition,
   assignPlayersByPreference,
@@ -442,6 +443,36 @@ describe("game summaries", () => {
       fieldSeconds: 0,
       benchSeconds: 0,
     });
+    expect(undoLastEvent(added, 6_000).guestPlayers).toEqual([]);
+  });
+
+  it("adds a guest to the bench and starts bench timing from arrival", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 5).map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    const guest = {
+      id: "guest-u8-bench",
+      name: "Borrowed Casey",
+      number: 44,
+      preferredRoles: ["forward", "defender"] as Player["preferredRoles"],
+      active: true,
+      guest: true,
+    };
+
+    const added = addGuestPlayerToBench(game, guest, team.sideSize, 6_000);
+    const later = materializeGame(added, 11_000);
+
+    expect(added.clock.elapsedSeconds).toBe(5);
+    expect(added.benchIds).toContain(guest.id);
+    expect(added.presentIds).toContain(guest.id);
+    expect(added.guestPlayers).toEqual([guest]);
+    expect(getCurrentBenchSeconds(later, guest.id)).toBe(5);
     expect(undoLastEvent(added, 6_000).guestPlayers).toEqual([]);
   });
 
