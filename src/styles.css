@@ -421,7 +421,7 @@ h3 {
 }
 
 .resume-strip small {
-  color: var(--ink);
+  color: var(--turf-dark);
   margin-top: 0.25rem;
 }
 
@@ -3662,7 +3662,7 @@ select:hover {
     align-items: center;
     justify-items: center;
     column-gap: 0;
-    color: var(--turf-dark);
+    color: var(--ink);
     font-size: 1.05rem;
     font-weight: 950;
     font-variant-numeric: tabular-nums;
