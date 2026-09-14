@@ -1910,7 +1910,7 @@ function LiveGameScreen({
           >
             <span>
               <small>
-                {period.label} {period.current} of {period.count}
+                {period.label} {period.current}
               </small>
               <strong>
                 {period.regulationReached
@@ -1942,9 +1942,9 @@ function LiveGameScreen({
           className={`compact-match-period ${
             periodBoundaryReached ? "added-time" : ""
           }`}
-          aria-label={`${period.label} ${period.current} of ${period.count}`}
+          aria-label={`${period.label} ${period.current}`}
         >
-          {periodShortLabel} / {period.count}
+          {periodShortLabel}
         </span>
         <span
           className={`compact-match-clock ${

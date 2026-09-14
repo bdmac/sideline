@@ -354,7 +354,7 @@ describe("Sideline app", () => {
     ).activeGame;
     expect(activeGame.durationSeconds).toBe(50 * 60);
     expect(activeGame.periodCount).toBe(2);
-    expect(screen.getByText("Half 1 of 2")).toBeInTheDocument();
+    expect(screen.getByText("Half 1")).toBeInTheDocument();
   });
 
   it("warns when attendance drops below the required side size", () => {
@@ -1882,7 +1882,7 @@ describe("Sideline app", () => {
       within(compactHeader as HTMLElement).queryByText("10:00 left"),
     ).not.toBeInTheDocument();
     expect(
-      within(compactHeader as HTMLElement).getByText("Q1 / 4"),
+      within(compactHeader as HTMLElement).getByText("Q1"),
     ).toBeInTheDocument();
     expect(
       within(compactHeader as HTMLElement).getByRole("button", {
@@ -2657,7 +2657,7 @@ describe("Sideline app", () => {
     });
     fireEvent.scroll(window);
     expect(
-      within(compactHeader as HTMLElement).getByText("Q1 / 4"),
+      within(compactHeader as HTMLElement).getByText("Q1"),
     ).toBeInTheDocument();
     expect(
       within(compactHeader as HTMLElement).getByText("10:04"),
@@ -2687,7 +2687,7 @@ describe("Sideline app", () => {
     fireEvent.click(
       within(breakBanner).getByRole("button", { name: "Start Quarter 2" }),
     );
-    expect(screen.getByText("Quarter 2 of 4")).toBeInTheDocument();
+    expect(screen.getByText("Quarter 2")).toBeInTheDocument();
     expect(screen.getByLabelText("Game clock, running")).toBeInTheDocument();
     expect(screen.getByLabelText("Game clock, running")).toHaveTextContent(
       "10:04",
