@@ -2537,7 +2537,12 @@ function LiveGameScreen({
         </aside>
       </div>
 
-      <GameLog game={game} formation={formation} team={team} />
+      <GameLog
+        game={game}
+        formation={formation}
+        team={team}
+        followsRoster={game.unavailableIds.length === 0}
+      />
 
       <div className="mobile-control-dock" aria-label="Game controls">
         <Button
@@ -5201,12 +5206,14 @@ function GameLog({
   team,
   onUndo,
   completed = false,
+  followsRoster = false,
 }: {
   game: ActiveGame;
   formation: ReturnType<typeof getFormation>;
   team: Team;
   onUndo?: () => void;
   completed?: boolean;
+  followsRoster?: boolean;
 }) {
   const periodLength = game.durationSeconds / game.periodCount;
   const periodLabel = game.periodCount === 4 ? "Quarter" : "Half";
@@ -5290,7 +5297,7 @@ function GameLog({
   };
 
   return (
-    <details className="game-log">
+    <details className={`game-log ${followsRoster ? "follows-roster" : ""}`}>
       <summary className="disclosure-summary">
         <span>
           <strong>Game timeline</strong>

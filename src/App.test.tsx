@@ -684,7 +684,9 @@ describe("Sideline app", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start Q1" }));
 
-    expect(screen.getByText("Game timeline")).toBeInTheDocument();
+    expect(screen.getByText("Game timeline").closest("details")).toHaveClass(
+      "follows-roster",
+    );
   });
 
   it("opens U12 setup directly without configurable duration or format", () => {

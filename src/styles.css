@@ -2115,6 +2115,10 @@ select:hover {
   padding: 0;
 }
 
+.game-log.follows-roster {
+  border-top: 0;
+}
+
 .disclosure-summary {
   min-height: 64px;
   display: flex;
