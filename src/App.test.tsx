@@ -669,22 +669,33 @@ describe("Sideline app", () => {
     expect(planner.querySelectorAll(".swap-player-status")).toHaveLength(6);
     expect(planner.querySelectorAll(".swap-transfer svg")).toHaveLength(3);
     expect(planner.querySelectorAll(".review-direction small")).toHaveLength(3);
-    const outgoingPlayers = within(planner).getAllByLabelText(
-      /outgoing player/,
-    ) as HTMLSelectElement[];
-    const incomingPlayers = within(planner).getAllByLabelText(
-      /incoming player/,
-    ) as HTMLSelectElement[];
-    expect(
-      outgoingPlayers[1].querySelector(
-        `option[value="${outgoingPlayers[0].value}"]`,
-      ),
-    ).toBeDisabled();
-    expect(
-      incomingPlayers[1].querySelector(
-        `option[value="${incomingPlayers[0].value}"]`,
-      ),
-    ).toBeDisabled();
+    const outgoingPlayers =
+      within(planner).getAllByLabelText(/outgoing player/);
+    const incomingPlayers =
+      within(planner).getAllByLabelText(/incoming player/);
+    const firstOutgoingName = outgoingPlayers[0].textContent?.trim() ?? "";
+    fireEvent.click(outgoingPlayers[1]);
+    const repeatedOutgoing = screen
+      .getAllByRole("menuitemradio")
+      .find((item) => item.textContent?.startsWith(firstOutgoingName));
+    expect(repeatedOutgoing).toHaveAttribute("data-inactive", "true");
+    expect(repeatedOutgoing).toHaveAttribute("aria-disabled", "true");
+    expect(repeatedOutgoing).toHaveAccessibleDescription(
+      expect.stringContaining("Planned to come off for Noah"),
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    const firstIncomingName = incomingPlayers[0].textContent?.trim() ?? "";
+    fireEvent.click(incomingPlayers[1]);
+    const repeatedIncoming = screen
+      .getAllByRole("menuitemradio")
+      .find((item) => item.textContent?.startsWith(firstIncomingName));
+    expect(repeatedIncoming).toHaveAttribute("data-inactive", "true");
+    expect(repeatedIncoming).toHaveAttribute("aria-disabled", "true");
+    expect(repeatedIncoming).toHaveAccessibleDescription(
+      expect.stringContaining("Planned to go on for Simon"),
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(
       screen.getByRole("button", { name: "Queue 3 swaps" }),
     ).toBeInTheDocument();
@@ -753,6 +764,65 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows rich player details and returns focus after choosing a swap player", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+
+    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    fireEvent.click(within(planner).getByRole("button", { name: "1" }));
+    const outgoingTrigger = within(planner).getByLabelText(
+      "Swap 1 outgoing player",
+    );
+    const originalPlayer = outgoingTrigger.textContent;
+    fireEvent.click(outgoingTrigger);
+
+    const options = screen.getAllByRole("menuitemradio");
+    expect(options[0]).toHaveAccessibleDescription(
+      expect.stringMatching(/\d+:\d+ playing · \d+:\d+ total/),
+    );
+    const replacement = options.find(
+      (option) =>
+        option.getAttribute("aria-checked") === "false" &&
+        !option.hasAttribute("data-inactive"),
+    );
+    expect(replacement).toBeDefined();
+    const replacementName =
+      replacement!.querySelector('[id$="--label"]')?.textContent ?? "";
+    fireEvent.click(replacement!);
+
+    expect(outgoingTrigger).toHaveTextContent(replacementName);
+    expect(outgoingTrigger).not.toHaveTextContent(originalPlayer ?? "");
+    expect(outgoingTrigger).toHaveFocus();
+  });
+
+  it("keeps planner chrome fixed around a scrollable dialog body", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+    const planButton = screen.getByRole("button", { name: "Plan subs" });
+    planButton.focus();
+    fireEvent.click(planButton);
+
+    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    expect(
+      planner.querySelector('[data-component="Dialog.Header"]'),
+    ).toBeInTheDocument();
+    expect(
+      planner.querySelector('[data-component="Dialog.Body"]'),
+    ).toBeInTheDocument();
+    expect(
+      planner.querySelector('[data-component="Dialog.Footer"]'),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(
+      screen.queryByRole("dialog", { name: "Plan substitutions" }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => expect(planButton).toHaveFocus());
+  });
+
   it("re-optimizes untouched suggestions when the swap count decreases", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;
@@ -781,46 +851,53 @@ describe("Sideline app", () => {
     const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
     fireEvent.click(within(planner).getByRole("button", { name: "2" }));
 
+    const playerName = (playerId: string) =>
+      team.roster.find((player) => player.id === playerId)!.name;
     expect(
       within(planner)
         .getAllByLabelText(/incoming player/)
-        .map((select) => (select as HTMLSelectElement).value),
-    ).toEqual(expect.arrayContaining([firstLeastPlayed, secondLeastPlayed]));
-    const outgoingOptions = Array.from(
-      (
-        within(planner).getAllByLabelText(
-          /outgoing player/,
-        )[0] as HTMLSelectElement
-      ).options,
-    ).map((option) => option.value);
+        .map((button) => button.textContent?.trim()),
+    ).toEqual(
+      expect.arrayContaining([
+        playerName(firstLeastPlayed),
+        playerName(secondLeastPlayed),
+      ]),
+    );
+
     const expectedOutgoingOptions = Object.values(game.assignments).sort(
       (playerA, playerB) =>
         game.totals[playerB].fieldSeconds - game.totals[playerA].fieldSeconds ||
-        team.roster
-          .find((player) => player.id === playerA)!
-          .name.localeCompare(
-            team.roster.find((player) => player.id === playerB)!.name,
-          ),
+        playerName(playerA).localeCompare(playerName(playerB)),
     );
-    expect(outgoingOptions).toEqual(expectedOutgoingOptions);
+    fireEvent.click(within(planner).getAllByLabelText(/outgoing player/)[0]);
+    expect(
+      screen
+        .getAllByRole("menuitemradio")
+        .map((item) =>
+          team.roster.find((player) =>
+            item.textContent?.startsWith(player.name),
+          ),
+        )
+        .map((player) => player?.id),
+    ).toEqual(expectedOutgoingOptions);
+    fireEvent.keyDown(document, { key: "Escape" });
 
-    const incomingOptions = Array.from(
-      (
-        within(planner).getAllByLabelText(
-          /incoming player/,
-        )[0] as HTMLSelectElement
-      ).options,
-    ).map((option) => option.value);
     const expectedIncomingOptions = [...game.benchIds].sort(
       (playerA, playerB) =>
         game.totals[playerA].fieldSeconds - game.totals[playerB].fieldSeconds ||
-        team.roster
-          .find((player) => player.id === playerA)!
-          .name.localeCompare(
-            team.roster.find((player) => player.id === playerB)!.name,
-          ),
+        playerName(playerA).localeCompare(playerName(playerB)),
     );
-    expect(incomingOptions).toEqual(expectedIncomingOptions);
+    fireEvent.click(within(planner).getAllByLabelText(/incoming player/)[0]);
+    expect(
+      screen
+        .getAllByRole("menuitemradio")
+        .map((item) =>
+          team.roster.find((player) =>
+            item.textContent?.startsWith(player.name),
+          ),
+        )
+        .map((player) => player?.id),
+    ).toEqual(expectedIncomingOptions);
   });
 
   it("keeps a queued plan accessible from the live game until cancelled", () => {
@@ -887,18 +964,18 @@ describe("Sideline app", () => {
     const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
     expect(
       within(planner).getByLabelText("Swap 1 outgoing player"),
-    ).toHaveDisplayValue(/Simon · CB/);
+    ).toHaveTextContent("Simon");
     expect(
       within(planner).getByLabelText("Swap 1 incoming player"),
-    ).toHaveDisplayValue("Dylan");
+    ).toHaveTextContent("Dylan");
     fireEvent.click(within(planner).getByRole("button", { name: "2" }));
     fireEvent.click(within(planner).getByRole("button", { name: "1" }));
     expect(
       within(planner).getByLabelText("Swap 1 outgoing player"),
-    ).toHaveDisplayValue(/Simon · CB/);
+    ).toHaveTextContent("Simon");
     expect(
       within(planner).getByLabelText("Swap 1 incoming player"),
-    ).toHaveDisplayValue("Dylan");
+    ).toHaveTextContent("Dylan");
     fireEvent.click(within(planner).getByRole("button", { name: "Close" }));
 
     expect(screen.getByText("Queued for CB")).toBeInTheDocument();
@@ -1504,7 +1581,9 @@ describe("Sideline app", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
     expect(
-      container.querySelector(".swap-row .swap-transfer svg"),
+      screen
+        .getByRole("dialog", { name: "Plan substitutions" })
+        .querySelector(".swap-row .swap-transfer svg"),
     ).toBeInTheDocument();
   });
 

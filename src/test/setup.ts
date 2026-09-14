@@ -43,6 +43,27 @@ Object.defineProperty(window, "scrollTo", {
   value: vi.fn(),
   configurable: true,
 });
+Object.defineProperty(window, "matchMedia", {
+  value: vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+  configurable: true,
+});
+Object.defineProperty(globalThis, "ResizeObserver", {
+  value: class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+  configurable: true,
+});
 
 afterEach(() => {
   cleanup();

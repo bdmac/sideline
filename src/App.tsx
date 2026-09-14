@@ -1,7 +1,9 @@
+import { ActionList, ActionMenu, Dialog } from "@primer/react";
 import {
   ArrowLeft,
   ArrowRightLeft,
   Check,
+  ChevronDown,
   ChevronRight,
   CircleAlert,
   CirclePlus,
@@ -3105,6 +3107,83 @@ function PlayerTimeRow({
   );
 }
 
+type PlayerActionMenuOption = {
+  id: string;
+  label: string;
+  description: string;
+  trailing?: string;
+  inactiveText?: string;
+};
+
+function PlayerActionMenu({
+  label,
+  value,
+  options,
+  align,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: PlayerActionMenuOption[];
+  align: "start" | "end";
+  onChange: (value: string) => void;
+}) {
+  const selected = options.find((option) => option.id === value);
+
+  return (
+    <ActionMenu>
+      <ActionMenu.Anchor>
+        <button
+          className="player-action-menu-trigger"
+          type="button"
+          aria-label={label}
+        >
+          <span>{selected?.label ?? "Choose player"}</span>
+          <ChevronDown size={18} aria-hidden="true" />
+        </button>
+      </ActionMenu.Anchor>
+      <ActionMenu.Overlay
+        align={align}
+        side="outside-bottom"
+        displayInViewport
+        width="medium"
+        className="sideline-player-action-menu"
+      >
+        <ActionList
+          variant="inset"
+          selectionVariant="single"
+          showDividers
+          className="sideline-player-action-list"
+        >
+          {options.map((option) => (
+            <ActionList.Item
+              className="sideline-player-action-item"
+              key={option.id}
+              selected={option.id === value}
+              inactiveText={option.inactiveText}
+              disabled={Boolean(option.inactiveText)}
+              size="large"
+              onSelect={() => onChange(option.id)}
+            >
+              {option.label}
+              <ActionList.Description variant="block">
+                {option.description}
+              </ActionList.Description>
+              {option.trailing && (
+                <ActionList.TrailingVisual>
+                  <span className="player-action-menu-meta">
+                    {option.trailing}
+                  </span>
+                </ActionList.TrailingVisual>
+              )}
+            </ActionList.Item>
+          ))}
+        </ActionList>
+      </ActionMenu.Overlay>
+    </ActionMenu>
+  );
+}
+
 function SubstitutionPlanner({
   game,
   team,
@@ -3204,17 +3283,22 @@ function SubstitutionPlanner({
   );
 
   return (
-    <ModalBackdrop onDismiss={onClose}>
-      <section
-        className="bottom-sheet substitution-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="substitution-title"
-      >
-        <header className="sheet-header">
+    <Dialog
+      title="Plan substitutions"
+      subtitle="Suggested for fairness. Queue the plan now, then execute it when the players enter."
+      onClose={onClose}
+      position={{ narrow: "bottom", regular: "center" }}
+      width="720px"
+      className="substitution-dialog substitution-sheet"
+      renderHeader={({
+        dialogLabelId,
+        dialogDescriptionId,
+        onClose: closeDialog,
+      }) => (
+        <Dialog.Header className="sheet-header">
           <div>
-            <h2 id="substitution-title">Plan substitutions</h2>
-            <p>
+            <h2 id={dialogLabelId}>Plan substitutions</h2>
+            <p id={dialogDescriptionId}>
               Suggested for fairness. Queue the plan now, then execute it when
               the players enter.
             </p>
@@ -3222,183 +3306,205 @@ function SubstitutionPlanner({
           <button
             className="icon-button"
             type="button"
-            onClick={onClose}
+            onClick={() => closeDialog("close-button")}
             aria-label="Close"
           >
             <X size={22} />
           </button>
-        </header>
-
-        <div className="sub-count">
-          <span>Players to swap</span>
-          <div className="stepper">
-            {Array.from({ length: maxCount }, (_, index) => index + 1).map(
-              (value) => (
-                <button
-                  type="button"
-                  key={value}
-                  className={count === value ? "active" : ""}
-                  onClick={() => changeCount(value)}
-                >
-                  {value}
-                </button>
-              ),
-            )}
-          </div>
+        </Dialog.Header>
+      )}
+    >
+      <div className="sub-count">
+        <span>Players to swap</span>
+        <div className="stepper">
+          {Array.from({ length: maxCount }, (_, index) => index + 1).map(
+            (value) => (
+              <button
+                type="button"
+                key={value}
+                className={count === value ? "active" : ""}
+                onClick={() => changeCount(value)}
+              >
+                {value}
+              </button>
+            ),
+          )}
         </div>
+      </div>
 
-        <div className="swap-list">
-          <div className="swap-column-headings" aria-hidden="true">
-            <span className="out-label">OUT</span>
-            <span className="in-label">IN</span>
-          </div>
-          {pairs.map((pair, index) => {
-            const position = formation.positions.find(
-              (item) => item.id === pair.positionId,
-            );
-            return (
-              <div className="swap-row" key={index}>
-                <span className="swap-number">{index + 1}</span>
-                <label>
-                  <span className="sr-only">OUT</span>
-                  <select
-                    aria-label={`Swap ${index + 1} outgoing player`}
-                    value={pair.outPlayerId}
-                    onChange={(event) => {
-                      const positionId =
-                        Object.entries(game.assignments).find(
-                          ([, id]) => id === event.target.value,
-                        )?.[0] ?? pair.positionId;
-                      updatePair(index, {
-                        outPlayerId: event.target.value,
-                        positionId,
-                      });
-                    }}
-                  >
-                    {outgoingChoices.map(([positionId, id]) => (
-                      <option
-                        value={id}
-                        key={id}
-                        disabled={pairs.some(
-                          (otherPair, pairIndex) =>
-                            pairIndex !== index && otherPair.outPlayerId === id,
-                        )}
-                      >
-                        {playerName(team, id)} ·{" "}
-                        {
-                          formation.positions.find(
-                            (item) => item.id === positionId,
-                          )?.shortLabel
-                        }
-                      </option>
-                    ))}
-                  </select>
-                  <small className="swap-player-status">
-                    {formatDuration(
-                      getCurrentFieldSeconds(game, pair.outPlayerId),
-                    )}{" "}
-                    playing ·{" "}
-                    {formatDuration(
-                      game.totals[pair.outPlayerId]?.fieldSeconds ?? 0,
-                    )}{" "}
-                    total
-                  </small>
-                </label>
-                <span className="swap-transfer">
-                  <ArrowRightLeft size={22} aria-hidden="true" />
-                  <small>{position?.shortLabel}</small>
-                </span>
-                <label>
-                  <span className="sr-only">IN</span>
-                  <select
-                    aria-label={`Swap ${index + 1} incoming player`}
-                    value={pair.inPlayerId}
-                    onChange={(event) =>
-                      updatePair(index, { inPlayerId: event.target.value })
-                    }
-                  >
-                    {incomingChoices.map((id) => (
-                      <option
-                        value={id}
-                        key={id}
-                        disabled={pairs.some(
-                          (otherPair, pairIndex) =>
-                            pairIndex !== index && otherPair.inPlayerId === id,
-                        )}
-                      >
-                        {playerName(team, id)}
-                      </option>
-                    ))}
-                  </select>
-                  <small className="swap-player-status">
-                    {formatDuration(
-                      getCurrentBenchSeconds(game, pair.inPlayerId),
-                    )}{" "}
-                    sitting ·{" "}
-                    {formatDuration(
-                      game.totals[pair.inPlayerId]?.fieldSeconds ?? 0,
-                    )}{" "}
-                    played
-                  </small>
-                </label>
-              </div>
-            );
-          })}
+      <div className="swap-list">
+        <div className="swap-column-headings" aria-hidden="true">
+          <span className="out-label">OUT</span>
+          <span className="in-label">IN</span>
         </div>
-
-        {!valid && (
-          <p className="error-message">
-            {pairErrors[0] ??
-              "Choose a different outgoing and incoming player for every swap."}
-          </p>
-        )}
-
-        <div className="review-checklist">
-          <h3>Confirm together</h3>
-          <div className="review-column-headings" aria-hidden="true">
-            <span className="out-label">OUT</span>
-            <span className="in-label">IN</span>
-          </div>
-          {pairs.map((pair, index) => {
-            const position = formation.positions.find(
-              (item) => item.id === pair.positionId,
+        {pairs.map((pair, index) => {
+          const position = formation.positions.find(
+            (item) => item.id === pair.positionId,
+          );
+          const outgoingOptions = outgoingChoices.map(
+            ([positionId, playerId]) => {
+              const usedInSwap = pairs.findIndex(
+                (otherPair, pairIndex) =>
+                  pairIndex !== index && otherPair.outPlayerId === playerId,
+              );
+              return {
+                id: playerId,
+                label: playerName(team, playerId),
+                description: `${formatDuration(
+                  getCurrentFieldSeconds(game, playerId),
+                )} playing · ${formatDuration(
+                  game.totals[playerId]?.fieldSeconds ?? 0,
+                )} total`,
+                trailing:
+                  formation.positions.find((item) => item.id === positionId)
+                    ?.shortLabel ?? "",
+                inactiveText:
+                  usedInSwap >= 0
+                    ? `Planned to come off for ${playerName(
+                        team,
+                        pairs[usedInSwap].inPlayerId,
+                      )}`
+                    : undefined,
+              };
+            },
+          );
+          const incomingOptions = incomingChoices.map((playerId) => {
+            const usedInSwap = pairs.findIndex(
+              (otherPair, pairIndex) =>
+                pairIndex !== index && otherPair.inPlayerId === playerId,
             );
-            return (
-              <div className="review-row" key={index}>
-                <span className="review-number">{index + 1}</span>
-                <GoalMarkedPlayerName
-                  label={playerName(team, pair.outPlayerId)}
-                  goalCount={playerGoalCount(game, pair.outPlayerId)}
+            const player = team.roster.find((item) => item.id === playerId);
+            return {
+              id: playerId,
+              label: playerName(team, playerId),
+              description: `${formatDuration(
+                getCurrentBenchSeconds(game, playerId),
+              )} sitting · ${formatDuration(
+                game.totals[playerId]?.fieldSeconds ?? 0,
+              )} played`,
+              trailing: player?.number ? `#${player.number}` : undefined,
+              inactiveText:
+                usedInSwap >= 0
+                  ? `Planned to go on for ${playerName(
+                      team,
+                      pairs[usedInSwap].outPlayerId,
+                    )}`
+                  : undefined,
+            };
+          });
+          return (
+            <div className="swap-row" key={index}>
+              <span className="swap-number">{index + 1}</span>
+              <div className="swap-player-choice">
+                <PlayerActionMenu
+                  label={`Swap ${index + 1} outgoing player`}
+                  value={pair.outPlayerId}
+                  options={outgoingOptions}
+                  align="start"
+                  onChange={(playerId) => {
+                    const positionId =
+                      Object.entries(game.assignments).find(
+                        ([, id]) => id === playerId,
+                      )?.[0] ?? pair.positionId;
+                    updatePair(index, {
+                      outPlayerId: playerId,
+                      positionId,
+                    });
+                  }}
                 />
-                <span className="review-direction">
-                  <ArrowRightLeft size={17} aria-hidden="true" />
-                  <small>{position?.shortLabel}</small>
-                </span>
-                <GoalMarkedPlayerName
-                  label={playerName(team, pair.inPlayerId)}
-                  goalCount={playerGoalCount(game, pair.inPlayerId)}
-                />
+                <small className="swap-player-status">
+                  {formatDuration(
+                    getCurrentFieldSeconds(game, pair.outPlayerId),
+                  )}{" "}
+                  playing ·{" "}
+                  {formatDuration(
+                    game.totals[pair.outPlayerId]?.fieldSeconds ?? 0,
+                  )}{" "}
+                  total
+                </small>
               </div>
-            );
-          })}
-        </div>
+              <span className="swap-transfer">
+                <ArrowRightLeft size={22} aria-hidden="true" />
+                <small>{position?.shortLabel}</small>
+              </span>
+              <div className="swap-player-choice">
+                <PlayerActionMenu
+                  label={`Swap ${index + 1} incoming player`}
+                  value={pair.inPlayerId}
+                  options={incomingOptions}
+                  align="end"
+                  onChange={(playerId) =>
+                    updatePair(index, { inPlayerId: playerId })
+                  }
+                />
+                <small className="swap-player-status">
+                  {formatDuration(
+                    getCurrentBenchSeconds(game, pair.inPlayerId),
+                  )}{" "}
+                  sitting ·{" "}
+                  {formatDuration(
+                    game.totals[pair.inPlayerId]?.fieldSeconds ?? 0,
+                  )}{" "}
+                  played
+                </small>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-        <div className="sheet-actions">
-          <button className="secondary-action" type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="sub-confirm"
-            type="button"
-            disabled={!valid}
-            onClick={() => onConfirm(pairs)}
-          >
-            <Check size={21} aria-hidden="true" />
-            Queue {count} swap{count === 1 ? "" : "s"}
-          </button>
+      {!valid && (
+        <p className="error-message">
+          {pairErrors[0] ??
+            "Choose a different outgoing and incoming player for every swap."}
+        </p>
+      )}
+
+      <div className="review-checklist">
+        <h3>Confirm together</h3>
+        <div className="review-column-headings" aria-hidden="true">
+          <span className="out-label">OUT</span>
+          <span className="in-label">IN</span>
         </div>
-      </section>
-    </ModalBackdrop>
+        {pairs.map((pair, index) => {
+          const position = formation.positions.find(
+            (item) => item.id === pair.positionId,
+          );
+          return (
+            <div className="review-row" key={index}>
+              <span className="review-number">{index + 1}</span>
+              <GoalMarkedPlayerName
+                label={playerName(team, pair.outPlayerId)}
+                goalCount={playerGoalCount(game, pair.outPlayerId)}
+              />
+              <span className="review-direction">
+                <ArrowRightLeft size={17} aria-hidden="true" />
+                <small>{position?.shortLabel}</small>
+              </span>
+              <GoalMarkedPlayerName
+                label={playerName(team, pair.inPlayerId)}
+                goalCount={playerGoalCount(game, pair.inPlayerId)}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <Dialog.Footer className="sheet-actions">
+        <button className="secondary-action" type="button" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          className="sub-confirm"
+          type="button"
+          disabled={!valid}
+          onClick={() => onConfirm(pairs)}
+        >
+          <Check size={21} aria-hidden="true" />
+          Queue {count} swap{count === 1 ? "" : "s"}
+        </button>
+      </Dialog.Footer>
+    </Dialog>
   );
 }
 

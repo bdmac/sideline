@@ -1904,6 +1904,35 @@ select:hover {
   border-bottom: 2px solid var(--ink);
 }
 
+.substitution-dialog {
+  color: var(--ink);
+  background: var(--paper);
+  border-top: 5px solid var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.substitution-dialog[data-position-regular] {
+  max-height: 84vh;
+  max-height: 84dvh;
+  border-radius: 0;
+}
+
+.substitution-dialog .sheet-header {
+  padding: 1.25rem;
+  box-shadow: none;
+}
+
+.substitution-dialog [data-component="Dialog.Body"] {
+  padding: 0 1.25rem 1.25rem;
+}
+
+.substitution-dialog [data-component="Dialog.Footer"] {
+  margin: 0;
+  padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom));
+  border-top: 2px solid var(--ink);
+  background: var(--paper);
+}
+
 .sub-count {
   display: flex;
   align-items: center;
@@ -1981,12 +2010,12 @@ select:hover {
   border-bottom: 1px solid var(--line);
 }
 
-.swap-row label {
+.swap-player-choice {
   display: grid;
   gap: 0.35rem;
+  min-width: 0;
 }
 
-.swap-row label > span,
 .out-label,
 .in-label {
   font-size: 0.67rem;
@@ -1994,14 +2023,107 @@ select:hover {
   letter-spacing: 0.08em;
 }
 
-.swap-row label:first-of-type > span,
 .out-label {
   color: var(--warm-dark);
 }
 
-.swap-row label:last-of-type > span,
 .in-label {
   color: var(--turf-dark);
+}
+
+.player-action-menu-trigger {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.55rem 0.6rem;
+  overflow: hidden;
+  color: var(--ink);
+  background: white;
+  border: 1px solid #899b95;
+  border-radius: 0;
+  text-align: left;
+}
+
+.player-action-menu-trigger:hover {
+  border-color: var(--ink);
+}
+
+.player-action-menu-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-action-menu-trigger svg {
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.sideline-player-action-menu {
+  z-index: 80;
+  max-height: min(22rem, calc(100vh - 2rem));
+  max-height: min(22rem, calc(100dvh - 2rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  box-shadow: var(--shadow);
+  font-family: inherit;
+}
+
+#__primerPortalRoot__ {
+  z-index: 80;
+}
+
+.sideline-player-action-list {
+  background: var(--paper);
+}
+
+.sideline-player-action-item {
+  border-radius: 0;
+}
+
+.sideline-player-action-item[data-inactive="true"] {
+  cursor: not-allowed;
+}
+
+.sideline-player-action-item[data-inactive="true"]
+  [data-component="ActionList.Item.Label"],
+.sideline-player-action-item[data-inactive="true"]
+  [data-component="ActionList.Description"],
+.sideline-player-action-item[data-inactive="true"]
+  [data-component="ActionList.TrailingVisual"] {
+  color: var(--ink-soft);
+  opacity: 0.62;
+}
+
+.sideline-player-action-item[data-inactive="true"]
+  [data-component="ActionList.TrailingVisual"] {
+  margin-inline-end: 0;
+}
+
+.sideline-player-action-item[data-inactive="true"] [id$="--warning-message"] {
+  color: var(--warm-dark);
+  font-weight: 850;
+}
+
+.sideline-player-action-item [data-component="ActionList.Item--Content"] {
+  min-height: 52px;
+}
+
+.player-action-menu-meta {
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 950;
 }
 
 .swap-number {
@@ -2576,6 +2698,31 @@ select:hover {
     max-width: none;
   }
 
+  .sideline-player-action-menu[data-width-medium] {
+    position: fixed;
+    inset: auto 0 0 !important;
+    box-sizing: border-box;
+    width: 100vw;
+    max-width: 100vw;
+    max-height: min(22rem, calc(100dvh - 2rem));
+    padding: 0.35rem 0 max(0.35rem, env(safe-area-inset-bottom));
+    border: 0;
+    border-top: 5px solid var(--ink);
+    box-shadow: 0 -12px 34px rgba(9, 26, 29, 0.24);
+  }
+
+  .sideline-player-action-menu[data-width-medium]::before {
+    content: "";
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: block;
+    width: 42px;
+    height: 4px;
+    margin: 0.2rem auto 0.45rem;
+    background: var(--line-strong);
+  }
+
   .local-status {
     font-size: 0;
   }
@@ -3078,11 +3225,11 @@ select:hover {
     width: 24px;
   }
 
-  .swap-row label {
+  .swap-player-choice {
     min-width: 0;
   }
 
-  .swap-row select {
+  .player-action-menu-trigger {
     min-width: 0;
     padding: 0.55rem 1.35rem 0.55rem 0.45rem;
     font-size: 0.76rem;
