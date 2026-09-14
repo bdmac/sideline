@@ -2327,6 +2327,16 @@ function LiveGameScreen({
             safeChange(() => cancelQueuedSubstitutions(game));
             setQueuedPlanOpen(false);
           }}
+          onRemove={(pair) => {
+            if (
+              safeChange(() =>
+                removeQueuedSubstitution(game, pair.inPlayerId),
+              ) &&
+              queuedPairs.length === 1
+            ) {
+              setQueuedPlanOpen(false);
+            }
+          }}
           onExecute={executeQueuedSubstitutions}
         />
       )}
@@ -3975,14 +3985,23 @@ function ReadySwapList({
   formation,
   team,
   game,
+  onRemove,
 }: {
   pairs: SubstitutionPair[];
   formation: ReturnType<typeof getFormation>;
   team: Team;
   game: ActiveGame;
+  onRemove?: (pair: SubstitutionPair) => void;
 }) {
+  const [revealedPairKey, setRevealedPairKey] = useState<string | null>(null);
+  const swipeStart = useRef<{
+    pairKey: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
   return (
-    <div className="ready-swap-list">
+    <div className={`ready-swap-list ${onRemove ? "removable" : ""}`}>
       <div className="ready-swap-headings" aria-hidden="true">
         <span className="out-label">OUT</span>
         <span className="in-label">IN</span>
@@ -3991,29 +4010,90 @@ function ReadySwapList({
         const position = formation.positions.find(
           (item) => item.id === pair.positionId,
         );
+        const pairKey = `${pair.outPlayerId}:${pair.inPlayerId}:${pair.positionId}`;
+        const outgoingName = playerName(team, pair.outPlayerId);
+        const incomingName = playerName(team, pair.inPlayerId);
         return (
-          <div className="ready-swap" key={index}>
-            <span className="ready-swap-number">{index + 1}</span>
-            <span className="ready-player out">
-              <ReadyPlayerIdentity
-                team={team}
-                playerId={pair.outPlayerId}
-                goalCount={playerGoalCount(game, pair.outPlayerId)}
-                direction="out"
+          <div
+            className={`ready-swap-shell ${
+              revealedPairKey === pairKey ? "swipe-revealed" : ""
+            }`}
+            key={pairKey}
+          >
+            <div
+              className="ready-swap"
+              onTouchStart={(event) => {
+                if (!onRemove) return;
+                const touch = event.touches[0];
+                if (touch) {
+                  swipeStart.current = {
+                    pairKey,
+                    x: touch.clientX,
+                    y: touch.clientY,
+                  };
+                }
+              }}
+              onTouchEnd={(event) => {
+                const start = swipeStart.current;
+                swipeStart.current = null;
+                const touch = event.changedTouches[0];
+                if (
+                  !onRemove ||
+                  !start ||
+                  !touch ||
+                  start.pairKey !== pairKey
+                ) {
+                  return;
+                }
+                const deltaX = touch.clientX - start.x;
+                const deltaY = touch.clientY - start.y;
+                if (
+                  Math.abs(deltaX) < 48 ||
+                  Math.abs(deltaX) < Math.abs(deltaY) * 1.25
+                ) {
+                  return;
+                }
+                setRevealedPairKey(deltaX < 0 ? pairKey : null);
+              }}
+              onTouchCancel={() => {
+                swipeStart.current = null;
+              }}
+            >
+              <span className="ready-swap-number">{index + 1}</span>
+              <span className="ready-player out">
+                <ReadyPlayerIdentity
+                  team={team}
+                  playerId={pair.outPlayerId}
+                  goalCount={playerGoalCount(game, pair.outPlayerId)}
+                  direction="out"
+                />
+              </span>
+              <span className="ready-direction">
+                <ArrowRightLeft size={24} aria-hidden="true" />
+                <small>{position?.shortLabel}</small>
+              </span>
+              <span className="ready-player in">
+                <ReadyPlayerIdentity
+                  team={team}
+                  playerId={pair.inPlayerId}
+                  goalCount={playerGoalCount(game, pair.inPlayerId)}
+                  direction="in"
+                />
+              </span>
+            </div>
+            {onRemove && (
+              <IconButton
+                className="ready-swap-remove"
+                variant="danger"
+                size="large"
+                icon={Trash2}
+                aria-label={`Remove ${outgoingName} for ${incomingName} substitution`}
+                onClick={() => {
+                  setRevealedPairKey(null);
+                  onRemove(pair);
+                }}
               />
-            </span>
-            <span className="ready-direction">
-              <ArrowRightLeft size={24} aria-hidden="true" />
-              <small>{position?.shortLabel}</small>
-            </span>
-            <span className="ready-player in">
-              <ReadyPlayerIdentity
-                team={team}
-                playerId={pair.inPlayerId}
-                goalCount={playerGoalCount(game, pair.inPlayerId)}
-                direction="in"
-              />
-            </span>
+            )}
           </div>
         );
       })}
@@ -4061,6 +4141,7 @@ function QueuedSubstitutionSummary({
   onClose,
   onEdit,
   onCancel,
+  onRemove,
   onExecute,
 }: {
   pairs: SubstitutionPair[];
@@ -4071,6 +4152,7 @@ function QueuedSubstitutionSummary({
   onClose: () => void;
   onEdit: () => void;
   onCancel: () => void;
+  onRemove: (pair: SubstitutionPair) => void;
   onExecute: () => void;
 }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -4092,7 +4174,15 @@ function QueuedSubstitutionSummary({
   return (
     <SidelineDialog
       title={`Review substitutions (${pairs.length})`}
-      description="Get these players ready. Timers and positions change only when you execute."
+      description={
+        <>
+          Get these players ready. Nothing changes until you execute.
+          <span className="mobile-inline-instruction">
+            {" "}
+            Swipe a substitution to remove it.
+          </span>
+        </>
+      }
       className="substitution-ready-sheet"
       width="620px"
       onClose={onClose}
@@ -4135,6 +4225,7 @@ function QueuedSubstitutionSummary({
         formation={formation}
         team={team}
         game={game}
+        onRemove={onRemove}
       />
 
       {errors.length > 0 && (

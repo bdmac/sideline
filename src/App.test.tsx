@@ -1326,6 +1326,82 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
+  it("removes one reviewed substitution and reduces the editable plan count", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Queue 3 swaps" }));
+
+    const summary = screen.getByRole("dialog", {
+      name: "Review substitutions (3)",
+    });
+    const firstSwap = summary.querySelector(".ready-swap");
+    const firstShell = firstSwap?.closest(".ready-swap-shell");
+    fireEvent.touchStart(firstSwap!, {
+      touches: [{ clientX: 150, clientY: 40 }],
+    });
+    fireEvent.touchEnd(firstSwap!, {
+      changedTouches: [{ clientX: 70, clientY: 42 }],
+    });
+    expect(firstShell).toHaveClass("swipe-revealed");
+
+    fireEvent.click(
+      within(summary).getAllByRole("button", {
+        name: /^Remove .* substitution$/,
+      })[0],
+    );
+
+    const reducedSummary = screen.getByRole("dialog", {
+      name: "Review substitutions (2)",
+    });
+    expect(
+      within(reducedSummary).getAllByRole("button", {
+        name: /^Remove .* substitution$/,
+      }),
+    ).toHaveLength(2);
+    expect(screen.getByText("2 substitutions queued")).toBeInTheDocument();
+
+    fireEvent.click(
+      within(reducedSummary).getByRole("button", { name: "Edit plan" }),
+    );
+    const planner = screen.getByRole("dialog", {
+      name: "Plan substitutions",
+    });
+    expect(within(planner).getByRole("button", { name: "2" })).toHaveClass(
+      "active",
+    );
+    expect(within(planner).getAllByLabelText(/outgoing player/)).toHaveLength(
+      2,
+    );
+  });
+
+  it("deletes the queued plan when its final reviewed substitution is removed", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Queue 1 swap" }));
+
+    const summary = screen.getByRole("dialog", {
+      name: "Review substitutions (1)",
+    });
+    fireEvent.click(
+      within(summary).getByRole("button", {
+        name: /^Remove .* substitution$/,
+      }),
+    );
+
+    expect(
+      screen.queryByRole("dialog", { name: /Review substitutions/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("1 substitution queued")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Plan subs" }),
+    ).toBeInTheDocument();
+  });
+
   it("queues and edits one substitution directly from a bench player", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
