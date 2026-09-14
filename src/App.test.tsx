@@ -842,6 +842,38 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers Continue game and a close button in the end-game confirmation", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    let confirmation = screen.getByRole("alertdialog", {
+      name: "End this game?",
+    });
+    expect(
+      within(confirmation).getByRole("button", { name: "Continue game" }),
+    ).toHaveAttribute("data-variant", "default");
+    fireEvent.click(
+      within(confirmation).getByRole("button", { name: "Close" }),
+    );
+    expect(
+      screen.queryByRole("alertdialog", { name: "End this game?" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    confirmation = screen.getByRole("alertdialog", {
+      name: "End this game?",
+    });
+    fireEvent.click(
+      within(confirmation).getByRole("button", { name: "Continue game" }),
+    );
+    expect(
+      screen.queryByRole("alertdialog", { name: "End this game?" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "On the field" })).toBeVisible();
+  });
+
   it("does not offer the tapped player as a swap target", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -1808,7 +1840,7 @@ describe("Sideline app", () => {
     const compactHeader = container.querySelector(".compact-match-header");
 
     expect(
-      within(screen.getByLabelText("Match status")).getByText("40:00 left"),
+      within(screen.getByLabelText("Match status")).getByText("10:00 left"),
     ).toBeInTheDocument();
     expect(compactHeader).toHaveAttribute("aria-hidden", "true");
     Object.defineProperty(window, "scrollY", {
@@ -1822,7 +1854,7 @@ describe("Sideline app", () => {
       within(compactHeader as HTMLElement).getByLabelText("Score"),
     ).toBeInTheDocument();
     expect(
-      within(compactHeader as HTMLElement).getByText("40:00 left"),
+      within(compactHeader as HTMLElement).getByText("10:00 left"),
     ).toBeInTheDocument();
     expect(
       within(compactHeader as HTMLElement).getByText("Q1 / 4"),
@@ -1834,17 +1866,28 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps clock and undo controls reachable during live play", () => {
+  it("keeps match controls together and centers substitutions in the dock", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
 
     expect(
-      container.querySelector(".mobile-control-dock .clock-button"),
+      container.querySelector(".match-header .match-clock-button"),
     ).toHaveAccessibleName("Start Q1");
     expect(
-      container.querySelector(".mobile-control-dock .undo-button"),
-    ).toHaveAccessibleName("Undo last change");
+      container.querySelector(".match-header .match-clock-button"),
+    ).toHaveTextContent("Start Q1");
+    expect(
+      container.querySelector(".match-header .match-end-copy-short"),
+    ).toHaveTextContent("End");
+    const dockButtons = within(
+      container.querySelector(".mobile-control-dock") as HTMLElement,
+    ).getAllByRole("button");
+    expect(dockButtons.map((button) => button.textContent?.trim())).toEqual([
+      "Undo",
+      "Plan subs",
+      "Goal",
+    ]);
     expect(
       screen.queryByRole("button", { name: "Positions" }),
     ).not.toBeInTheDocument();
@@ -1891,7 +1934,7 @@ describe("Sideline app", () => {
     startGame();
 
     expect(
-      container.querySelector(".mobile-control-dock .clock-button"),
+      container.querySelector(".match-header .match-clock-button"),
     ).toHaveAccessibleName("Start H1");
   });
 
@@ -2456,7 +2499,7 @@ describe("Sideline app", () => {
     );
   });
 
-  it("shows a persisted period break with rotation and resume actions", () => {
+  it("shows a persisted period break with rotation and next-period actions", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;
     const game = createGame(
@@ -2477,22 +2520,25 @@ describe("Sideline app", () => {
     render(<App />);
 
     const breakBanner = screen.getByLabelText("End of Quarter 1");
-    expect(breakBanner).toHaveTextContent("Clock paused at 10:00");
+    expect(breakBanner).toHaveTextContent("Quarter 1 ended");
+    expect(breakBanner).toHaveTextContent("Ended at 10:00");
     expect(
       within(breakBanner).getByRole("button", { name: "Plan subs" }),
     ).toBeInTheDocument();
     expect(
-      document.querySelector(".mobile-control-dock .clock-button"),
+      document.querySelector(".match-header .match-clock-button"),
     ).toHaveTextContent("Start Q2");
     fireEvent.click(
-      within(breakBanner).getByRole("button", { name: "Start Quarter 2" }),
+      document.querySelector(
+        ".match-header .match-clock-button",
+      ) as HTMLElement,
     );
 
     expect(screen.queryByLabelText("End of Quarter 1")).not.toBeInTheDocument();
     expect(screen.getByText("Clock running")).toBeInTheDocument();
   });
 
-  it("uses a compact Resume label after regulation time", () => {
+  it("uses a period-specific Resume label for a persisted final break", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;
     const game = createGame(
@@ -2507,6 +2553,7 @@ describe("Sideline app", () => {
       running: false,
       lastStartedAt: null,
     };
+    game.period = { current: 4, startedAtSeconds: 30 * 60 };
     game.periodBreak = { completedPeriod: 4, final: true };
     state.activeGame = game;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -2518,7 +2565,7 @@ describe("Sideline app", () => {
     });
     expect(endGameButton.querySelector(".lucide-flag")).toBeInTheDocument();
     expect(
-      document.querySelector(".mobile-control-dock .clock-button"),
+      document.querySelector(".match-header .match-clock-button"),
     ).toHaveTextContent("Resume");
 
     fireEvent.click(endGameButton);
@@ -2530,6 +2577,145 @@ describe("Sideline app", () => {
         .getByRole("button", { name: "End game" })
         .querySelector(".lucide-flag"),
     ).toBeInTheDocument();
+  });
+
+  it("keeps running in added time and starts the next period from the actual endpoint", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(6_000));
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = {
+      elapsedSeconds: 9 * 60 + 59,
+      running: true,
+      lastStartedAt: 1_000,
+    };
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    const addedTimeBanner = screen.getByLabelText("Quarter 1 time reached");
+    expect(addedTimeBanner).toHaveTextContent(
+      "+0:04 added time · Clock running",
+    );
+    expect(
+      within(addedTimeBanner).getByRole("button", { name: "Plan subs" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Substitution reminder"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Record a goal" })).toBeEnabled();
+    expect(screen.getByLabelText("Game clock")).toHaveTextContent("10:04");
+
+    const compactHeader = document.querySelector(".compact-match-header");
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      value: 140,
+    });
+    fireEvent.scroll(window);
+    expect(
+      within(compactHeader as HTMLElement).getByText("Q1 / 4"),
+    ).toBeInTheDocument();
+    expect(
+      within(compactHeader as HTMLElement).getByText("10:04"),
+    ).toBeInTheDocument();
+    expect(
+      within(compactHeader as HTMLElement).getByText("+0:04 added"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(addedTimeBanner).getByRole("button", {
+        name: "End Quarter 1",
+      }),
+    );
+
+    const breakBanner = screen.getByLabelText("End of Quarter 1");
+    expect(breakBanner).toHaveTextContent("Ended at 10:04");
+    expect(breakBanner).toHaveTextContent("+0:04 added time");
+    expect(
+      document.querySelector(".match-header .match-clock-button"),
+    ).toHaveTextContent("Start Q2");
+
+    fireEvent.click(
+      within(breakBanner).getByRole("button", { name: "Start Quarter 2" }),
+    );
+    expect(screen.getByText("Quarter 2 of 4")).toBeInTheDocument();
+    expect(screen.getByText("Clock running")).toBeInTheDocument();
+    expect(screen.getByLabelText("Game clock")).toHaveTextContent("0:00");
+
+    act(() => {
+      vi.advanceTimersByTime(10 * 60 * 1_000);
+    });
+    expect(screen.getByLabelText("Quarter 2 time reached")).toHaveTextContent(
+      "+0:00 added time",
+    );
+    expect(screen.getByLabelText("Game clock")).toHaveTextContent("10:00");
+  });
+
+  it("keeps final regulation running until the coach ends the game", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(11_000));
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u12;
+    const game = createGame(
+      team,
+      "9-3-1-3-1",
+      team.roster.map((player) => player.id),
+      60,
+      1_000,
+    );
+    game.period = { current: 2, startedAtSeconds: 30 * 60 };
+    game.clock = {
+      elapsedSeconds: 59 * 60 + 58,
+      running: true,
+      lastStartedAt: 1_000,
+    };
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    const regulationBanner = screen.getByLabelText("Regulation time reached");
+    expect(regulationBanner).toHaveTextContent(
+      "+0:08 added time · Clock running",
+    );
+    expect(
+      within(regulationBanner).getByRole("button", { name: "End game" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Record a goal" })).toBeEnabled();
+  });
+
+  it("identifies an interrupted added-time game before it is resumed", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(6_000));
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = {
+      elapsedSeconds: 9 * 60 + 59,
+      running: true,
+      lastStartedAt: 1_000,
+    };
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Go to team selection" }),
+    );
+
+    expect(screen.getByText("Added time +0:04 · 10:04")).toBeInTheDocument();
   });
 
   it("consolidates ready substitutions into the period-break banner", () => {

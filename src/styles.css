@@ -1208,6 +1208,19 @@ select:hover {
   gap: 0.7rem;
 }
 
+.match-header .match-header-actions {
+  flex: none;
+  gap: 0.45rem;
+}
+
+.match-header-actions [data-component="Button"] {
+  white-space: nowrap;
+}
+
+.match-end-copy-short {
+  display: none;
+}
+
 .match-header strong,
 .match-header small {
   display: block;
@@ -1285,6 +1298,13 @@ select:hover {
 .clock-secondary > span:first-child strong {
   color: var(--ink);
   font-size: 1rem;
+}
+
+.clock-secondary.added-time > span:first-child strong,
+.clock-secondary.added-time > span:last-child,
+.compact-match-period.added-time,
+.period-added-time-status {
+  color: var(--warm-dark);
 }
 
 .scoreboard {
@@ -1417,6 +1437,15 @@ select:hover {
 .period-break-banner.final {
   border-color: var(--danger);
   background: var(--danger-pale);
+}
+
+.period-added-time-banner:not(.final) {
+  border-color: var(--warm);
+  background: var(--warm-pale);
+}
+
+.period-break-banner .period-added-time-status {
+  font-weight: 850;
 }
 
 .queued-substitution-banner,
@@ -2178,7 +2207,7 @@ select:hover {
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: 1.15fr 1.15fr 0.85fr 0.75fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 0.65rem max(0.65rem, calc((100vw - 1180px) / 2))
     calc(0.65rem + env(safe-area-inset-bottom));
   gap: 0.45rem;
@@ -3573,6 +3602,13 @@ select:hover {
     place-items: center;
   }
 
+  .compact-match-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .compact-clock-button,
   .compact-end-game-button {
     min-width: 44px;
     min-height: 44px;
@@ -3611,7 +3647,7 @@ select:hover {
     left: 0;
     right: 0;
     bottom: 0;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     padding-top: 0.65rem;
     padding-right: max(1rem, env(safe-area-inset-right));
     padding-bottom: calc(0.65rem + env(safe-area-inset-bottom));
@@ -3634,6 +3670,35 @@ select:hover {
   .mobile-control-dock [data-component="leadingVisual"] svg {
     width: 18px;
     height: 18px;
+  }
+
+  .match-header > div:first-child {
+    min-width: 0;
+  }
+
+  .match-header > div:first-child > span {
+    min-width: 0;
+  }
+
+  .match-header > div:first-child strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .match-header-actions [data-component="Button"] {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 0.65rem;
+    font-size: 0.72rem;
+  }
+
+  .match-end-copy-long {
+    display: none;
+  }
+
+  .match-end-copy-short {
+    display: inline;
   }
 
   .queued-substitution-banner,

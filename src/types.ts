@@ -62,6 +62,11 @@ export type ClockState = {
   lastStartedAt: number | null;
 };
 
+export type PeriodState = {
+  current: number;
+  startedAtSeconds: number;
+};
+
 export type SubstitutionPair = {
   outPlayerId: string;
   inPlayerId: string;
@@ -103,6 +108,7 @@ export type ActiveGame = {
   assignments: Record<string, string>;
   benchIds: string[];
   clock: ClockState;
+  period: PeriodState;
   periodBreak?: {
     completedPeriod: number;
     final: boolean;
@@ -114,7 +120,7 @@ export type ActiveGame = {
 };
 
 export type AppState = {
-  version: 12;
+  version: 13;
   teams: Record<TeamId, Team>;
   activeGame: ActiveGame | null;
 };

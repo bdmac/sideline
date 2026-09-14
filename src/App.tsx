@@ -58,6 +58,7 @@ import {
   assignPlayersByPreference,
   cancelQueuedSubstitutions,
   createGame,
+  endCurrentPeriod,
   formatDuration,
   getCurrentBenchSeconds,
   getCurrentFieldSeconds,
@@ -78,6 +79,7 @@ import {
   removeQueuedSubstitution,
   removeQueuedSubstitutionForOutgoing,
   setClockRunning,
+  startNextPeriod,
   suggestSubstitutions,
   summarizePlayerPositions,
   undoLastEvent,
@@ -729,6 +731,14 @@ function HomeScreen({
   const displayedGame = state.activeGame
     ? materializeGame(state.activeGame, now)
     : null;
+  const activePeriod = displayedGame
+    ? getPeriodStatus(
+        displayedGame.durationSeconds,
+        displayedGame.clock.elapsedSeconds,
+        displayedGame.periodCount,
+        displayedGame.period,
+      )
+    : null;
   return (
     <div className="page home-page">
       <section className="page-heading">
@@ -748,8 +758,14 @@ function HomeScreen({
           <span>
             <strong>Game in progress · {activeTeam.name}</strong>
             <small>
-              {displayedGame.clock.running ? "Clock running" : "Clock paused"} ·{" "}
-              {formatDuration(displayedGame.clock.elapsedSeconds)}
+              {activePeriod?.regulationReached && !displayedGame.periodBreak
+                ? `Added time +${formatDuration(activePeriod.addedTimeSeconds)}`
+                : displayedGame.periodBreak
+                  ? `${activePeriod?.label ?? "Period"} ${displayedGame.periodBreak.completedPeriod} ended`
+                  : displayedGame.clock.running
+                    ? "Clock running"
+                    : "Clock paused"}{" "}
+              · {formatDuration(displayedGame.clock.elapsedSeconds)}
             </small>
           </span>
           <span className="resume-action">
@@ -1618,15 +1634,13 @@ function LiveGameScreen({
   const scorerIds = fieldIds.filter(
     (playerId) => game.assignments[goalkeeperPositionId ?? ""] !== playerId,
   );
-  const remaining = Math.max(
-    0,
-    game.durationSeconds - displayed.clock.elapsedSeconds,
-  );
   const period = getPeriodStatus(
     game.durationSeconds,
     displayed.clock.elapsedSeconds,
     game.periodCount,
+    displayed.period,
   );
+  const remaining = period.regulationRemainingSeconds;
   const score = getScore(game);
   const goalScorers = summarizePlayerPositions(game).filter(
     (summary) => summary.goals.length > 0,
@@ -1635,12 +1649,16 @@ function LiveGameScreen({
   const queuedPairs = game.queuedSubstitutions ?? [];
   const queuedPlanErrors = validateSubstitutionPairs(game, queuedPairs);
   const periodBreak = displayed.periodBreak;
+  const periodBoundaryReached = period.regulationReached && !periodBreak;
+  const periodShortLabel = `${period.count === 4 ? "Q" : "H"}${period.current}`;
+  const breakAddedTimeSeconds = periodBreak ? period.addedTimeSeconds : 0;
   const substitutionReminder = getSubstitutionReminderStatus(displayed);
   const showSubstitutionReminder =
     substitutionReminder.due &&
     game.benchIds.length > 0 &&
     queuedPairs.length === 0 &&
-    !periodBreak;
+    !periodBreak &&
+    !periodBoundaryReached;
   const latestRotationEvent = game.history
     .filter(
       (event) =>
@@ -1658,13 +1676,13 @@ function LiveGameScreen({
         }`
       : periodBreak?.final
         ? "Resume"
-        : `Start ${period.count === 4 ? "Q1" : "H1"}`;
-
-  useEffect(() => {
-    if (game.clock.running && !displayed.clock.running && periodBreak) {
-      onChange(displayed);
-    }
-  }, [displayed, game.clock.running, onChange, periodBreak]);
+        : displayed.clock.elapsedSeconds > displayed.period.startedAtSeconds
+          ? "Resume"
+          : `Start ${periodShortLabel}`;
+  const changeClockState = () =>
+    periodBreak && !periodBreak.final
+      ? startNextPeriod(game, Date.now())
+      : setClockRunning(game, !game.clock.running);
 
   useEffect(() => {
     if (
@@ -1806,14 +1824,28 @@ function LiveGameScreen({
               </small>
             </span>
           </div>
-          <Button
-            variant="danger"
-            size="medium"
-            leadingVisual={Flag}
-            onClick={() => setEndConfirm(true)}
-          >
-            End game
-          </Button>
+          <div className="match-header-actions" aria-label="Match controls">
+            <Button
+              className="match-clock-button"
+              variant={game.clock.running ? "default" : "primary"}
+              size="medium"
+              leadingVisual={game.clock.running ? Pause : Play}
+              aria-label={clockActionLabel}
+              onClick={() => safeChange(changeClockState)}
+            >
+              {clockActionLabel}
+            </Button>
+            <Button
+              variant="danger"
+              size="medium"
+              leadingVisual={Flag}
+              aria-label="End game"
+              onClick={() => setEndConfirm(true)}
+            >
+              <span className="match-end-copy-long">End game</span>
+              <span className="match-end-copy-short">End</span>
+            </Button>
+          </div>
         </header>
 
         <section className="match-metrics" aria-label="Match status">
@@ -1823,7 +1855,7 @@ function LiveGameScreen({
             >
               {game.clock.running ? "Clock running" : "Clock paused"}
             </span>
-            <strong>{formatDuration(displayed.clock.elapsedSeconds)}</strong>
+            <strong>{formatDuration(period.periodElapsedSeconds)}</strong>
           </div>
 
           <div className="scoreboard" aria-label="Score">
@@ -1851,20 +1883,25 @@ function LiveGameScreen({
             </div>
           </div>
 
-          <div className="clock-secondary">
+          <div
+            className={`clock-secondary ${
+              periodBoundaryReached ? "added-time" : ""
+            }`}
+          >
             <span>
               <small>
                 {period.label} {period.current} of {period.count}
               </small>
               <strong>
-                {remaining > 0
-                  ? `${formatDuration(remaining)} left`
-                  : "Duration reached"}
+                {period.regulationReached
+                  ? `+${formatDuration(period.addedTimeSeconds)} added`
+                  : `${formatDuration(period.remainingSeconds)} left`}
               </strong>
             </span>
             <span>
-              {formatDuration(period.remainingSeconds)} left in{" "}
-              {period.label.toLowerCase()}
+              {period.regulationReached
+                ? `Regulation reached for this ${period.label.toLowerCase()}`
+                : `${formatDuration(remaining)} regulation remaining`}
             </span>
           </div>
         </section>
@@ -1882,15 +1919,20 @@ function LiveGameScreen({
       >
         <strong className="compact-match-team">{team.name}</strong>
         <span
-          className="compact-match-period"
+          className={`compact-match-period ${
+            periodBoundaryReached ? "added-time" : ""
+          }`}
           aria-label={`${period.label} ${period.current} of ${period.count}`}
         >
-          {period.count === 4 ? "Q" : "H"}
-          {period.current} / {period.count}
+          {periodShortLabel} / {period.count}
         </span>
         <span className="compact-match-clock">
-          <strong>{formatDuration(displayed.clock.elapsedSeconds)}</strong>
-          <small>{formatDuration(remaining)} left</small>
+          <strong>{formatDuration(period.periodElapsedSeconds)}</strong>
+          <small>
+            {periodBoundaryReached
+              ? `+${formatDuration(period.addedTimeSeconds)} added`
+              : `${formatDuration(period.remainingSeconds)} left`}
+          </small>
         </span>
         <span className="compact-match-score" aria-label="Score">
           <button
@@ -1910,16 +1952,112 @@ function LiveGameScreen({
             {score.opponent}
           </span>
         </span>
-        <IconButton
-          className="compact-end-game-button"
-          variant="danger"
-          size="large"
-          icon={Flag}
-          aria-label="End game"
-          tabIndex={compactHeaderInteractive ? 0 : -1}
-          onClick={() => setEndConfirm(true)}
-        />
+        <div className="compact-match-actions" aria-label="Match controls">
+          <IconButton
+            className="compact-clock-button"
+            variant={game.clock.running ? "default" : "primary"}
+            size="large"
+            icon={game.clock.running ? Pause : Play}
+            aria-label={clockActionLabel}
+            tabIndex={compactHeaderInteractive ? 0 : -1}
+            onClick={() => safeChange(changeClockState)}
+          />
+          <IconButton
+            className="compact-end-game-button"
+            variant="danger"
+            size="large"
+            icon={Flag}
+            aria-label="End game"
+            tabIndex={compactHeaderInteractive ? 0 : -1}
+            onClick={() => setEndConfirm(true)}
+          />
+        </div>
       </div>
+
+      {periodBoundaryReached && (
+        <section
+          className={`period-break-banner period-added-time-banner ${
+            period.current === period.count ? "final" : ""
+          }`}
+          aria-label={
+            period.current === period.count
+              ? "Regulation time reached"
+              : `${period.label} ${period.current} time reached`
+          }
+        >
+          <span>
+            <strong>
+              {period.current === period.count
+                ? "Regulation time reached"
+                : `${period.label} ${period.current} time reached`}
+            </strong>
+            <small className="period-added-time-status">
+              +{formatDuration(period.addedTimeSeconds)} added time · Clock{" "}
+              {displayed.clock.running ? "running" : "paused"}
+            </small>
+            {queuedPairs.length > 0 && (
+              <small className="period-break-queue-status">
+                {queuedPairs.length} substitution
+                {queuedPairs.length === 1 ? "" : "s"} ready
+              </small>
+            )}
+          </span>
+          <div>
+            {queuedPairs.length > 0 ? (
+              <Button
+                className="secondary-action period-break-review-action"
+                variant="default"
+                size="large"
+                leadingVisual={ArrowRightLeft}
+                aria-label="Review substitutions"
+                onClick={() => setQueuedPlanOpen(true)}
+              >
+                {queuedPlanErrors.length ? (
+                  "Review plan"
+                ) : (
+                  <>
+                    <span className="period-review-copy-long">
+                      Review & send 'em in
+                    </span>
+                    <span className="period-review-copy-short">
+                      Review subs
+                    </span>
+                  </>
+                )}
+              </Button>
+            ) : game.benchIds.length > 0 ? (
+              <Button
+                className="secondary-action"
+                variant="default"
+                size="large"
+                leadingVisual={ArrowRightLeft}
+                onClick={() => setPlannerOpen(true)}
+              >
+                Plan subs
+              </Button>
+            ) : null}
+            <Button
+              className={
+                period.current === period.count
+                  ? "danger-action"
+                  : "primary-action"
+              }
+              variant={period.current === period.count ? "danger" : "primary"}
+              size="large"
+              leadingVisual={period.current === period.count ? Flag : Square}
+              onClick={() =>
+                period.current === period.count
+                  ? setEndConfirm(true)
+                  : safeChange(() => endCurrentPeriod(game, Date.now()))
+              }
+            >
+              {period.current === period.count
+                ? "End game"
+                : `End ${period.label} ${period.current}`}
+            </Button>
+          </div>
+        </section>
+      )}
 
       {periodBreak && (
         <section
@@ -1934,10 +2072,13 @@ function LiveGameScreen({
             <strong>
               {periodBreak.final
                 ? "Regulation time complete"
-                : `End of ${period.label} ${periodBreak.completedPeriod}`}
+                : `${period.label} ${periodBreak.completedPeriod} ended`}
             </strong>
             <small>
-              Clock paused at {formatDuration(displayed.clock.elapsedSeconds)}
+              Ended at {formatDuration(displayed.clock.elapsedSeconds)}
+              {breakAddedTimeSeconds > 0
+                ? ` · +${formatDuration(breakAddedTimeSeconds)} added time`
+                : ""}
             </small>
             {!periodBreak.final && queuedPairs.length > 0 && (
               <small className="period-break-queue-status">
@@ -1989,7 +2130,7 @@ function LiveGameScreen({
               onClick={() =>
                 periodBreak.final
                   ? setEndConfirm(true)
-                  : safeChange(() => setClockRunning(game, true, Date.now()))
+                  : safeChange(() => startNextPeriod(game, Date.now()))
               }
             >
               {periodBreak.final
@@ -2044,7 +2185,7 @@ function LiveGameScreen({
           </Button>
         </section>
       )}
-      {queuedPairs.length > 0 && !periodBreak && (
+      {queuedPairs.length > 0 && !periodBreak && !periodBoundaryReached && (
         <section
           className={`queued-substitution-banner ${
             queuedPlanErrors.length ? "invalid" : ""
@@ -2375,16 +2516,17 @@ function LiveGameScreen({
 
       <div className="mobile-control-dock" aria-label="Game controls">
         <Button
-          className="clock-button"
+          className="undo-button"
           variant="invisible"
           size="large"
           block
-          leadingVisual={game.clock.running ? Pause : Play}
-          onClick={() =>
-            safeChange(() => setClockRunning(game, !game.clock.running))
-          }
+          labelWrap
+          leadingVisual={RotateCcw}
+          disabled={game.history.length === 0}
+          onClick={() => safeChange(() => undoLastEvent(game))}
+          aria-label="Undo last change"
         >
-          {clockActionLabel}
+          Undo
         </Button>
         <Button
           className={`sub-button ${queuedPairs.length ? "queued" : ""}`}
@@ -2399,19 +2541,6 @@ function LiveGameScreen({
           }
         >
           {queuedPairs.length ? "Review" : "Plan subs"}
-        </Button>
-        <Button
-          className="undo-button"
-          variant="invisible"
-          size="large"
-          block
-          labelWrap
-          leadingVisual={RotateCcw}
-          disabled={game.history.length === 0}
-          onClick={() => safeChange(() => undoLastEvent(game))}
-          aria-label="Undo last change"
-        >
-          Undo
         </Button>
         <Button
           className="score-button"
@@ -2677,8 +2806,10 @@ function LiveGameScreen({
         <ConfirmSheet
           title="End this game?"
           body="The clock will stop and you’ll see a player summary before returning to team selection."
+          cancelLabel="Continue game"
           confirmLabel="End game"
           confirmIcon={<Flag size={18} aria-hidden="true" />}
+          showClose
           onCancel={() => setEndConfirm(false)}
           onConfirm={() => {
             const finalGame = cancelQueuedSubstitutions(
@@ -5319,10 +5450,11 @@ function PositionEditor({
 function ConfirmSheet({
   title,
   body,
-  cancelLabel = "Keep game",
+  cancelLabel = "Continue game",
   confirmLabel,
   confirmIcon = <Square size={18} aria-hidden="true" />,
   confirmClassName = "danger-action",
+  showClose = false,
   onCancel,
   onConfirm,
 }: {
@@ -5332,6 +5464,7 @@ function ConfirmSheet({
   confirmLabel: string;
   confirmIcon?: ElementType | ReactElement;
   confirmClassName?: "primary-action" | "danger-action";
+  showClose?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -5342,7 +5475,7 @@ function ConfirmSheet({
       className="confirm-sheet"
       width="480px"
       role="alertdialog"
-      showClose={false}
+      showClose={showClose}
       onClose={onCancel}
       footer={
         <>

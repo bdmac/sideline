@@ -31,6 +31,17 @@ const applyCurrentRosterPreferences = (
 
 const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
   const team = INITIAL_STATE.teams[game.teamId];
+  const periodCount = game.periodCount ?? (game.teamId === "u8" ? 4 : 2);
+  const periodLength = game.durationSeconds / periodCount;
+  const legacyCompletedPeriod = game.periodBreak?.completedPeriod;
+  const currentPeriod = Math.min(
+    periodCount,
+    Math.max(
+      1,
+      legacyCompletedPeriod ??
+        Math.floor(game.clock.elapsedSeconds / periodLength) + 1,
+    ),
+  );
   const guestPlayers = (game.guestPlayers ?? []).filter(
     (player) => player.guest && player.active,
   );
@@ -54,7 +65,11 @@ const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
   return {
     ...game,
     ...(guestPlayers.length ? { guestPlayers } : {}),
-    periodCount: game.periodCount ?? (game.teamId === "u8" ? 4 : 2),
+    periodCount,
+    period: game.period ?? {
+      current: currentPeriod,
+      startedAtSeconds: (currentPeriod - 1) * periodLength,
+    },
     presentIds,
     unavailableIds,
     totals,
@@ -79,7 +94,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     parsed.version === 10
   ) {
     return {
-      version: 12,
+      version: 13,
       teams: structuredClone(INITIAL_STATE.teams),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -89,7 +104,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 11) {
     return {
-      version: 12,
+      version: 13,
       teams: applyCurrentRosterPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -98,7 +113,22 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   }
 
   if (parsed.version === 12) {
-    return parsed as AppState;
+    return {
+      version: 13,
+      teams: parsed.teams as AppState["teams"],
+      activeGame: parsed.activeGame
+        ? normalizeActiveGame(parsed.activeGame)
+        : null,
+    };
+  }
+
+  if (parsed.version === 13) {
+    return {
+      ...(parsed as AppState),
+      activeGame: parsed.activeGame
+        ? normalizeActiveGame(parsed.activeGame)
+        : null,
+    };
   }
 
   return structuredClone(INITIAL_STATE);

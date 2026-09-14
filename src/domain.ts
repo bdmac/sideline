@@ -223,7 +223,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 12,
+  version: 13,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
@@ -308,6 +308,7 @@ export const createGame = (
     assignments,
     benchIds: validPresent.slice(team.sideSize),
     clock: { elapsedSeconds: 0, running: false, lastStartedAt: null },
+    period: { current: 1, startedAtSeconds: 0 },
     totals,
     history: [],
   };
@@ -335,37 +336,16 @@ export const materializeGame = (
     Math.floor((now - game.clock.lastStartedAt) / 1000),
   );
   if (delta === 0) return game;
-  const periodLength = game.durationSeconds / game.periodCount;
-  const nextBoundary =
-    (Math.floor(game.clock.elapsedSeconds / periodLength) + 1) * periodLength;
-  const crossesBoundary =
-    game.clock.elapsedSeconds < game.durationSeconds &&
-    game.clock.elapsedSeconds + delta >= nextBoundary;
-  const creditedSeconds = crossesBoundary
-    ? nextBoundary - game.clock.elapsedSeconds
-    : delta;
   const totals = structuredClone(game.totals);
-  addSeconds(
-    totals,
-    Object.values(game.assignments),
-    "fieldSeconds",
-    creditedSeconds,
-  );
-  addSeconds(totals, game.benchIds, "benchSeconds", creditedSeconds);
+  addSeconds(totals, Object.values(game.assignments), "fieldSeconds", delta);
+  addSeconds(totals, game.benchIds, "benchSeconds", delta);
   return {
     ...game,
     totals,
-    periodBreak: crossesBoundary
-      ? {
-          completedPeriod: Math.round(nextBoundary / periodLength),
-          final: nextBoundary >= game.durationSeconds,
-        }
-      : game.periodBreak,
     clock: {
       ...game.clock,
-      elapsedSeconds: game.clock.elapsedSeconds + creditedSeconds,
-      running: crossesBoundary ? false : game.clock.running,
-      lastStartedAt: crossesBoundary ? null : now,
+      elapsedSeconds: game.clock.elapsedSeconds + delta,
+      lastStartedAt: now,
     },
   };
 };
@@ -383,6 +363,60 @@ export const setClockRunning = (
       ...current.clock,
       running,
       lastStartedAt: running ? now : null,
+    },
+  };
+};
+
+export const endCurrentPeriod = (
+  game: ActiveGame,
+  now = Date.now(),
+): ActiveGame => {
+  const current = materializeGame(game, now);
+  const status = getPeriodStatus(
+    current.durationSeconds,
+    current.clock.elapsedSeconds,
+    current.periodCount,
+    current.period,
+  );
+  if (!status.regulationReached) {
+    throw new Error(
+      `${status.label} ${status.current} still has time remaining`,
+    );
+  }
+  return {
+    ...current,
+    periodBreak: {
+      completedPeriod: current.period.current,
+      final: current.period.current >= current.periodCount,
+    },
+    clock: {
+      ...current.clock,
+      running: false,
+      lastStartedAt: null,
+    },
+  };
+};
+
+export const startNextPeriod = (
+  game: ActiveGame,
+  now = Date.now(),
+): ActiveGame => {
+  const current = materializeGame(game, now);
+  if (!current.periodBreak || current.periodBreak.final) {
+    throw new Error("The current period must end before starting the next one");
+  }
+  const nextPeriod = current.periodBreak.completedPeriod + 1;
+  return {
+    ...current,
+    period: {
+      current: nextPeriod,
+      startedAtSeconds: current.clock.elapsedSeconds,
+    },
+    periodBreak: undefined,
+    clock: {
+      ...current.clock,
+      running: true,
+      lastStartedAt: now,
     },
   };
 };
@@ -464,21 +498,39 @@ export const getPeriodStatus = (
   durationSeconds: number,
   elapsedSeconds: number,
   periodCount: 2 | 4,
+  periodState = {
+    current: Math.min(
+      periodCount,
+      Math.floor(elapsedSeconds / (durationSeconds / periodCount)) + 1,
+    ),
+    startedAtSeconds:
+      Math.min(
+        periodCount,
+        Math.floor(elapsedSeconds / (durationSeconds / periodCount)) + 1,
+      ) *
+        (durationSeconds / periodCount) -
+      durationSeconds / periodCount,
+  },
 ) => {
   const periodLength = durationSeconds / periodCount;
-  const current = Math.min(
-    periodCount,
-    Math.floor(elapsedSeconds / periodLength) + 1,
+  const current = Math.min(periodCount, Math.max(1, periodState.current));
+  const periodElapsed = Math.max(
+    0,
+    elapsedSeconds - periodState.startedAtSeconds,
   );
-  const periodElapsed =
-    elapsedSeconds >= durationSeconds
-      ? periodLength
-      : elapsedSeconds % periodLength;
+  const remainingSeconds = Math.max(0, periodLength - periodElapsed);
+  const addedTimeSeconds = Math.max(0, periodElapsed - periodLength);
   return {
     current,
     count: periodCount,
     label: periodCount === 4 ? "Quarter" : "Half",
-    remainingSeconds: Math.max(0, periodLength - periodElapsed),
+    periodLengthSeconds: periodLength,
+    periodElapsedSeconds: periodElapsed,
+    remainingSeconds,
+    regulationRemainingSeconds:
+      (periodCount - current) * periodLength + remainingSeconds,
+    regulationReached: periodElapsed >= periodLength,
+    addedTimeSeconds,
   };
 };
 

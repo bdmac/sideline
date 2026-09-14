@@ -7,6 +7,7 @@ import {
   assignPlayerToPosition,
   assignPlayersByPreference,
   createGame,
+  endCurrentPeriod,
   FORMATIONS,
   getCurrentBenchSeconds,
   getCurrentFieldSeconds,
@@ -27,6 +28,7 @@ import {
   removeQueuedSubstitution,
   removeQueuedSubstitutionForOutgoing,
   setClockRunning,
+  startNextPeriod,
   suggestSubstitutions,
   summarizePlayerPositions,
   undoLastEvent,
@@ -233,19 +235,19 @@ describe("player availability", () => {
 
 describe("period accounting", () => {
   it("tracks U8 quarters and U12 halves at their boundaries", () => {
-    expect(getPeriodStatus(40 * 60, 9 * 60, 4)).toEqual({
+    expect(getPeriodStatus(40 * 60, 9 * 60, 4)).toMatchObject({
       current: 1,
       count: 4,
       label: "Quarter",
       remainingSeconds: 60,
     });
-    expect(getPeriodStatus(40 * 60, 10 * 60, 4)).toEqual({
+    expect(getPeriodStatus(40 * 60, 10 * 60, 4)).toMatchObject({
       current: 2,
       count: 4,
       label: "Quarter",
       remainingSeconds: 10 * 60,
     });
-    expect(getPeriodStatus(60 * 60, 35 * 60, 2)).toEqual({
+    expect(getPeriodStatus(60 * 60, 35 * 60, 2)).toMatchObject({
       current: 2,
       count: 2,
       label: "Half",
@@ -253,7 +255,7 @@ describe("period accounting", () => {
     });
   });
 
-  it("pauses exactly at period boundaries and resumes into the next period", () => {
+  it("continues into added time until the coach ends the period", () => {
     const team = INITIAL_TEAMS.u8;
     const game = createGame(
       team,
@@ -267,29 +269,57 @@ describe("period accounting", () => {
       running: true,
       lastStartedAt: 1_000,
     };
-    const paused = materializeGame(game, 6_000);
+    const addedTime = materializeGame(game, 6_000);
 
-    expect(paused.clock).toEqual({
-      elapsedSeconds: 10 * 60,
-      running: false,
-      lastStartedAt: null,
+    expect(addedTime.clock).toEqual({
+      elapsedSeconds: 10 * 60 + 4,
+      running: true,
+      lastStartedAt: 6_000,
     });
-    expect(paused.periodBreak).toEqual({ completedPeriod: 1, final: false });
+    expect(addedTime.periodBreak).toBeUndefined();
+    expect(
+      getPeriodStatus(
+        addedTime.durationSeconds,
+        addedTime.clock.elapsedSeconds,
+        addedTime.periodCount,
+        addedTime.period,
+      ),
+    ).toMatchObject({
+      current: 1,
+      regulationReached: true,
+      addedTimeSeconds: 4,
+    });
     Object.values(game.assignments).forEach((playerId) => {
-      expect(paused.totals[playerId].fieldSeconds).toBe(1);
+      expect(addedTime.totals[playerId].fieldSeconds).toBe(5);
     });
 
-    const resumed = setClockRunning(paused, true, 7_000);
-    expect(resumed.periodBreak).toBeUndefined();
-    const nextBreak = materializeGame(resumed, 607_000);
-    expect(nextBreak.clock.elapsedSeconds).toBe(20 * 60);
-    expect(nextBreak.periodBreak).toEqual({
-      completedPeriod: 2,
-      final: false,
+    const ended = endCurrentPeriod(addedTime, 7_000);
+    expect(ended.clock.running).toBe(false);
+    expect(ended.clock.elapsedSeconds).toBe(10 * 60 + 5);
+    expect(ended.periodBreak).toEqual({ completedPeriod: 1, final: false });
+
+    const nextPeriod = startNextPeriod(ended, 8_000);
+    expect(nextPeriod.period).toEqual({
+      current: 2,
+      startedAtSeconds: 10 * 60 + 5,
+    });
+    const nextAddedTime = materializeGame(nextPeriod, 608_000);
+    expect(nextAddedTime.clock.elapsedSeconds).toBe(20 * 60 + 5);
+    expect(
+      getPeriodStatus(
+        nextAddedTime.durationSeconds,
+        nextAddedTime.clock.elapsedSeconds,
+        nextAddedTime.periodCount,
+        nextAddedTime.period,
+      ),
+    ).toMatchObject({
+      current: 2,
+      regulationReached: true,
+      addedTimeSeconds: 0,
     });
   });
 
-  it("pauses at the end of regulation", () => {
+  it("continues beyond final regulation while tracking added time", () => {
     const team = INITIAL_TEAMS.u12;
     const game = createGame(
       team,
@@ -303,11 +333,79 @@ describe("period accounting", () => {
       running: true,
       lastStartedAt: 1_000,
     };
+    game.period = { current: 2, startedAtSeconds: 30 * 60 };
 
     const completed = materializeGame(game, 11_000);
-    expect(completed.clock.elapsedSeconds).toBe(60 * 60);
-    expect(completed.clock.running).toBe(false);
-    expect(completed.periodBreak).toEqual({ completedPeriod: 2, final: true });
+    expect(completed.clock.elapsedSeconds).toBe(60 * 60 + 8);
+    expect(completed.clock.running).toBe(true);
+    expect(completed.periodBreak).toBeUndefined();
+    expect(
+      getPeriodStatus(
+        completed.durationSeconds,
+        completed.clock.elapsedSeconds,
+        completed.periodCount,
+        completed.period,
+      ),
+    ).toMatchObject({
+      current: 2,
+      regulationReached: true,
+      addedTimeSeconds: 8,
+      regulationRemainingSeconds: 0,
+    });
+  });
+
+  it("keeps reminders and event timestamps on actual added time", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = {
+      elapsedSeconds: 9 * 60 + 59,
+      running: true,
+      lastStartedAt: 1_000,
+    };
+
+    const addedTime = materializeGame(game, 6_000);
+    const scorerId = Object.values(addedTime.assignments).find(
+      (playerId) => addedTime.assignments.gk !== playerId,
+    )!;
+    const scored = recordGoal(addedTime, "us", scorerId, 6_000);
+
+    expect(getSubstitutionReminderStatus(addedTime)).toMatchObject({
+      due: true,
+      secondsSinceLastSubstitution: 10 * 60 + 4,
+    });
+    expect(scored.history.at(-1)).toMatchObject({
+      type: "goal-for",
+      atSeconds: 10 * 60 + 4,
+    });
+  });
+
+  it("resumes the same period after an accidental period end", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = {
+      elapsedSeconds: 10 * 60,
+      running: true,
+      lastStartedAt: 1_000,
+    };
+
+    const ended = endCurrentPeriod(game, 1_000);
+    const resumed = setClockRunning(ended, true, 2_000);
+
+    expect(resumed.period).toEqual({ current: 1, startedAtSeconds: 0 });
+    expect(resumed.periodBreak).toBeUndefined();
+    expect(resumed.clock.running).toBe(true);
   });
 });
 
