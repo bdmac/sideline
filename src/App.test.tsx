@@ -664,6 +664,7 @@ describe("Sideline app", () => {
     expect(
       screen.queryByRole("button", { name: "Add Evan to game" }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByText("Out of game")).not.toBeInTheDocument();
     expect(screen.getByText("Evan")).toBeInTheDocument();
 
     const gameLog = screen.getByText("Game timeline").closest("details");
@@ -671,6 +672,19 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByText("Game timeline"));
     expect(gameLog).toHaveAttribute("open");
     expect(screen.getByText("Evan added to game")).toBeInTheDocument();
+  });
+
+  it("hides empty live-game exception and timeline sections", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+
+    expect(screen.queryByText("Out of game")).not.toBeInTheDocument();
+    expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start Q1" }));
+
+    expect(screen.getByText("Game timeline")).toBeInTheDocument();
   });
 
   it("opens U12 setup directly without configurable duration or format", () => {
@@ -2639,6 +2653,11 @@ describe("Sideline app", () => {
     expect(
       within(compactHeader as HTMLElement).getByText("+0:04 added"),
     ).toBeInTheDocument();
+    expect(
+      within(compactHeader as HTMLElement)
+        .getByText("+0:04 added")
+        .closest(".compact-match-clock"),
+    ).toHaveClass("added-time");
 
     fireEvent.click(
       within(addedTimeBanner).getByRole("button", {

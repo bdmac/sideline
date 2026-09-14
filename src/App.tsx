@@ -2496,19 +2496,19 @@ function LiveGameScreen({
             )}
           </div>
 
-          <details className="availability-section">
-            <summary className="disclosure-summary">
-              <span>
-                <strong>Out of game</strong>
-                <small>Not currently available to play</small>
-              </span>
-              <span>
-                {game.unavailableIds.length}{" "}
-                {game.unavailableIds.length === 1 ? "player" : "players"}
-              </span>
-            </summary>
-            <div className="availability-content">
-              {game.unavailableIds.length ? (
+          {game.unavailableIds.length > 0 && (
+            <details className="availability-section">
+              <summary className="disclosure-summary">
+                <span>
+                  <strong>Out of game</strong>
+                  <small>Not currently available to play</small>
+                </span>
+                <span>
+                  {game.unavailableIds.length}{" "}
+                  {game.unavailableIds.length === 1 ? "player" : "players"}
+                </span>
+              </summary>
+              <div className="availability-content">
                 <div className="unavailable-list">
                   {game.unavailableIds.map((id) => (
                     <div className="unavailable-row" key={id}>
@@ -2531,11 +2531,9 @@ function LiveGameScreen({
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p>No players are currently out of the game.</p>
-              )}
-            </div>
-          </details>
+              </div>
+            </details>
+          )}
         </aside>
       </div>
 
@@ -5273,6 +5271,8 @@ function GameLog({
       event,
     })),
   ].sort((a, b) => b.atSeconds - a.atSeconds || b.order - a.order);
+  if (timelineItems.length === 0) return null;
+
   const eventIcon = (event: GameEvent) => {
     switch (event.type) {
       case "substitution":

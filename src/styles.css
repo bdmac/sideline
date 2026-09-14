@@ -3595,7 +3595,8 @@ select:hover {
     color: var(--ink-soft);
   }
 
-  .compact-match-clock.added-time .compact-clock-glyph {
+  .compact-match-clock.added-time .compact-clock-glyph,
+  .compact-match-clock.added-time small {
     color: var(--warm-dark);
   }
 
