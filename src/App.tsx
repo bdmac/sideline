@@ -10,6 +10,7 @@ import {
 import { ThemeProvider } from "@primer/react/next";
 import {
   ArrowLeft,
+  ArrowRight,
   ArrowRightLeft,
   Check,
   ChevronDown,
@@ -30,6 +31,7 @@ import {
   Sun,
   Trash2,
   UserRoundX,
+  WandSparkles,
   X,
 } from "lucide-react";
 import {
@@ -1023,6 +1025,7 @@ function SetupScreen({
               className="secondary-action"
               variant="default"
               size="large"
+              leadingVisual={WandSparkles}
               disabled={assignmentCount === expectedOnField}
               onClick={autoFillStarters}
             >
@@ -1032,6 +1035,7 @@ function SetupScreen({
               className="quiet-button"
               variant="invisible"
               size="large"
+              leadingVisual={RotateCcw}
               onClick={resetStarters}
             >
               Reset
@@ -1086,7 +1090,7 @@ function SetupScreen({
             className="primary-action"
             variant="primary"
             size="large"
-            trailingVisual={ChevronRight}
+            trailingVisual={ArrowRight}
             onClick={() => goToStep((setupStep + 1) as 1 | 2)}
           >
             {setupSteps[setupStep + 1].label}
@@ -4387,26 +4391,24 @@ function TeamCrest({
           strokeWidth="3"
         />
         <path
-          d="M19 39c6 3 16 1 18-5 1.7-5-3-7-7-5 1-5 5-8 11-8l-3-5c8 1 12 7 11 13-1 10-10 18-22 17l4 6c-7-1-11-5-12-13Z"
+          d="M32 23c-2 1-3 3-4 6l-8-8-5-1 3 6 4-1-1 7-9 3 8 6c1 3 4 5 7 6l-3 6h16l-3-6c3-1 6-3 7-6l8-6-9-3-1-7 4 1 3-6-5 1-8 8c-1-3-2-5-4-6Z"
           fill="#0b6b63"
           stroke="#10282c"
           strokeLinejoin="round"
           strokeWidth="2"
         />
         <path
-          d="m39 22 6-7m-3 12 8-2"
-          stroke="#fbfcf8"
-          strokeLinecap="round"
-          strokeWidth="2"
+          d="m24 37 5 1-4 2-1-3Zm16 0-5 1 4 2 1-3ZM29 47l2-1-1 2-1-1Zm6 0-2-1 1 2 1-1Z"
+          fill="#f2c94c"
         />
-        <circle cx="39" cy="26" r="1.8" fill="#fbfcf8" />
         <text
-          x="18"
-          y="20"
+          x="32"
+          y="16"
           fill="#10282c"
           fontSize="9"
           fontWeight="900"
           fontFamily="system-ui, sans-serif"
+          textAnchor="middle"
         >
           U8
         </text>

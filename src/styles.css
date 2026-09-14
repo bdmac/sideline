@@ -23,6 +23,7 @@
   --wash: #edf2ee;
   --line: #c8d3cd;
   --rule-strong: var(--ink);
+  --dialog-edge: var(--ink);
   --control-border: var(--ink);
   --control-border-hover: var(--ink);
   --turf: #0b6b63;
@@ -69,6 +70,7 @@
   --wash: #17272a;
   --line: #293a3c;
   --rule-strong: #455c5e;
+  --dialog-edge: #33484a;
   --control-border: #5d696e;
   --control-border-hover: #818e92;
   --turf: #35b7a2;
@@ -1945,7 +1947,7 @@ select:hover {
   max-height: 92dvh;
   color: var(--ink);
   background: var(--paper);
-  border-top: 5px solid var(--ink);
+  border-top: 3px solid var(--dialog-edge);
   box-shadow: var(--shadow);
   border-radius: 0;
 }
@@ -2844,7 +2846,7 @@ select:hover {
     max-height: min(22rem, calc(100dvh - 2rem));
     padding: 0.35rem 0 max(0.35rem, env(safe-area-inset-bottom));
     border: 0;
-    border-top: 5px solid var(--ink);
+    border-top: 3px solid var(--dialog-edge);
     box-shadow: 0 -12px 34px rgba(9, 26, 29, 0.24);
   }
 
@@ -3051,43 +3053,9 @@ select:hover {
 
   .setup-submit .primary-action,
   .setup-submit .setup-back {
-    min-height: 66px;
+    min-height: 56px;
     flex: 1;
-    flex-direction: column;
-    gap: 0.25rem;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    color: var(--turf-dark);
-    line-height: 1.05;
     -webkit-tap-highlight-color: transparent;
-  }
-
-  .setup-submit .primary-action:hover:not(:disabled),
-  .setup-submit .primary-action:active:not(:disabled),
-  .setup-submit .setup-back:hover:not(:disabled),
-  .setup-submit .setup-back:active:not(:disabled) {
-    border-color: transparent;
-    background: var(--wash);
-  }
-
-  .setup-submit .primary-action svg,
-  .setup-submit .setup-back svg {
-    box-sizing: content-box;
-    width: 22px;
-    height: 22px;
-    padding: 0.28rem 0.6rem;
-    border-radius: 999px;
-    order: -1;
-    color: var(--on-accent);
-  }
-
-  .setup-submit .primary-action svg {
-    background: var(--turf-fill);
-  }
-
-  .setup-submit .setup-back svg {
-    background: var(--ink);
   }
 
   .live-page {

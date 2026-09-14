@@ -424,6 +424,11 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
 
+    const formationButton = screen.getByRole("button", { name: "Formation" });
+    expect(formationButton).toHaveAttribute("data-component", "Button");
+    expect(formationButton).toHaveAttribute("data-variant", "primary");
+    expect(formationButton.querySelector("svg")).toBeInTheDocument();
+
     const backButton = screen.getByRole("button", { name: "Team selection" });
     expect(backButton).toBeInTheDocument();
     fireEvent.click(backButton);
