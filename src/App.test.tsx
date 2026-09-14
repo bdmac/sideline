@@ -282,6 +282,42 @@ describe("Sideline app", () => {
     ).toHaveTextContent("5/5");
   });
 
+  it("calls out the no-bench case when exactly enough players attend", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    ["Simon", "Noah", "Maddox", "Ollie"].forEach((name) => {
+      fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+
+    expect(
+      screen.getByText(
+        "No bench — exactly enough players. 🪦 their little legs and lungs.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(
+      screen.getByText(
+        "Position changes are still available. Tiny legs, big minutes.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(document.querySelector(".pitch-player") as HTMLElement);
+    const playerActions = screen.getByRole("dialog");
+    expect(
+      within(playerActions).queryByRole("button", {
+        name: "Queue substitution",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(playerActions).getByRole("button", {
+        name: "Change positions",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("assigns starters from the tactics board and swaps occupied positions", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -517,6 +553,7 @@ describe("Sideline app", () => {
       screen.getByRole("button", { name: "Open actions for Simon" }),
     );
     const actions = screen.getByRole("dialog", { name: "Simon" });
+    expect(actions).not.toHaveClass("sideline-dialog-bodyless");
     expect(
       within(actions).getByRole("button", { name: "Queue substitution" }),
     ).toBeInTheDocument();
@@ -545,6 +582,7 @@ describe("Sideline app", () => {
     const confirmation = screen.getByRole("alertdialog", {
       name: "End this game?",
     });
+    expect(confirmation).toHaveClass("sideline-dialog-bodyless");
     fireEvent.mouseDown(confirmation.parentElement!);
     fireEvent.click(confirmation.parentElement!);
 
@@ -1023,7 +1061,9 @@ describe("Sideline app", () => {
     );
 
     expect(screen.getByText("3 substitutions queued")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Review subs" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review substitutions" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Delete plan" }));
 
     const confirmation = screen.getByRole("alertdialog", {
@@ -1062,7 +1102,9 @@ describe("Sideline app", () => {
     expect(
       screen.queryByRole("dialog", { name: /Review substitutions/ }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Review subs" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review substitutions" }),
+    );
 
     let queued = screen.getByRole("dialog", {
       name: "Review substitutions (1)",
@@ -1105,7 +1147,9 @@ describe("Sideline app", () => {
       screen.queryByRole("dialog", { name: /Review substitutions/ }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Queued for LM")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Review subs" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review substitutions" }),
+    );
     queued = screen.getByRole("dialog", {
       name: "Review substitutions (1)",
     });
@@ -1164,7 +1208,7 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
 
-    fireEvent.click(screen.getByRole("button", { name: "Score" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record a goal" }));
     const scorerDialog = screen.getByRole("dialog", { name: "Record a goal" });
     expect(
       within(scorerDialog).queryByRole("button", { name: "#14 Maddox" }),
@@ -1195,7 +1239,7 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     fireEvent.click(within(goalSummary).getByRole("button", { name: "Close" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Score" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record a goal" }));
     fireEvent.click(screen.getByRole("button", { name: "Opponent scored" }));
     expect(
       within(expandedStatus as HTMLElement).getByLabelText("Score"),
@@ -1576,6 +1620,46 @@ describe("Sideline app", () => {
 
     expect(screen.queryByLabelText("End of Quarter 1")).not.toBeInTheDocument();
     expect(screen.getByText("Clock running")).toBeInTheDocument();
+  });
+
+  it("uses a compact Resume label after regulation time", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = {
+      elapsedSeconds: 40 * 60,
+      running: false,
+      lastStartedAt: null,
+    };
+    game.periodBreak = { completedPeriod: 4, final: true };
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    const regulationBanner = screen.getByLabelText("Regulation time complete");
+    const endGameButton = within(regulationBanner).getByRole("button", {
+      name: "End game",
+    });
+    expect(endGameButton.querySelector(".lucide-flag")).toBeInTheDocument();
+    expect(
+      document.querySelector(".mobile-control-dock .clock-button"),
+    ).toHaveTextContent("Resume");
+
+    fireEvent.click(endGameButton);
+    const confirmation = screen.getByRole("alertdialog", {
+      name: "End this game?",
+    });
+    expect(
+      within(confirmation)
+        .getByRole("button", { name: "End game" })
+        .querySelector(".lucide-flag"),
+    ).toBeInTheDocument();
   });
 
   it("consolidates queued substitutions into the period-break banner", () => {

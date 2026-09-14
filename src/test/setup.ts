@@ -65,6 +65,34 @@ Object.defineProperty(globalThis, "ResizeObserver", {
   configurable: true,
 });
 
+Object.defineProperties(HTMLElement.prototype, {
+  popover: {
+    get() {
+      return this.getAttribute("popover");
+    },
+    set(value: string | null) {
+      if (value === null) {
+        this.removeAttribute("popover");
+      } else {
+        this.setAttribute("popover", value);
+      }
+    },
+    configurable: true,
+  },
+  showPopover: {
+    value: vi.fn(),
+    configurable: true,
+  },
+  hidePopover: {
+    value: vi.fn(),
+    configurable: true,
+  },
+  togglePopover: {
+    value: vi.fn(),
+    configurable: true,
+  },
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();

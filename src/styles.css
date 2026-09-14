@@ -32,7 +32,7 @@
   color: var(--ink-soft);
 }
 
-.section-title > span:first-child {
+.section-title > :first-child {
   min-width: 0;
 }
 
@@ -144,14 +144,27 @@ h3 {
   z-index: 100;
   left: 1rem;
   top: 1rem;
-  transform: translateY(-180%);
-  background: var(--ink);
-  color: white;
-  padding: 0.75rem 1rem;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
-.skip-link:focus {
-  transform: translateY(0);
+.skip-link:focus-visible {
+  width: auto;
+  height: auto;
+  padding: 0.75rem 1rem;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  background: var(--ink);
+  color: white;
 }
 
 .app-shell {
@@ -413,10 +426,10 @@ h3 {
   background: #7f2424;
 }
 
-.end-game-button {
-  min-height: 44px;
-  padding: 0.6rem 0.85rem;
-  white-space: nowrap;
+.primary-action [data-component="leadingVisual"],
+.danger-action [data-component="leadingVisual"],
+.sub-confirm [data-component="leadingVisual"] {
+  color: inherit;
 }
 
 .compact-score-button {
@@ -967,10 +980,6 @@ select:hover {
   display: flex;
   align-items: center;
   gap: 0.7rem;
-}
-
-.end-game-button {
-  min-height: 44px;
 }
 
 .match-header strong,
@@ -1799,28 +1808,14 @@ select:hover {
   box-shadow: 0 -8px 24px rgba(16, 40, 44, 0.1);
 }
 
-.mobile-control-dock button {
-  border: 1px solid var(--ink);
-  background: var(--paper);
+.mobile-control-dock [data-component="Button"] {
+  width: 100%;
+  min-width: 0;
   min-height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
+  border-radius: 0.375rem;
   font-size: 0.78rem;
+  font-family: inherit;
   font-weight: 850;
-}
-
-.mobile-control-dock .sub-button {
-  background: var(--warm);
-  border-color: var(--warm);
-  color: white;
-}
-
-.mobile-control-dock .clock-button {
-  background: var(--turf);
-  border-color: var(--turf);
-  color: white;
 }
 
 .position-player-summary {
@@ -1898,6 +1893,14 @@ select:hover {
 
 .sideline-dialog [data-component="Dialog.Body"] {
   padding: 0 1.25rem 1.25rem;
+}
+
+.sideline-dialog-bodyless [data-component="ScrollableRegion"] {
+  display: none;
+}
+
+.sideline-dialog-bodyless .sheet-header {
+  border-bottom: 0;
 }
 
 .sideline-dialog [data-component="Dialog.Footer"] {
@@ -2942,36 +2945,9 @@ select:hover {
     place-items: center;
   }
 
-  .compact-match-header .end-game-button {
-    min-height: 42px;
-    gap: 0.25rem;
-    padding-inline: 0.25rem;
-    font-size: 0.7rem;
-  }
-
-  .end-game-button {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    color: var(--danger);
-    padding: 0.3rem 0.4rem;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .end-game-button:hover:not(:disabled),
-  .end-game-button:active:not(:disabled) {
-    border-color: transparent;
-    background: #fae5e5;
-  }
-
-  .end-game-button svg {
-    box-sizing: content-box;
-    width: 16px;
-    height: 16px;
-    padding: 0.25rem 0.5rem;
-    border-radius: 999px;
-    background: var(--danger);
-    color: white;
+  .compact-end-game-button {
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .setup-submit {
@@ -3053,80 +3029,17 @@ select:hover {
     box-shadow: 0 -8px 24px rgba(16, 40, 44, 0.14);
   }
 
-  .mobile-control-dock button {
-    flex-direction: column;
-    gap: 0.25rem;
-    min-height: 66px;
-    padding: 0.35rem;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    line-height: 1.05;
+  .mobile-control-dock [data-component="Button"] {
+    min-height: 54px;
+    padding-inline: 0.4rem;
+    border-radius: 0.375rem;
+    font-size: 0.76rem;
     -webkit-tap-highlight-color: transparent;
   }
 
-  .mobile-control-dock .clock-button,
-  .mobile-control-dock .undo-button,
-  .mobile-control-dock .sub-button,
-  .mobile-control-dock .score-button,
-  .mobile-control-dock
-    button:not(.clock-button):not(.undo-button):not(.sub-button):not(
-      .score-button
-    ) {
-    background: transparent;
-  }
-
-  .mobile-control-dock .clock-button {
-    color: var(--turf-dark);
-  }
-
-  .mobile-control-dock .undo-button {
-    color: var(--ink);
-  }
-
-  .mobile-control-dock .sub-button {
-    color: var(--warm-dark);
-  }
-
-  .mobile-control-dock .score-button {
-    color: var(--turf-dark);
-  }
-
-  .mobile-control-dock .sub-button.queued svg {
-    outline: 3px solid var(--warm-pale);
-    outline-offset: 2px;
-  }
-
-  .mobile-control-dock button:active:not(:disabled) {
-    background: var(--wash);
-  }
-
-  .mobile-control-dock .clock-button svg,
-  .mobile-control-dock .undo-button svg,
-  .mobile-control-dock .sub-button svg,
-  .mobile-control-dock .score-button svg {
-    box-sizing: content-box;
-    width: 22px;
-    height: 22px;
-    padding: 0.28rem 0.6rem;
-    border-radius: 999px;
-    color: white;
-  }
-
-  .mobile-control-dock .clock-button svg {
-    background: var(--turf);
-  }
-
-  .mobile-control-dock .undo-button svg {
-    background: var(--ink);
-  }
-
-  .mobile-control-dock .sub-button svg {
-    background: var(--warm);
-  }
-
-  .mobile-control-dock .score-button svg {
-    background: var(--turf-dark);
+  .mobile-control-dock [data-component="leadingVisual"] svg {
+    width: 18px;
+    height: 18px;
   }
 
   .queued-substitution-banner,
@@ -3167,7 +3080,7 @@ select:hover {
     padding-left: 0;
   }
 
-  .attendance-support-actions .secondary-action {
+  .attendance-support-actions .attendance-guest-action {
     width: 100%;
   }
 

@@ -1,7 +1,9 @@
 import {
   ActionList,
   ActionMenu,
+  Button,
   Dialog,
+  IconButton,
   type DialogWidth,
 } from "@primer/react";
 import {
@@ -14,6 +16,7 @@ import {
   CirclePlus,
   Clock3,
   Download,
+  Flag,
   MoreHorizontal,
   Move,
   Pause,
@@ -26,8 +29,10 @@ import {
   X,
 } from "lucide-react";
 import {
+  type ElementType,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactElement,
   type ReactNode,
   useEffect,
   useLayoutEffect,
@@ -174,7 +179,9 @@ function SidelineDialog({
       position={{ narrow: "bottom", regular: "center" }}
       width={width}
       role={role}
-      className={`sideline-dialog ${className}`.trim()}
+      className={`sideline-dialog ${
+        children ? "" : "sideline-dialog-bodyless"
+      } ${className}`.trim()}
       renderHeader={({
         dialogLabelId,
         dialogDescriptionId,
@@ -186,14 +193,14 @@ function SidelineDialog({
             <p id={dialogDescriptionId}>{description}</p>
           </div>
           {showClose && (
-            <button
+            <IconButton
               className="icon-button"
-              type="button"
+              variant="invisible"
+              size="large"
+              icon={X}
               onClick={() => closeDialog("close-button")}
               aria-label="Close"
-            >
-              <X size={22} />
-            </button>
+            />
           )}
         </Dialog.Header>
       )}
@@ -502,9 +509,14 @@ function InstallHelpDialog({
       showClose={false}
       onClose={onClose}
       footer={
-        <button className="primary-action" type="button" onClick={onClose}>
+        <Button
+          className="primary-action"
+          variant="primary"
+          size="large"
+          onClick={onClose}
+        >
           Got it
-        </button>
+        </Button>
       }
     >
       <p>{instructions}</p>
@@ -531,18 +543,25 @@ function GuestPlayerSheet({
       onClose={onClose}
       footer={
         <>
-          <button className="secondary-action" type="button" onClick={onClose}>
+          <Button
+            className="secondary-action"
+            variant="default"
+            size="large"
+            onClick={onClose}
+          >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             className="primary-action"
             type="submit"
             form="guest-player-form"
+            variant="primary"
+            size="large"
+            leadingVisual={CirclePlus}
             disabled={!trimmedName}
           >
-            <CirclePlus size={18} aria-hidden="true" />
             Add guest
-          </button>
+          </Button>
         </>
       }
     >
@@ -840,14 +859,15 @@ function SetupScreen({
                 </span>
               </div>
               <div className="attendance-support-actions">
-                <button
-                  className="secondary-action"
-                  type="button"
+                <Button
+                  className="attendance-guest-action"
+                  variant="danger"
+                  size="large"
+                  leadingVisual={CirclePlus}
                   onClick={() => setGuestPlayerOpen(true)}
                 >
-                  <CirclePlus size={18} aria-hidden="true" />
                   Add guest player
-                </button>
+                </Button>
                 <small>Guest players are saved only with this game.</small>
               </div>
             </div>
@@ -878,15 +898,14 @@ function SetupScreen({
               return player.guest ? (
                 <div className="guest-attendance-row" key={player.id}>
                   {attendanceButton}
-                  <button
+                  <IconButton
                     className="icon-button"
-                    type="button"
+                    variant="default"
+                    size="large"
+                    icon={Trash2}
                     onClick={() => removeGuestPlayer(player.id)}
                     aria-label={`Remove guest ${player.name}`}
-                    title={`Remove guest ${player.name}`}
-                  >
-                    <Trash2 size={19} aria-hidden="true" />
-                  </button>
+                  />
                 </div>
               ) : (
                 attendanceButton
@@ -957,21 +976,23 @@ function SetupScreen({
             </span>
           </div>
           <div className="starter-tools">
-            <button
+            <Button
               className="secondary-action"
-              type="button"
+              variant="default"
+              size="large"
               disabled={assignmentCount === expectedOnField}
               onClick={autoFillStarters}
             >
               Auto-fill
-            </button>
-            <button
+            </Button>
+            <Button
               className="quiet-button"
-              type="button"
+              variant="invisible"
+              size="large"
               onClick={resetStarters}
             >
               Reset
-            </button>
+            </Button>
           </div>
           <StarterPitch
             formation={formation}
@@ -994,7 +1015,12 @@ function SetupScreen({
                   ))}
               </ul>
             ) : (
-              <span>No bench — exactly enough players</span>
+              <span>
+                No bench — exactly enough players
+                {presentIds.length === team.sideSize
+                  ? ". 🪦 their little legs and lungs."
+                  : ""}
+              </span>
             )}
           </div>
         </section>
@@ -1002,36 +1028,39 @@ function SetupScreen({
 
       <div className="setup-submit">
         {setupStep > 0 && (
-          <button
+          <Button
             className="secondary-action setup-back"
-            type="button"
+            variant="default"
+            size="large"
+            leadingVisual={ArrowLeft}
             onClick={() => goToStep((setupStep - 1) as 0 | 1)}
           >
-            <ArrowLeft size={20} aria-hidden="true" />{" "}
             {setupSteps[setupStep - 1].label}
-          </button>
+          </Button>
         )}
         {setupStep < 2 ? (
-          <button
+          <Button
             className="primary-action"
-            type="button"
+            variant="primary"
+            size="large"
+            trailingVisual={ChevronRight}
             onClick={() => goToStep((setupStep + 1) as 1 | 2)}
           >
             {setupSteps[setupStep + 1].label}
-            <ChevronRight size={22} aria-hidden="true" />
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             className="primary-action"
-            type="button"
+            variant="primary"
+            size="large"
+            leadingVisual={Play}
             disabled={!canStart}
             onClick={() =>
               attendanceShortfall > 0 ? setShortStartConfirm(true) : start()
             }
           >
-            <Play size={22} aria-hidden="true" />{" "}
             {attendanceShortfall > 0 ? "Start short-sided" : "Start game"}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -1176,7 +1205,7 @@ function LiveGameScreen({
     : periodBreak && !periodBreak.final
       ? `Start ${period.label} ${periodBreak.completedPeriod + 1}`
       : periodBreak?.final
-        ? "Continue clock"
+        ? "Resume"
         : "Start clock";
 
   useEffect(() => {
@@ -1307,14 +1336,14 @@ function LiveGameScreen({
               </small>
             </span>
           </div>
-          <button
-            className="danger-action end-game-button"
-            type="button"
+          <Button
+            variant="danger"
+            size="medium"
+            leadingVisual={Flag}
             onClick={() => setEndConfirm(true)}
           >
-            <Square size={18} aria-hidden="true" />
-            <span>End game</span>
-          </button>
+            End game
+          </Button>
         </header>
 
         <section className="match-metrics" aria-label="Match status">
@@ -1404,15 +1433,15 @@ function LiveGameScreen({
             {score.opponent}
           </span>
         </span>
-        <button
-          className="danger-action end-game-button"
-          type="button"
+        <IconButton
+          className="compact-end-game-button"
+          variant="danger"
+          size="large"
+          icon={Flag}
+          aria-label="End game"
           tabIndex={compactHeaderInteractive ? 0 : -1}
           onClick={() => setEndConfirm(true)}
-        >
-          <Square size={18} aria-hidden="true" />
-          <span>End game</span>
-        </button>
+        />
       </div>
 
       {periodBreak && (
@@ -1443,42 +1472,41 @@ function LiveGameScreen({
           <div>
             {!periodBreak.final &&
               (queuedPairs.length > 0 ? (
-                <button
+                <Button
                   className="secondary-action"
-                  type="button"
+                  variant="default"
+                  size="large"
+                  leadingVisual={ArrowRightLeft}
                   onClick={() => setQueuedPlanOpen(true)}
                 >
-                  <ArrowRightLeft size={18} aria-hidden="true" />
                   {queuedPlanErrors.length ? "Review plan" : "Review & execute"}
-                </button>
+                </Button>
               ) : game.benchIds.length > 0 ? (
-                <button
+                <Button
                   className="secondary-action"
-                  type="button"
+                  variant="default"
+                  size="large"
+                  leadingVisual={ArrowRightLeft}
                   onClick={() => setPlannerOpen(true)}
                 >
-                  <ArrowRightLeft size={18} aria-hidden="true" />
                   Plan subs
-                </button>
+                </Button>
               ) : null)}
-            <button
+            <Button
               className={periodBreak.final ? "danger-action" : "primary-action"}
-              type="button"
+              variant={periodBreak.final ? "danger" : "primary"}
+              size="large"
+              leadingVisual={periodBreak.final ? Flag : Play}
               onClick={() =>
                 periodBreak.final
                   ? setEndConfirm(true)
                   : safeChange(() => setClockRunning(game, true, Date.now()))
               }
             >
-              {periodBreak.final ? (
-                <Square size={18} aria-hidden="true" />
-              ) : (
-                <Play size={18} aria-hidden="true" />
-              )}
               {periodBreak.final
                 ? "End game"
                 : `Start ${period.label} ${periodBreak.completedPeriod + 1}`}
-            </button>
+            </Button>
           </div>
         </section>
       )}
@@ -1487,13 +1515,12 @@ function LiveGameScreen({
         <div className="error-banner" role="alert">
           <CircleAlert size={20} aria-hidden="true" />
           <span>{error}</span>
-          <button
-            type="button"
+          <IconButton
+            variant="invisible"
+            icon={X}
             onClick={() => setError("")}
             aria-label="Dismiss error"
-          >
-            <X size={18} />
-          </button>
+          />
         </div>
       )}
       {validationErrors.length > 0 && (
@@ -1505,6 +1532,7 @@ function LiveGameScreen({
       {showSubstitutionReminder && (
         <section
           className="substitution-reminder-banner"
+          role="status"
           aria-label="Substitution reminder"
         >
           <span>
@@ -1516,14 +1544,15 @@ function LiveGameScreen({
               )}
             </small>
           </span>
-          <button
+          <Button
             className="secondary-action"
-            type="button"
+            variant="default"
+            size="large"
+            leadingVisual={ArrowRightLeft}
             onClick={() => setPlannerOpen(true)}
           >
-            <ArrowRightLeft size={18} aria-hidden="true" />
             Plan subs
-          </button>
+          </Button>
         </section>
       )}
       {queuedPairs.length > 0 && !periodBreak && (
@@ -1545,23 +1574,25 @@ function LiveGameScreen({
             </small>
           </span>
           <div>
-            <button
+            <Button
               className="secondary-action"
-              type="button"
+              variant="default"
+              size="large"
+              leadingVisual={ArrowRightLeft}
               onClick={() => setQueuedPlanOpen(true)}
             >
-              <ArrowRightLeft size={18} aria-hidden="true" />
               Review
-            </button>
-            <button
+            </Button>
+            <Button
               className="sub-confirm"
-              type="button"
+              variant="primary"
+              size="large"
+              leadingVisual={Check}
               disabled={queuedPlanErrors.length > 0}
               onClick={executeQueuedSubstitutions}
             >
-              <Check size={18} aria-hidden="true" />
               Execute
-            </button>
+            </Button>
           </div>
         </section>
       )}
@@ -1569,12 +1600,12 @@ function LiveGameScreen({
       <div className="live-layout">
         <section className="pitch-section">
           <div className="section-title">
-            <span>
+            <div>
               <h1>On the field</h1>
               <small className="section-hint">
                 Tap a player for actions, or drag them onto another position.
               </small>
-            </span>
+            </div>
             <span>
               {fieldIds.length}/
               {Math.min(
@@ -1591,7 +1622,10 @@ function LiveGameScreen({
             team={team}
             totals={displayed.totals}
             onEditPlayer={(playerId) =>
-              setFieldActions({ playerId, includeQueue: true })
+              setFieldActions({
+                playerId,
+                includeQueue: game.benchIds.length > 0,
+              })
             }
             onAddGuestAtPosition={setGuestPositionId}
             onMovePlayer={(playerId, positionId) =>
@@ -1743,7 +1777,9 @@ function LiveGameScreen({
             ) : (
               <div className="bench-empty">
                 <strong>No available substitutes</strong>
-                <span>Position changes are still available.</span>
+                <span>
+                  Position changes are still available. Tiny legs, big minutes.
+                </span>
               </div>
             )}
           </div>
@@ -1771,14 +1807,15 @@ function LiveGameScreen({
                         />
                         <small>Not playing</small>
                       </span>
-                      <button
+                      <Button
                         className="secondary-action"
-                        type="button"
+                        variant="default"
+                        size="large"
                         aria-label={`Add ${playerName(team, id)} to game`}
                         onClick={() => handleAvailable(id)}
                       >
                         Add to game
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -1793,49 +1830,59 @@ function LiveGameScreen({
       <GameLog game={game} formation={formation} team={team} />
 
       <div className="mobile-control-dock" aria-label="Game controls">
-        <button
+        <Button
           className="clock-button"
-          type="button"
+          variant="invisible"
+          size="large"
+          block
+          labelWrap
+          leadingVisual={game.clock.running ? Pause : Play}
           onClick={() =>
             safeChange(() => setClockRunning(game, !game.clock.running))
           }
         >
-          {game.clock.running ? (
-            <Pause size={22} aria-hidden="true" />
-          ) : (
-            <Play size={22} aria-hidden="true" />
-          )}
           {clockActionLabel}
-        </button>
-        <button
+        </Button>
+        <Button
           className={`sub-button ${queuedPairs.length ? "queued" : ""}`}
-          type="button"
+          variant="invisible"
+          size="large"
+          block
+          labelWrap
+          leadingVisual={ArrowRightLeft}
+          aria-label={queuedPairs.length ? "Review substitutions" : undefined}
           disabled={game.benchIds.length === 0 && queuedPairs.length === 0}
           onClick={() =>
             queuedPairs.length ? setQueuedPlanOpen(true) : setPlannerOpen(true)
           }
         >
-          <ArrowRightLeft size={22} aria-hidden="true" />
-          {queuedPairs.length ? "Review subs" : "Plan subs"}
-        </button>
-        <button
+          {queuedPairs.length ? "Review" : "Plan subs"}
+        </Button>
+        <Button
           className="undo-button"
-          type="button"
+          variant="invisible"
+          size="large"
+          block
+          labelWrap
+          leadingVisual={RotateCcw}
           disabled={game.history.length === 0}
           onClick={() => safeChange(() => undoLastEvent(game))}
           aria-label="Undo last change"
         >
-          <RotateCcw size={21} aria-hidden="true" />
           Undo
-        </button>
-        <button
+        </Button>
+        <Button
           className="score-button"
-          type="button"
+          variant="invisible"
+          size="large"
+          block
+          labelWrap
+          leadingVisual={CirclePlus}
+          aria-label="Record a goal"
           onClick={() => setGoalScorerOpen(true)}
         >
-          <CirclePlus size={21} aria-hidden="true" />
-          Score
-        </button>
+          Goal
+        </Button>
       </div>
 
       {plannerOpen && (
@@ -2057,6 +2104,7 @@ function LiveGameScreen({
           title="End this game?"
           body="The clock will stop and you’ll see a player summary before returning to team selection."
           confirmLabel="End game"
+          confirmIcon={<Flag size={18} aria-hidden="true" />}
           onCancel={() => setEndConfirm(false)}
           onConfirm={() => {
             const finalGame = cancelQueuedSubstitutions(
@@ -2377,13 +2425,23 @@ function StarterPicker({
       onClose={onClose}
       footer={
         <>
-          <button className="secondary-action" type="button" onClick={onClose}>
+          <Button
+            className="secondary-action"
+            variant="default"
+            size="large"
+            onClick={onClose}
+          >
             Cancel
-          </button>
+          </Button>
           {currentPlayerId && (
-            <button className="quiet-button" type="button" onClick={onClear}>
+            <Button
+              className="quiet-button"
+              variant="invisible"
+              size="large"
+              onClick={onClear}
+            >
               Leave open
-            </button>
+            </Button>
           )}
         </>
       }
@@ -2464,32 +2522,34 @@ function GoalScorerPicker({
       onClose={onClose}
       footerClassName="scorekeeper-footer"
       footer={
-        <button
+        <Button
           className="secondary-action opponent-goal-action"
-          type="button"
+          variant="default"
+          size="large"
+          leadingVisual={CirclePlus}
           onClick={onOpponentGoal}
         >
-          <CirclePlus size={19} aria-hidden="true" />
           Opponent scored
-        </button>
+        </Button>
       }
     >
       <h3>Who scored for us?</h3>
       <div className="goal-scorer-grid">
         {playerIds.map((playerId) => (
-          <button
+          <Button
             className="secondary-action"
-            type="button"
+            variant="default"
+            size="large"
+            leadingVisual={CirclePlus}
             key={playerId}
             onClick={() => onSelect(playerId)}
           >
-            <CirclePlus size={18} aria-hidden="true" />
             <GoalMarkedPlayerName
               label={playerLabel(team, playerId)}
               goalCount={playerGoalCount(game, playerId)}
               emphasized={false}
             />
-          </button>
+          </Button>
         ))}
       </div>
     </SidelineDialog>
@@ -2595,14 +2655,15 @@ function BenchSubstitutionPicker({
       footer={
         currentPair ? (
           <div className="bench-picker-actions">
-            <button
+            <Button
               className="secondary-action remove-from-plan-action"
-              type="button"
+              variant="default"
+              size="large"
+              leadingVisual={Trash2}
               onClick={onRemove}
             >
-              <Trash2 size={18} aria-hidden="true" />
               Remove from queue
-            </button>
+            </Button>
           </div>
         ) : undefined
       }
@@ -2715,14 +2776,15 @@ function FieldSubstitutionPicker({
       footer={
         currentPair ? (
           <div className="bench-picker-actions">
-            <button
+            <Button
               className="secondary-action remove-from-plan-action"
-              type="button"
+              variant="default"
+              size="large"
+              leadingVisual={Trash2}
               onClick={onRemove}
             >
-              <Trash2 size={18} aria-hidden="true" />
               Remove from queue
-            </button>
+            </Button>
           </div>
         ) : undefined
       }
@@ -2808,31 +2870,34 @@ function FieldPlayerActionsSheet({
     >
       <div className="field-player-action-list">
         {includeQueue && (
-          <button
+          <Button
             className="secondary-action queue-field-player-action"
-            type="button"
+            variant="default"
+            size="large"
+            leadingVisual={ArrowRightLeft}
             onClick={onQueue}
           >
-            <ArrowRightLeft size={20} aria-hidden="true" />
             Queue substitution
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           className="secondary-action"
-          type="button"
+          variant="default"
+          size="large"
+          leadingVisual={Move}
           onClick={onChangePosition}
         >
-          <Move size={20} aria-hidden="true" />
           Change positions
-        </button>
-        <button
+        </Button>
+        <Button
           className="secondary-action remove-field-player-action"
-          type="button"
+          variant="default"
+          size="large"
+          leadingVisual={UserRoundX}
           onClick={onUnavailable}
         >
-          <UserRoundX size={20} aria-hidden="true" />
           Take {label} out of game
-        </button>
+        </Button>
       </div>
     </SidelineDialog>
   );
@@ -2885,31 +2950,25 @@ function FieldPlayerTimeRow({
         <strong>{formatDuration(currentFieldTime)}</strong>
       </span>
       <span className="player-row-actions">
-        <button
+        <IconButton
           className={`icon-button queue-player-button ${
             queued ? "queued" : ""
           }`}
-          type="button"
+          variant="default"
+          size="medium"
+          icon={queued ? Pencil : ArrowRightLeft}
           disabled={!queued && !canQueue}
           onClick={onQueue}
           aria-label={`${queued ? "Edit queued substitution for" : "Queue"} ${player.name} out`}
-          title={`${queued ? "Edit queued substitution for" : "Queue"} ${player.name} out`}
-        >
-          {queued ? (
-            <Pencil size={19} aria-hidden="true" />
-          ) : (
-            <ArrowRightLeft size={20} aria-hidden="true" />
-          )}
-        </button>
-        <button
+        />
+        <IconButton
           className="icon-button"
-          type="button"
+          variant="default"
+          size="medium"
+          icon={MoreHorizontal}
           onClick={onMore}
           aria-label={`More actions for ${player.name}`}
-          title={`More actions for ${player.name}`}
-        >
-          <MoreHorizontal size={21} aria-hidden="true" />
-        </button>
+        />
       </span>
     </div>
   );
@@ -2971,30 +3030,24 @@ function PlayerTimeRow({
         <strong>{formatDuration(currentBenchTime)}</strong>
       </span>
       <span className="player-row-actions">
-        <button
+        <IconButton
           className={`icon-button queue-player-button ${
             queued ? "queued" : ""
           }`}
-          type="button"
+          variant="default"
+          size="medium"
+          icon={queued ? Pencil : ArrowRightLeft}
           onClick={onQueue}
           aria-label={`${queued ? "Edit queued substitution for" : "Queue"} ${player.name}`}
-          title={`${queued ? "Edit queued substitution for" : "Queue"} ${player.name}`}
-        >
-          {queued ? (
-            <Pencil size={19} aria-hidden="true" />
-          ) : (
-            <ArrowRightLeft size={20} aria-hidden="true" />
-          )}
-        </button>
-        <button
+        />
+        <IconButton
           className="icon-button"
-          type="button"
+          variant="default"
+          size="medium"
+          icon={UserRoundX}
           onClick={onUnavailable}
           aria-label={`Take ${player.name} out of game`}
-          title={`Take ${player.name} out of game`}
-        >
-          <UserRoundX size={20} aria-hidden="true" />
-        </button>
+        />
       </span>
     </div>
   );
@@ -3057,15 +3110,17 @@ function PlayerActionMenu({
       }}
     >
       <ActionMenu.Anchor>
-        <button
+        <Button
           className="player-action-menu-trigger"
-          type="button"
+          variant="default"
+          size="large"
+          block
+          trailingVisual={ChevronDown}
           aria-label={label}
           data-player-menu-id={id}
         >
-          <span>{selected?.label ?? "Choose player"}</span>
-          <ChevronDown size={18} aria-hidden="true" />
-        </button>
+          {selected?.label ?? "Choose player"}
+        </Button>
       </ActionMenu.Anchor>
       <ActionMenu.Overlay
         align={align}
@@ -3274,18 +3329,24 @@ function SubstitutionPlanner({
       className="substitution-dialog substitution-sheet"
       footer={
         <>
-          <button className="secondary-action" type="button" onClick={onClose}>
+          <Button
+            className="secondary-action"
+            variant="default"
+            size="large"
+            onClick={onClose}
+          >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             className="sub-confirm"
-            type="button"
+            variant="primary"
+            size="large"
+            leadingVisual={Check}
             disabled={!valid}
             onClick={() => onConfirm(pairs)}
           >
-            <Check size={21} aria-hidden="true" />
             Queue {count} swap{count === 1 ? "" : "s"}
-          </button>
+          </Button>
         </>
       }
     >
@@ -3600,27 +3661,34 @@ function QueuedSubstitutionSummary({
       footerClassName="queued-plan-actions"
       footer={
         <>
-          <button className="secondary-action" type="button" onClick={onEdit}>
-            <Pencil size={18} aria-hidden="true" />
+          <Button
+            className="secondary-action"
+            variant="default"
+            size="large"
+            leadingVisual={Pencil}
+            onClick={onEdit}
+          >
             Edit plan
-          </button>
-          <button
+          </Button>
+          <Button
             className="danger-action delete-plan-action"
-            type="button"
+            variant="danger"
+            size="large"
+            leadingVisual={Trash2}
             onClick={() => setDeleteConfirm(true)}
           >
-            <Trash2 size={18} aria-hidden="true" />
             Delete plan
-          </button>
-          <button
+          </Button>
+          <Button
             className="sub-confirm"
-            type="button"
+            variant="primary"
+            size="large"
+            leadingVisual={Check}
             disabled={errors.length > 0}
             onClick={onExecute}
           >
-            <Check size={21} aria-hidden="true" />
             Execute subs
-          </button>
+          </Button>
         </>
       }
     >
@@ -3666,9 +3734,14 @@ function SubstitutionSummary({
       onClose={onClose}
       footerClassName="single-action-footer"
       footer={
-        <button className="primary-action" type="button" onClick={onClose}>
+        <Button
+          className="primary-action"
+          variant="primary"
+          size="large"
+          onClick={onClose}
+        >
           Done
-        </button>
+        </Button>
       }
     >
       <ReadySwapList
@@ -3707,9 +3780,14 @@ function PlayerEntrySummary({
       onClose={onClose}
       footerClassName="single-action-footer"
       footer={
-        <button className="primary-action" type="button" onClick={onClose}>
+        <Button
+          className="primary-action"
+          variant="primary"
+          size="large"
+          onClick={onClose}
+        >
           Done
-        </button>
+        </Button>
       }
     >
       <div className="ready-entry">
@@ -3827,9 +3905,14 @@ function GameSummary({
       </main>
 
       <footer className="game-summary-actions">
-        <button className="primary-action" type="button" onClick={onClose}>
+        <Button
+          className="primary-action"
+          variant="primary"
+          size="large"
+          onClick={onClose}
+        >
           Return to teams
-        </button>
+        </Button>
       </footer>
     </div>
   );
@@ -3955,17 +4038,18 @@ function GameLog({
             })}
           </ol>
         ) : (
-          <p className="empty-copy">Confirmed changes will appear here.</p>
+          <p className="empty-copy">But first there have to be some changes.</p>
         )}
         {onUndo && game.history.length > 0 && (
-          <button
+          <Button
             className="secondary-action game-log-undo"
-            type="button"
+            variant="default"
+            size="large"
+            leadingVisual={RotateCcw}
             onClick={onUndo}
           >
-            <RotateCcw size={18} aria-hidden="true" />
             Undo last change
-          </button>
+          </Button>
         )}
       </div>
     </details>
@@ -4005,16 +4089,22 @@ function PositionEditor({
       onClose={onClose}
       footer={
         <>
-          <button className="secondary-action" type="button" onClick={onClose}>
+          <Button
+            className="secondary-action"
+            variant="default"
+            size="large"
+            onClick={onClose}
+          >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             className="primary-action"
-            type="button"
+            variant="primary"
+            size="large"
             onClick={() => onConfirm(playerId, positionId)}
           >
             Save positions
-          </button>
+          </Button>
         </>
       }
     >
@@ -4080,7 +4170,7 @@ function ConfirmSheet({
   body: string;
   cancelLabel?: string;
   confirmLabel: string;
-  confirmIcon?: ReactNode;
+  confirmIcon?: ElementType | ReactElement;
   confirmClassName?: "primary-action" | "danger-action";
   onCancel: () => void;
   onConfirm: () => void;
@@ -4096,16 +4186,25 @@ function ConfirmSheet({
       onClose={onCancel}
       footer={
         <>
-          <button className="secondary-action" type="button" onClick={onCancel}>
+          <Button
+            className="secondary-action"
+            variant="default"
+            size="large"
+            onClick={onCancel}
+          >
             {cancelLabel}
-          </button>
-          <button
+          </Button>
+          <Button
             className={confirmClassName}
-            type="button"
+            variant={
+              confirmClassName === "danger-action" ? "danger" : "primary"
+            }
+            size="large"
+            leadingVisual={confirmIcon}
             onClick={onConfirm}
           >
-            {confirmIcon} {confirmLabel}
-          </button>
+            {confirmLabel}
+          </Button>
         </>
       }
     />
@@ -4120,9 +4219,15 @@ function PageBack({
   onClick: () => void;
 }) {
   return (
-    <button className="back-button" type="button" onClick={onClick}>
-      <ArrowLeft size={20} aria-hidden="true" /> {children}
-    </button>
+    <Button
+      className="back-button"
+      variant="invisible"
+      size="large"
+      leadingVisual={ArrowLeft}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
   );
 }
 
@@ -4142,9 +4247,15 @@ function EmptyState({
       <Clock3 size={32} aria-hidden="true" />
       <h1>{title}</h1>
       <p>{body}</p>
-      <button className="primary-action" type="button" onClick={onAction}>
-        {action} <ArrowRightLeft size={20} aria-hidden="true" />
-      </button>
+      <Button
+        className="primary-action"
+        variant="primary"
+        size="large"
+        trailingVisual={ArrowRightLeft}
+        onClick={onAction}
+      >
+        {action}
+      </Button>
     </div>
   );
 }
