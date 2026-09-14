@@ -9,6 +9,7 @@ import {
   createGame,
   FORMATIONS,
   getCurrentBenchSeconds,
+  getCurrentFieldSeconds,
   getFormationsForTeam,
   getPeriodStatus,
   getRecommendedSubstitutionCount,
@@ -22,6 +23,7 @@ import {
   queueSubstitutions,
   recordGoal,
   removeQueuedSubstitution,
+  removeQueuedSubstitutionForOutgoing,
   setClockRunning,
   suggestSubstitutions,
   summarizePlayerPositions,
@@ -545,6 +547,25 @@ describe("substitutions", () => {
     ).toBeUndefined();
   });
 
+  it("removes one outgoing player without clearing the rest of the queued batch", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const pairs = suggestSubstitutions(game, 2, team);
+    const queued = queueSubstitutions(game, pairs);
+    const updated = removeQueuedSubstitutionForOutgoing(
+      queued,
+      pairs[0].outPlayerId,
+    );
+
+    expect(updated.queuedSubstitutions).toEqual([pairs[1]]);
+  });
+
   it("removes an unavailable bench player from the queued batch", () => {
     const team = INITIAL_TEAMS.u8;
     const game = createGame(
@@ -784,6 +805,33 @@ describe("substitutions", () => {
     game.clock.elapsedSeconds = 480;
 
     expect(getCurrentBenchSeconds(game, playerId)).toBe(60);
+  });
+
+  it("tracks the current field stint across substitutions and position changes", () => {
+    const team = INITIAL_TEAMS.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const pair = suggestSubstitutions(game, 1, team)[0];
+    const playerId = pair.inPlayerId;
+    game.clock.elapsedSeconds = 300;
+    game = applySubstitutions(game, [pair], team.sideSize, 1_000);
+    game.clock.elapsedSeconds = 390;
+
+    expect(getCurrentFieldSeconds(game, playerId)).toBe(90);
+
+    const targetPositionId = Object.keys(game.assignments).find(
+      (positionId) => positionId !== pair.positionId,
+    )!;
+    game = movePlayer(game, playerId, targetPositionId, 1_000);
+    game.clock.elapsedSeconds = 450;
+
+    expect(getCurrentFieldSeconds(game, playerId)).toBe(150);
+    expect(getCurrentFieldSeconds(game, pair.outPlayerId)).toBe(0);
   });
 
   it("undoes the most recent confirmed substitution", () => {

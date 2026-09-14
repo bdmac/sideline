@@ -769,6 +769,22 @@ export const getCurrentBenchSeconds = (game: ActiveGame, playerId: string) => {
   return Math.max(0, game.clock.elapsedSeconds - enteredBenchAt);
 };
 
+export const getCurrentFieldSeconds = (game: ActiveGame, playerId: string) => {
+  if (!Object.values(game.assignments).includes(playerId)) return 0;
+  let enteredFieldAt = 0;
+  game.history.forEach((event, index) => {
+    const afterAssignments =
+      game.history[index + 1]?.beforeAssignments ?? game.assignments;
+    if (
+      !Object.values(event.beforeAssignments).includes(playerId) &&
+      Object.values(afterAssignments).includes(playerId)
+    ) {
+      enteredFieldAt = event.atSeconds;
+    }
+  });
+  return Math.max(0, game.clock.elapsedSeconds - enteredFieldAt);
+};
+
 export const validateGame = (game: ActiveGame, sideSize: number): string[] => {
   const errors: string[] = [];
   const fieldIds = Object.values(game.assignments);
@@ -868,6 +884,23 @@ export const removeQueuedSubstitution = (
   const existingPairs = game.queuedSubstitutions ?? [];
   const nextPairs = existingPairs.filter(
     (pair) => pair.inPlayerId !== inPlayerId,
+  );
+  if (nextPairs.length === existingPairs.length) {
+    throw new Error("Player is not in the queued substitution plan");
+  }
+  return {
+    ...game,
+    queuedSubstitutions: nextPairs.length ? nextPairs : undefined,
+  };
+};
+
+export const removeQueuedSubstitutionForOutgoing = (
+  game: ActiveGame,
+  outPlayerId: string,
+): ActiveGame => {
+  const existingPairs = game.queuedSubstitutions ?? [];
+  const nextPairs = existingPairs.filter(
+    (pair) => pair.outPlayerId !== outPlayerId,
   );
   if (nextPairs.length === existingPairs.length) {
     throw new Error("Player is not in the queued substitution plan");
@@ -1070,7 +1103,7 @@ export const markUnavailable = (
     ([, id]) => id === playerId,
   )?.[0];
   let benchIds = current.benchIds.filter((id) => id !== playerId);
-  let note = "Player marked unavailable";
+  let note = "Player taken out of game";
   const pairs: SubstitutionPair[] = [];
   if (fieldPosition) {
     delete assignments[fieldPosition];
@@ -1089,9 +1122,9 @@ export const markUnavailable = (
         outPlayerId: playerId,
         inPlayerId: replacement,
       });
-      note = "Player unavailable; fairest bench player entered";
+      note = "Player left game; fairest bench player entered";
     } else {
-      note = "Player unavailable; no replacement available";
+      note = "Player left game; no replacement available";
     }
   }
   const queuedSubstitutions = current.queuedSubstitutions
@@ -1152,7 +1185,7 @@ export const markAvailable = (
   const unavailableIds = current.unavailableIds.filter((id) => id !== playerId);
   const assignments = { ...current.assignments };
   let benchIds = current.benchIds;
-  let note = "Player marked available and added to bench";
+  let note = "Player added to game and joined the bench";
 
   if (Object.keys(assignments).length < Math.min(sideSize, presentIds.length)) {
     const openPosition = getFormation(current.formationId).positions.find(
@@ -1160,7 +1193,7 @@ export const markAvailable = (
     );
     if (!openPosition) throw new Error("No open position is available");
     assignments[openPosition.id] = playerId;
-    note = "Player marked available and entered an open position";
+    note = "Player added to game and entered an open position";
   } else if (!benchIds.includes(playerId)) {
     benchIds = [...benchIds, playerId];
   }
