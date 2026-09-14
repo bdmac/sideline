@@ -16,6 +16,32 @@
     />
     <link rel="icon" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script>
+      (() => {
+        try {
+          const mode =
+            localStorage.getItem("sideline-color-mode") === "dark"
+              ? "dark"
+              : "light";
+          document.documentElement.dataset.theme = mode;
+          document.documentElement.dataset.colorMode = mode;
+          document.documentElement.dataset.lightTheme = "light";
+          document.documentElement.dataset.darkTheme = "dark_dimmed";
+          document.documentElement.style.colorScheme = mode;
+          document
+            .querySelector('meta[name="theme-color"]')
+            ?.setAttribute("content", mode === "dark" ? "#071315" : "#0b3b3f");
+          document
+            .querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
+            ?.setAttribute(
+              "content",
+              mode === "dark" ? "black-translucent" : "default",
+            );
+        } catch {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
     <title>Sideline</title>
   </head>
   <body>

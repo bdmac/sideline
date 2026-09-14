@@ -7,6 +7,7 @@ import {
   Label,
   type DialogWidth,
 } from "@primer/react";
+import { ThemeProvider } from "@primer/react/next";
 import {
   ArrowLeft,
   ArrowRightLeft,
@@ -20,11 +21,13 @@ import {
   Flag,
   MoreHorizontal,
   Move,
+  Moon,
   Pause,
   Pencil,
   Play,
   RotateCcw,
   Square,
+  Sun,
   Trash2,
   UserRoundX,
   X,
@@ -75,6 +78,7 @@ import {
   validateSubstitutionPairs,
 } from "./domain";
 import { loadState, saveState } from "./storage";
+import { type ColorMode, loadColorMode, saveColorMode } from "./theme";
 import type {
   ActiveGame,
   AppState,
@@ -249,6 +253,7 @@ const isIos = () =>
 
 function App() {
   const [state, setState] = useState<AppState>(() => loadState());
+  const [colorMode, setColorMode] = useState<ColorMode>(() => loadColorMode());
   const stateRef = useRef(state);
   const [screen, setScreen] = useState<Screen>(() =>
     state.activeGame ? { name: "live" } : { name: "home" },
@@ -270,6 +275,25 @@ function App() {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = colorMode;
+    root.dataset.colorMode = colorMode;
+    root.dataset.lightTheme = "light";
+    root.dataset.darkTheme = "dark_dimmed";
+    root.style.colorScheme = colorMode;
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", colorMode === "dark" ? "#071315" : "#0b3b3f");
+    document
+      .querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
+      ?.setAttribute(
+        "content",
+        colorMode === "dark" ? "black-translucent" : "default",
+      );
+    saveColorMode(colorMode);
+  }, [colorMode]);
 
   useEffect(() => {
     const persist = () => saveState(stateRef.current);
@@ -318,77 +342,95 @@ function App() {
     : null;
 
   return (
-    <div className="app-shell">
-      <a className="skip-link" href="#main">
-        Skip to main content
-      </a>
-      <header className="topbar">
-        <button
-          className="brand"
-          type="button"
-          onClick={() => setScreen({ name: "home" })}
-          aria-label="Go to team selection"
-        >
-          <SidelineMark />
-          <span>Sideline</span>
-        </button>
-      </header>
-
-      <main id="main">
-        {screen.name === "home" && (
-          <HomeScreen
-            state={state}
-            onChooseTeam={(teamId) => {
-              if (state.activeGame?.teamId === teamId) {
-                setScreen({ name: "live" });
-              } else {
-                setScreen({ name: "setup", teamId });
-              }
-            }}
-            onResume={() => setScreen({ name: "live" })}
-            showInstall={!installed}
-            onInstall={installApp}
-          />
-        )}
-        {screen.name === "setup" && (
-          <SetupScreen
-            team={state.teams[screen.teamId]}
-            onBack={() => setScreen({ name: "home" })}
-            onStart={(game) => {
-              commitState((current) => ({ ...current, activeGame: game }));
-              setScreen({ name: "live" });
-            }}
-          />
-        )}
-        {screen.name === "live" && state.activeGame && activeTeam && (
-          <LiveGameScreen
-            game={state.activeGame}
-            team={activeTeam}
-            onChange={(game) =>
-              commitState((current) => ({ ...current, activeGame: game }))
+    <ThemeProvider
+      colorMode={colorMode}
+      dayScheme="light"
+      nightScheme="dark_dimmed"
+    >
+      <div className="app-shell">
+        <a className="skip-link" href="#main">
+          Skip to main content
+        </a>
+        <header className="topbar">
+          <button
+            className="brand"
+            type="button"
+            onClick={() => setScreen({ name: "home" })}
+            aria-label="Go to team selection"
+          >
+            <SidelineMark />
+            <span>Sideline</span>
+          </button>
+          <IconButton
+            className="theme-toggle"
+            variant="invisible"
+            size="large"
+            icon={colorMode === "dark" ? Sun : Moon}
+            aria-label={
+              colorMode === "dark" ? "Use light mode" : "Use dark mode"
             }
-            onEnd={() => {
-              commitState((current) => ({ ...current, activeGame: null }));
-              setScreen({ name: "home" });
-            }}
+            onClick={() =>
+              setColorMode((current) => (current === "dark" ? "light" : "dark"))
+            }
+          />
+        </header>
+
+        <main id="main">
+          {screen.name === "home" && (
+            <HomeScreen
+              state={state}
+              onChooseTeam={(teamId) => {
+                if (state.activeGame?.teamId === teamId) {
+                  setScreen({ name: "live" });
+                } else {
+                  setScreen({ name: "setup", teamId });
+                }
+              }}
+              onResume={() => setScreen({ name: "live" })}
+              showInstall={!installed}
+              onInstall={installApp}
+            />
+          )}
+          {screen.name === "setup" && (
+            <SetupScreen
+              team={state.teams[screen.teamId]}
+              onBack={() => setScreen({ name: "home" })}
+              onStart={(game) => {
+                commitState((current) => ({ ...current, activeGame: game }));
+                setScreen({ name: "live" });
+              }}
+            />
+          )}
+          {screen.name === "live" && state.activeGame && activeTeam && (
+            <LiveGameScreen
+              game={state.activeGame}
+              team={activeTeam}
+              onChange={(game) =>
+                commitState((current) => ({ ...current, activeGame: game }))
+              }
+              onEnd={() => {
+                commitState((current) => ({ ...current, activeGame: null }));
+                setScreen({ name: "home" });
+              }}
+            />
+          )}
+          {screen.name === "live" && !state.activeGame && (
+            <EmptyState
+              title="No active game"
+              body="Choose a team to prepare a new match."
+              action="Choose a team"
+              onAction={() => setScreen({ name: "home" })}
+            />
+          )}
+        </main>
+        {installHelpOpen && (
+          <InstallHelpDialog
+            ios={isIos()}
+            onClose={() => setInstallHelpOpen(false)}
           />
         )}
-        {screen.name === "live" && !state.activeGame && (
-          <EmptyState
-            title="No active game"
-            body="Choose a team to prepare a new match."
-            action="Choose a team"
-            onAction={() => setScreen({ name: "home" })}
-          />
-        )}
-      </main>
-      {installHelpOpen && (
-        <InstallHelpDialog
-          ios={isIos()}
-          onClose={() => setInstallHelpOpen(false)}
-        />
-      )}
-    </div>
+      </div>
+    </ThemeProvider>
   );
 }
 
@@ -2912,8 +2954,8 @@ function FieldPlayerActionsSheet({
           Change positions
         </Button>
         <Button
-          className="secondary-action remove-field-player-action"
-          variant="default"
+          className="remove-field-player-action"
+          variant="danger"
           size="large"
           leadingVisual={UserRoundX}
           onClick={onUnavailable}
@@ -2973,10 +3015,8 @@ function FieldPlayerTimeRow({
       </span>
       <span className="player-row-actions">
         <IconButton
-          className={`icon-button queue-player-button ${
-            queued ? "queued" : ""
-          }`}
-          variant="default"
+          className="queue-player-button"
+          variant="primary"
           size="medium"
           icon={queued ? Pencil : ArrowRightLeft}
           disabled={!queued && !canQueue}
@@ -3053,10 +3093,8 @@ function PlayerTimeRow({
       </span>
       <span className="player-row-actions">
         <IconButton
-          className={`icon-button queue-player-button ${
-            queued ? "queued" : ""
-          }`}
-          variant="default"
+          className="queue-player-button"
+          variant="primary"
           size="medium"
           icon={queued ? Pencil : ArrowRightLeft}
           onClick={onQueue}
@@ -3064,7 +3102,7 @@ function PlayerTimeRow({
         />
         <IconButton
           className="icon-button"
-          variant="default"
+          variant="danger"
           size="medium"
           icon={UserRoundX}
           onClick={onUnavailable}

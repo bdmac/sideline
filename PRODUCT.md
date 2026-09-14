@@ -79,7 +79,7 @@ Auto-fill maximizes these preferences deterministically. Substitution planning c
 
 ## Data and privacy
 
-All data is stored in browser `localStorage` under a versioned key. Sideline does not transmit names or game data. Clearing browser site data removes the data.
+All data is stored in browser `localStorage`. Roster and game state use a versioned key; the local light/dark appearance choice uses a separate preference key. Sideline does not transmit names or game data. Clearing browser site data removes the data and appearance preference.
 
 ## MVP boundaries
 

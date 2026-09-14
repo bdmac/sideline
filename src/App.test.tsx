@@ -18,6 +18,7 @@ import {
   suggestSubstitutions,
 } from "./domain";
 import { STORAGE_KEY } from "./storage";
+import { THEME_STORAGE_KEY } from "./theme";
 
 const startGame = () => {
   fireEvent.click(screen.getByRole("button", { name: "Formation" }));
@@ -58,6 +59,29 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Golden Dragons")).toBeInTheDocument();
     expect(screen.getByText("Fireballers")).toBeInTheDocument();
+  });
+
+  it("persists the selected color mode on the local device", () => {
+    const firstRender = render(<App />);
+    expect(
+      screen.getByRole("button", { name: "Use dark mode" }),
+    ).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+
+    fireEvent.click(screen.getByRole("button", { name: "Use dark mode" }));
+
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
+    expect(
+      screen.getByRole("button", { name: "Use light mode" }),
+    ).toBeInTheDocument();
+
+    firstRender.unmount();
+    render(<App />);
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(
+      screen.getByRole("button", { name: "Use light mode" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the active-game timer live on team selection", () => {
@@ -564,7 +588,7 @@ describe("Sideline app", () => {
       within(actions).getByRole("button", {
         name: "Take Simon out of game",
       }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute("data-variant", "danger");
 
     fireEvent.mouseDown(actions.parentElement!);
     fireEvent.click(actions.parentElement!);
@@ -1209,9 +1233,16 @@ describe("Sideline app", () => {
       ),
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Take Dylan out of game" }),
-    );
+    const removePlayerButton = screen.getByRole("button", {
+      name: "Take Dylan out of game",
+    });
+    expect(removePlayerButton).toHaveAttribute("data-variant", "danger");
+    expect(
+      screen.getByRole("button", {
+        name: "Edit queued substitution for Dylan",
+      }),
+    ).toHaveAttribute("data-variant", "primary");
+    fireEvent.click(removePlayerButton);
 
     const confirmation = screen.getByRole("alertdialog", {
       name: "Take Dylan out of game?",

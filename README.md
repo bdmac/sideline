@@ -50,4 +50,4 @@ An interrupted active game reopens automatically. The live timestamp and accumul
 
 ## Data
 
-Data is stored in `localStorage` under `sideline-state-v1`. There is no backend or authentication. Clearing browser site data removes all Sideline data.
+Game data is stored in `localStorage` under `sideline-state-v1`, and the device-local color mode is stored under `sideline-color-mode`. There is no backend or authentication. Clearing browser site data removes all Sideline data and preferences.
