@@ -289,28 +289,48 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
 
     expect(screen.getByRole("button", { name: "Auto-fill" })).toBeDisabled();
+    expect(
+      Array.from(document.querySelectorAll(".starter-bench-list li")).map(
+        (playerName) => playerName.textContent,
+      ),
+    ).toEqual(["Dylan", "Evan", "Henry", "Noah"]);
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Change Maddox at Left Midfielder",
+        name: "Change Ollie at Left Midfielder",
       }),
     );
+    const starterPicker = screen.getByRole("dialog", {
+      name: "Choose Left Midfielder",
+    });
+    expect(starterPicker).toBeInTheDocument();
     expect(
-      screen.getByRole("dialog", { name: "Choose Left Midfielder" }),
-    ).toBeInTheDocument();
+      Array.from(
+        starterPicker.querySelectorAll(".starter-choice-player > strong"),
+      ).map((playerName) => playerName.textContent),
+    ).toEqual([
+      "Dylan",
+      "Evan",
+      "Haru",
+      "Henry",
+      "Maddox",
+      "Malik",
+      "Noah",
+      "Simon",
+    ]);
     fireEvent.click(
       screen.getByRole("button", {
-        name: /Ollie.*Currently Right Midfielder/,
+        name: /Haru.*Currently Right Midfielder/,
       }),
     );
 
     expect(
       screen.getByRole("button", {
-        name: "Change Ollie at Left Midfielder",
+        name: "Change Haru at Left Midfielder",
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "Change Maddox at Right Midfielder",
+        name: "Change Ollie at Right Midfielder",
       }),
     ).toBeInTheDocument();
 
@@ -324,7 +344,18 @@ describe("Sideline app", () => {
     expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Auto-fill" })).toBeEnabled();
 
+    fireEvent.click(goalkeeperSlot);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Henry.*Currently on starting bench/,
+      }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Auto-fill" }));
+    expect(
+      screen.getByRole("button", {
+        name: "Change Henry at Goalkeeper",
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Auto-fill" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Start game" })).toBeEnabled();
   });
@@ -465,9 +496,9 @@ describe("Sideline app", () => {
 
     expect(screen.queryByLabelText("Player")).not.toBeInTheDocument();
     expect(screen.getByText("Current position")).toBeInTheDocument();
-    expect(screen.getByText("Goalkeeper")).toBeInTheDocument();
+    expect(screen.getByText("Center Back")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Noah (Center Back)" }),
+      screen.getByRole("button", { name: "Maddox (Goalkeeper)" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Queue substitution" }),
@@ -530,10 +561,10 @@ describe("Sideline app", () => {
     openPositionEditor("Maddox");
 
     expect(
-      screen.queryByRole("button", { name: "Maddox (Left Midfielder)" }),
+      screen.queryByRole("button", { name: "Maddox (Goalkeeper)" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Simon (Goalkeeper)" }),
+      screen.getByRole("button", { name: "Simon (Center Back)" }),
     ).toBeInTheDocument();
   });
 
@@ -549,25 +580,23 @@ describe("Sideline app", () => {
     expect(positionDialog).toBeInTheDocument();
     expect(screen.queryByLabelText("Player")).not.toBeInTheDocument();
     expect(within(positionDialog).getByText("Maddox")).toBeInTheDocument();
-    expect(
-      within(positionDialog).getByText("Left Midfielder"),
-    ).toBeInTheDocument();
+    expect(within(positionDialog).getByText("Goalkeeper")).toBeInTheDocument();
   });
 
   it("logs position changes made in the editor", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    openPositionEditor("Maddox");
+    openPositionEditor("Ollie");
     fireEvent.click(
-      screen.getByRole("button", { name: "Ollie (Right Midfielder)" }),
+      screen.getByRole("button", { name: "Haru (Right Midfielder)" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Save positions" }));
 
     expect(screen.getByText("Position change")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Maddox: Left Midfielder → Right Midfielder · Ollie: Right Midfielder → Left Midfielder",
+        "Ollie: Left Midfielder → Right Midfielder · Haru: Right Midfielder → Left Midfielder",
       ),
     ).toBeInTheDocument();
   });
@@ -589,12 +618,12 @@ describe("Sideline app", () => {
       y: 0,
       toJSON: () => ({}),
     });
-    const maddox = screen.getByRole("button", {
-      name: "Open actions for Maddox",
+    const ollie = screen.getByRole("button", {
+      name: "Open actions for Ollie",
     });
 
     fireEvent(
-      maddox,
+      ollie,
       new MouseEvent("pointerdown", {
         bubbles: true,
         button: 0,
@@ -603,7 +632,7 @@ describe("Sideline app", () => {
       }),
     );
     fireEvent(
-      maddox,
+      ollie,
       new MouseEvent("pointermove", {
         bubbles: true,
         clientX: 700,
@@ -611,7 +640,7 @@ describe("Sideline app", () => {
       }),
     );
     fireEvent(
-      maddox,
+      ollie,
       new MouseEvent("pointerup", {
         bubbles: true,
         clientX: 700,
@@ -621,7 +650,7 @@ describe("Sideline app", () => {
 
     expect(
       screen.getByText(
-        "Maddox: Left Midfielder → Right Midfielder · Ollie: Right Midfielder → Left Midfielder",
+        "Ollie: Left Midfielder → Right Midfielder · Haru: Right Midfielder → Left Midfielder",
       ),
     ).toBeInTheDocument();
   });
@@ -637,22 +666,50 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByRole("button", { name: "Queue 3 swaps" }));
 
     const summary = screen.getByRole("dialog", {
-      name: "Substitutions queued",
+      name: "Review substitutions (3)",
     });
+
     expect(summary).toHaveTextContent("OUT");
     expect(summary).toHaveTextContent("IN");
-    expect(summary).not.toHaveTextContent("#4 Dylan");
+    expect(summary).not.toHaveTextContent("#12 Henry");
     expect(
       screen.getByRole("button", { name: "Open actions for Simon" }),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Execute subs" }));
     expect(
-      screen.getByRole("button", { name: "Open actions for Henry" }),
+      screen.getByRole("button", { name: "Open actions for Dylan" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("dialog", { name: "Substitutions queued" }),
+      screen.queryByRole("dialog", { name: /Review substitutions/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("prompts U8 to plan substitutions after five minutes without a swap", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      team.defaultDurationMinutes,
+      1_000,
+      2,
+    );
+    game.clock.elapsedSeconds = 300;
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+
+    const reminder = screen.getByLabelText("Substitution reminder");
+    expect(reminder).toHaveTextContent("No player swaps in 5:00");
+    fireEvent.click(
+      within(reminder).getByRole("button", { name: "Plan subs" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Plan substitutions" }),
+    ).toBeInTheDocument();
   });
 
   it("allows the coach to reduce the default full-bench rotation", () => {
@@ -708,7 +765,7 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByRole("button", { name: "Queue 3 swaps" }));
     fireEvent.click(
       within(
-        screen.getByRole("dialog", { name: "Substitutions queued" }),
+        screen.getByRole("dialog", { name: "Review substitutions (3)" }),
       ).getByRole("button", { name: "Close" }),
     );
 
@@ -740,24 +797,22 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByRole("button", { name: "Queue Dylan" }));
     const firstPicker = screen.getByRole("dialog", { name: "Queue #4 Dylan" });
     expect(firstPicker).toHaveTextContent("0:00 played");
-    expect(firstPicker).toHaveTextContent(
-      "Preferred rolesDefense · Goalkeeper",
-    );
+    expect(firstPicker).toHaveTextContent("Preferred rolesDefense · Midfield");
     fireEvent.click(
       within(firstPicker).getByRole("button", {
-        name: /#10 Simon.*Goalkeeper/,
+        name: /#10 Simon.*Center Back/,
       }),
     );
 
     expect(screen.getByText("1 substitution queued")).toBeInTheDocument();
-    expect(screen.getByText("Queued for GK")).toBeInTheDocument();
+    expect(screen.getByText("Queued for CB")).toBeInTheDocument();
     expect(
-      screen.queryByRole("dialog", { name: "Substitutions queued" }),
+      screen.queryByRole("dialog", { name: /Review substitutions/ }),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Review subs" }));
 
     let queued = screen.getByRole("dialog", {
-      name: "Substitutions queued",
+      name: "Review substitutions (1)",
     });
     expect(queued).toHaveTextContent("#10 Simon");
     expect(queued).toHaveTextContent("#4 Dylan");
@@ -765,18 +820,18 @@ describe("Sideline app", () => {
 
     const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
     expect(within(planner).getByLabelText("OUT")).toHaveDisplayValue(
-      /Simon · GK/,
+      /Simon · CB/,
     );
     expect(within(planner).getByLabelText("IN")).toHaveDisplayValue(/Dylan ·/);
     fireEvent.click(within(planner).getByRole("button", { name: "2" }));
     fireEvent.click(within(planner).getByRole("button", { name: "1" }));
     expect(within(planner).getByLabelText("OUT")).toHaveDisplayValue(
-      /Simon · GK/,
+      /Simon · CB/,
     );
     expect(within(planner).getByLabelText("IN")).toHaveDisplayValue(/Dylan ·/);
     fireEvent.click(within(planner).getByRole("button", { name: "Close" }));
 
-    expect(screen.getByText("Queued for GK")).toBeInTheDocument();
+    expect(screen.getByText("Queued for CB")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", {
         name: "Edit queued substitution for Dylan",
@@ -785,17 +840,19 @@ describe("Sideline app", () => {
     const editPicker = screen.getByRole("dialog", { name: "Queue #4 Dylan" });
     fireEvent.click(
       within(editPicker).getByRole("button", {
-        name: /#7 Noah.*Center Back/,
+        name: /#23 Ollie.*Left Midfielder/,
       }),
     );
 
     expect(
-      screen.queryByRole("dialog", { name: "Substitutions queued" }),
+      screen.queryByRole("dialog", { name: /Review substitutions/ }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Queued for CB")).toBeInTheDocument();
+    expect(screen.getByText("Queued for LM")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Review subs" }));
-    queued = screen.getByRole("dialog", { name: "Substitutions queued" });
-    expect(queued).toHaveTextContent("#7 Noah");
+    queued = screen.getByRole("dialog", {
+      name: "Review substitutions (1)",
+    });
+    expect(queued).toHaveTextContent("#23 Ollie");
     expect(queued).toHaveTextContent("#4 Dylan");
     expect(screen.getByText("1 substitution queued")).toBeInTheDocument();
     fireEvent.click(within(queued).getByRole("button", { name: "Close" }));
@@ -823,7 +880,7 @@ describe("Sideline app", () => {
     fireEvent.click(
       within(screen.getByRole("dialog", { name: "Queue #4 Dylan" })).getByRole(
         "button",
-        { name: /#10 Simon.*Goalkeeper/ },
+        { name: /#10 Simon.*Center Back/ },
       ),
     );
 
@@ -831,6 +888,15 @@ describe("Sideline app", () => {
       screen.getByRole("button", { name: "Take Dylan out of game" }),
     );
 
+    const confirmation = screen.getByRole("alertdialog", {
+      name: "Take Dylan out of game?",
+    });
+    expect(screen.queryByText("Dylan out of game")).not.toBeInTheDocument();
+    fireEvent.click(
+      within(confirmation).getByRole("button", {
+        name: "Remove player",
+      }),
+    );
     expect(screen.getByText("Dylan out of game")).toBeInTheDocument();
     expect(screen.queryByText(/Queued for/)).not.toBeInTheDocument();
     expect(screen.queryByText("1 substitution queued")).not.toBeInTheDocument();
@@ -844,16 +910,16 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByRole("button", { name: "Score" }));
     const scorerDialog = screen.getByRole("dialog", { name: "Record a goal" });
     expect(
-      within(scorerDialog).queryByRole("button", { name: "#10 Simon" }),
+      within(scorerDialog).queryByRole("button", { name: "#14 Maddox" }),
     ).not.toBeInTheDocument();
     expect(
-      within(scorerDialog).getByRole("button", { name: "#7 Noah" }),
+      within(scorerDialog).getByRole("button", { name: "#10 Simon" }),
     ).toBeInTheDocument();
     expect(
-      within(scorerDialog).queryByRole("button", { name: "#4 Dylan" }),
+      within(scorerDialog).queryByRole("button", { name: "#7 Noah" }),
     ).not.toBeInTheDocument();
     fireEvent.click(
-      within(scorerDialog).getByRole("button", { name: "#7 Noah" }),
+      within(scorerDialog).getByRole("button", { name: "#10 Simon" }),
     );
     const expandedStatus = document.querySelector(".live-match-status");
     expect(
@@ -866,9 +932,9 @@ describe("Sideline app", () => {
       }),
     );
     const goalSummary = screen.getByRole("dialog", { name: "Our goals" });
-    expect(goalSummary).toHaveTextContent("Noah");
+    expect(goalSummary).toHaveTextContent("Simon");
     expect(
-      within(goalSummary).getByLabelText("Noah scored 1 goal"),
+      within(goalSummary).getByLabelText("Simon scored 1 goal"),
     ).toBeInTheDocument();
     fireEvent.click(within(goalSummary).getByRole("button", { name: "Close" }));
 
@@ -879,7 +945,7 @@ describe("Sideline app", () => {
     ).toHaveTextContent("Us1–Opponent1");
 
     fireEvent.click(screen.getByText("Game log"));
-    expect(screen.getByText("Noah scored")).toBeInTheDocument();
+    expect(screen.getByText("Simon scored")).toBeInTheDocument();
     expect(
       screen.getByText(/^Goal for Golden Dragons · /),
     ).not.toHaveTextContent("Goalkeeper");
@@ -898,7 +964,7 @@ describe("Sideline app", () => {
       "Golden Dragons1 – 1Opponent",
     );
     expect(
-      screen.getByLabelText("Noah scored 1 goal").querySelectorAll("svg"),
+      screen.getByLabelText("Simon scored 1 goal").querySelectorAll("svg"),
     ).toHaveLength(1);
     expect(screen.queryByLabelText(/1 goal scored as/)).not.toBeInTheDocument();
   });
@@ -1302,13 +1368,24 @@ describe("Sideline app", () => {
       screen.getByRole("button", { name: "Take Simon out of game" }),
     );
 
+    const confirmation = screen.getByRole("alertdialog", {
+      name: "Take Simon out of game?",
+    });
+    expect(
+      screen.queryByRole("dialog", { name: "Substitution ready" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(confirmation).getByRole("button", {
+        name: "Remove player",
+      }),
+    );
     const summary = screen.getByRole("dialog", {
       name: "Substitution ready",
     });
     expect(summary).toHaveTextContent("OUT");
     expect(summary).toHaveTextContent("#10 Simon");
     expect(summary).toHaveTextContent("IN");
-    expect(summary).toHaveTextContent("#4 Dylan");
+    expect(summary).toHaveTextContent("#7 Noah");
     expect(screen.getByText("Simon out of game")).toBeInTheDocument();
     expect(
       screen.queryByRole("dialog", { name: "Change positions" }),
@@ -1330,13 +1407,20 @@ describe("Sideline app", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Take Simon out of game" }),
     );
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", {
+          name: "Take Simon out of game?",
+        }),
+      ).getByRole("button", { name: "Remove player" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Add Simon to game" }));
 
     const summary = screen.getByRole("dialog", { name: "Player ready" });
     expect(summary).toHaveTextContent("IN");
     expect(summary).toHaveTextContent("#10 Simon");
     expect(summary).toHaveTextContent("POSITION");
-    expect(summary).toHaveTextContent("Goalkeeper");
+    expect(summary).toHaveTextContent("Center Back");
   });
 
   it("keeps substitution direction styling out of the live toolbar", () => {

@@ -1189,7 +1189,8 @@ select:hover {
   background: #fae5e5;
 }
 
-.queued-substitution-banner {
+.queued-substitution-banner,
+.substitution-reminder-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1202,11 +1203,15 @@ select:hover {
 
 .queued-substitution-banner > span,
 .queued-substitution-banner strong,
-.queued-substitution-banner small {
+.queued-substitution-banner small,
+.substitution-reminder-banner > span,
+.substitution-reminder-banner strong,
+.substitution-reminder-banner small {
   display: block;
 }
 
-.queued-substitution-banner small {
+.queued-substitution-banner small,
+.substitution-reminder-banner small {
   margin-top: 0.15rem;
   color: var(--ink-soft);
   font-size: 0.75rem;
@@ -1217,7 +1222,8 @@ select:hover {
   gap: 0.5rem;
 }
 
-.queued-substitution-banner button {
+.queued-substitution-banner button,
+.substitution-reminder-banner button {
   min-height: 44px;
   padding: 0.55rem 0.8rem;
 }
@@ -1404,6 +1410,23 @@ select:hover {
   cursor: pointer;
 }
 
+.starter-slot.empty {
+  padding: 0.38rem 0.42rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "position ."
+    "name name";
+  align-items: center;
+  gap: 0.15rem 0.3rem;
+}
+
+.starter-slot.empty > strong {
+  grid-area: name;
+  color: var(--danger);
+  text-align: center;
+}
+
 .pitch-player.empty:hover {
   background: var(--turf-pale);
   border-color: var(--turf);
@@ -1425,6 +1448,16 @@ select:hover {
 }
 
 .pitch-player:not(.empty) .position-label {
+  position: static;
+  grid-area: position;
+  width: auto;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 0.2rem;
+  transform: none;
+}
+
+.starter-slot.empty .position-label {
   position: static;
   grid-area: position;
   width: auto;
@@ -1867,6 +1900,10 @@ select:hover {
   font-size: 0.88rem;
 }
 
+.substitution-sheet .sheet-header {
+  border-bottom: 2px solid var(--ink);
+}
+
 .sub-count {
   display: flex;
   align-items: center;
@@ -1902,7 +1939,7 @@ select:hover {
 }
 
 .swap-list {
-  border-top: 2px solid var(--ink);
+  border-top: 1px solid var(--line);
 }
 
 .swap-row {
@@ -1967,6 +2004,11 @@ select:hover {
 
 .substitution-ready-sheet {
   width: min(620px, 100%);
+}
+
+.substitution-ready-sheet .sheet-header {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .ready-swap-list {
@@ -2816,9 +2858,14 @@ select:hover {
     background: var(--turf-dark);
   }
 
-  .queued-substitution-banner {
+  .queued-substitution-banner,
+  .substitution-reminder-banner {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .substitution-reminder-banner button {
+    width: 100%;
   }
 
   .period-break-banner {

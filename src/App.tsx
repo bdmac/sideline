@@ -43,6 +43,7 @@ import {
   getPeriodStatus,
   getRecommendedSubstitutionCount,
   getScore,
+  getSubstitutionReminderStatus,
   markAvailable,
   markUnavailable,
   materializeGame,
@@ -677,12 +678,31 @@ function SetupScreen({
   };
 
   const autoFillStarters = () => {
-    const availableIds = activePlayers
-      .filter((player) => presentIds.includes(player.id))
-      .map((player) => player.id);
-    setAssignments(
-      assignPlayersByPreference(formation, availableIds, setupTeam.roster),
-    );
+    setAssignments((currentAssignments) => {
+      const assignedIds = new Set(
+        Object.values(currentAssignments).filter(Boolean),
+      );
+      const availableIds = activePlayers
+        .filter(
+          (player) =>
+            presentIds.includes(player.id) && !assignedIds.has(player.id),
+        )
+        .map((player) => player.id);
+      const openFormation = {
+        ...formation,
+        positions: formation.positions.filter(
+          (position) => !currentAssignments[position.id],
+        ),
+      };
+      return {
+        ...currentAssignments,
+        ...assignPlayersByPreference(
+          openFormation,
+          availableIds,
+          setupTeam.roster,
+        ),
+      };
+    });
   };
 
   const resetStarters = () =>
@@ -975,9 +995,15 @@ function SetupScreen({
             <strong>Starting bench</strong>
             {benchIds.length ? (
               <ul className="starter-bench-list">
-                {benchIds.map((id) => (
-                  <li key={id}>{playerName(setupTeam, id)}</li>
-                ))}
+                {[...benchIds]
+                  .sort((a, b) =>
+                    playerName(setupTeam, a).localeCompare(
+                      playerName(setupTeam, b),
+                    ),
+                  )
+                  .map((id) => (
+                    <li key={id}>{playerName(setupTeam, id)}</li>
+                  ))}
               </ul>
             ) : (
               <span>No bench — exactly enough players</span>
@@ -1107,6 +1133,9 @@ function LiveGameScreen({
   const [positionEditorPlayerId, setPositionEditorPlayerId] = useState<
     string | null
   >(null);
+  const [unavailableConfirmPlayerId, setUnavailableConfirmPlayerId] = useState<
+    string | null
+  >(null);
   const [endConfirm, setEndConfirm] = useState(false);
   const [endedGame, setEndedGame] = useState<ActiveGame | null>(null);
   const [error, setError] = useState("");
@@ -1146,8 +1175,14 @@ function LiveGameScreen({
   const validationErrors = validateGame(game, team.sideSize);
   const queuedPairs = game.queuedSubstitutions ?? [];
   const queuedPlanErrors = validateSubstitutionPairs(game, queuedPairs);
-  const compactHeaderInteractive = headerCollapseProgress > 0.8;
   const periodBreak = displayed.periodBreak;
+  const substitutionReminder = getSubstitutionReminderStatus(displayed);
+  const showSubstitutionReminder =
+    substitutionReminder.due &&
+    game.benchIds.length > 0 &&
+    queuedPairs.length === 0 &&
+    !periodBreak;
+  const compactHeaderInteractive = headerCollapseProgress > 0.8;
   const clockActionLabel = game.clock.running
     ? "Pause"
     : periodBreak && !periodBreak.final
@@ -1479,6 +1514,30 @@ function LiveGameScreen({
           {validationErrors.join(". ")}
         </div>
       )}
+      {showSubstitutionReminder && (
+        <section
+          className="substitution-reminder-banner"
+          aria-label="Substitution reminder"
+        >
+          <span>
+            <strong>Time to consider substitutions</strong>
+            <small>
+              No player swaps in{" "}
+              {formatDuration(
+                substitutionReminder.secondsSinceLastSubstitution,
+              )}
+            </small>
+          </span>
+          <button
+            className="secondary-action"
+            type="button"
+            onClick={() => setPlannerOpen(true)}
+          >
+            <ArrowRightLeft size={18} aria-hidden="true" />
+            Plan subs
+          </button>
+        </section>
+      )}
       {queuedPairs.length > 0 && !periodBreak && (
         <section
           className={`queued-substitution-banner ${
@@ -1688,7 +1747,7 @@ function LiveGameScreen({
                       belowMinimumPace={belowMinimumPace}
                       queuedPositionLabel={queuedPosition?.shortLabel}
                       onQueue={() => setBenchQueuePlayerId(id)}
-                      onUnavailable={() => handleUnavailable(id)}
+                      onUnavailable={() => setUnavailableConfirmPlayerId(id)}
                     />
                   );
                 })}
@@ -1951,8 +2010,26 @@ function LiveGameScreen({
             setFieldActions(null);
           }}
           onUnavailable={() => {
-            if (handleUnavailable(fieldActions.playerId)) {
-              setFieldActions(null);
+            setUnavailableConfirmPlayerId(fieldActions.playerId);
+            setFieldActions(null);
+          }}
+        />
+      )}
+      {unavailableConfirmPlayerId && (
+        <ConfirmSheet
+          title={`Take ${playerName(team, unavailableConfirmPlayerId)} out of game?`}
+          body={
+            Object.values(game.assignments).includes(unavailableConfirmPlayerId)
+              ? `${playerName(team, unavailableConfirmPlayerId)} will be marked unavailable. Sideline will choose the fairest available bench replacement and show you the change before play continues.`
+              : `${playerName(team, unavailableConfirmPlayerId)} will be removed from the bench and marked unavailable. You can add them back from Out of game.`
+          }
+          cancelLabel="Keep player"
+          confirmLabel="Remove player"
+          confirmIcon={<UserRoundX size={18} aria-hidden="true" />}
+          onCancel={() => setUnavailableConfirmPlayerId(null)}
+          onConfirm={() => {
+            if (handleUnavailable(unavailableConfirmPlayerId)) {
+              setUnavailableConfirmPlayerId(null);
             }
           }}
         />
@@ -2300,9 +2377,9 @@ function StarterPicker({
 }) {
   const position = formation.positions.find((item) => item.id === positionId);
   const currentPlayerId = assignments[positionId];
-  const choices = presentPlayers.filter(
-    (player) => player.id !== currentPlayerId,
-  );
+  const choices = presentPlayers
+    .filter((player) => player.id !== currentPlayerId)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <ModalBackdrop onDismiss={onClose}>
@@ -3351,7 +3428,9 @@ function QueuedSubstitutionSummary({
       >
         <header className="sheet-header">
           <div>
-            <h2 id="queued-substitution-title">Substitutions queued</h2>
+            <h2 id="queued-substitution-title">
+              Review substitutions ({pairs.length})
+            </h2>
             <p>
               Get these players ready. Timers and positions change only when you
               execute.

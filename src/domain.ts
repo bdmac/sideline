@@ -161,18 +161,18 @@ const rosterNumbers: Record<TeamId, number[]> = {
 
 const rosterPreferences: Record<TeamId, PositionRole[][]> = {
   u8: [
-    ["goalkeeper", "defender", "midfielder"],
     ["defender", "midfielder"],
-    ["midfielder", "forward"],
+    ["defender", "midfielder"],
+    ["goalkeeper", "midfielder", "forward"],
     ["midfielder", "forward"],
     ["forward", "midfielder"],
-    ["defender", "goalkeeper"],
     ["defender", "midfielder"],
+    ["goalkeeper", "midfielder", "forward"],
     ["midfielder", "forward"],
-    ["goalkeeper", "defender", "midfielder"],
+    ["goalkeeper", "midfielder"],
   ],
   u12: [
-    ["goalkeeper", "defender"],
+    ["goalkeeper", "defender", "midfielder"],
     ["defender", "midfielder"],
     ["defender", "midfielder"],
     ["midfielder", "forward"],
@@ -180,13 +180,13 @@ const rosterPreferences: Record<TeamId, PositionRole[][]> = {
     ["forward", "midfielder"],
     ["defender", "midfielder"],
     ["midfielder", "forward"],
+    ["forward", "midfielder", "goalkeeper"],
     ["defender", "midfielder"],
-    ["goalkeeper", "defender"],
     ["midfielder", "forward"],
     ["forward", "midfielder"],
-    ["defender", "midfielder"],
+    ["goalkeeper", "defender", "midfielder", "forward"],
     ["forward", "midfielder"],
-    ["goalkeeper", "defender", "midfielder"],
+    ["defender", "midfielder"],
   ],
 };
 
@@ -223,7 +223,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 11,
+  version: 12,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
@@ -389,6 +389,29 @@ export const setClockRunning = (
 
 export const getDisplayedSeconds = (game: ActiveGame, now = Date.now()) =>
   materializeGame(game, now).clock.elapsedSeconds;
+
+export const getSubstitutionReminderStatus = (game: ActiveGame) => {
+  const intervalSeconds = Math.round(
+    game.durationSeconds * (game.teamId === "u8" ? 0.125 : 0.25),
+  );
+  const lastExecutedSubstitution = game.history
+    .filter(
+      (event) =>
+        event.type === "substitution" ||
+        (event.type === "unavailable" && event.pairs.length > 0),
+    )
+    .at(-1);
+  const secondsSinceLastSubstitution = Math.max(
+    0,
+    game.clock.elapsedSeconds - (lastExecutedSubstitution?.atSeconds ?? 0),
+  );
+
+  return {
+    due: secondsSinceLastSubstitution >= intervalSeconds,
+    intervalSeconds,
+    secondsSinceLastSubstitution,
+  };
+};
 
 export const getScore = (game: ActiveGame) =>
   game.history.reduce(

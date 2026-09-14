@@ -14,6 +14,7 @@ import {
   getPeriodStatus,
   getRecommendedSubstitutionCount,
   getScore,
+  getSubstitutionReminderStatus,
   INITIAL_TEAMS,
   markAvailable,
   markUnavailable,
@@ -98,9 +99,19 @@ describe("team rosters", () => {
     expect(players.every((player) => player.preferredRoles.length >= 2)).toBe(
       true,
     );
-    expect(players.every((player) => player.preferredRoles.length <= 3)).toBe(
+    expect(players.every((player) => player.preferredRoles.length <= 4)).toBe(
       true,
     );
+    expect(
+      INITIAL_TEAMS.u8.roster
+        .filter((player) => player.preferredRoles.includes("goalkeeper"))
+        .map((player) => player.name),
+    ).toEqual(["Maddox", "Henry", "Evan"]);
+    expect(
+      INITIAL_TEAMS.u12.roster
+        .filter((player) => player.preferredRoles.includes("goalkeeper"))
+        .map((player) => player.name),
+    ).toEqual(["Jackson", "Matt", "Rayek"]);
     expect(u8Numbers).toMatchObject({
       Simon: 10,
       Ollie: 23,
@@ -129,10 +140,10 @@ describe("preference-aware assignments", () => {
     );
 
     expect(assignments.gk).toBe(
-      team.roster.find((player) => player.name === "Simon")?.id,
+      team.roster.find((player) => player.name === "Maddox")?.id,
     );
     expect(assignments.dl).toBe(
-      team.roster.find((player) => player.name === "Noah")?.id,
+      team.roster.find((player) => player.name === "Simon")?.id,
     );
     expect(assignments.f).toBe(
       team.roster.find((player) => player.name === "Malik")?.id,
@@ -496,6 +507,78 @@ describe("scorekeeping", () => {
 });
 
 describe("substitutions", () => {
+  it("prompts U8 after one eighth of game time and resets after an executed substitution", () => {
+    const team = INITIAL_TEAMS.u8;
+    let game = createGame(
+      team,
+      team.defaultFormationId,
+      team.roster.map((player) => player.id),
+      team.defaultDurationMinutes,
+      1_000,
+    );
+
+    game.clock.elapsedSeconds = 299;
+    expect(getSubstitutionReminderStatus(game)).toMatchObject({
+      due: false,
+      intervalSeconds: 300,
+      secondsSinceLastSubstitution: 299,
+    });
+
+    game.clock.elapsedSeconds = 300;
+    expect(getSubstitutionReminderStatus(game).due).toBe(true);
+
+    game = applySubstitutions(
+      game,
+      suggestSubstitutions(game, 1, team),
+      team.sideSize,
+      2_000,
+    );
+    game.clock.elapsedSeconds = 599;
+    expect(getSubstitutionReminderStatus(game).due).toBe(false);
+
+    game.clock.elapsedSeconds = 600;
+    expect(getSubstitutionReminderStatus(game)).toMatchObject({
+      due: true,
+      secondsSinceLastSubstitution: 300,
+    });
+  });
+
+  it("uses a quarter-game cadence for the longer U12 interval", () => {
+    const team = INITIAL_TEAMS.u12;
+    const game = createGame(
+      team,
+      team.defaultFormationId,
+      team.roster.map((player) => player.id),
+      team.defaultDurationMinutes,
+      1_000,
+    );
+
+    expect(getSubstitutionReminderStatus(game).intervalSeconds).toBe(900);
+  });
+
+  it("resets the reminder after an automatic replacement", () => {
+    const team = INITIAL_TEAMS.u8;
+    let game = createGame(
+      team,
+      team.defaultFormationId,
+      team.roster.map((player) => player.id),
+      team.defaultDurationMinutes,
+      1_000,
+    );
+    game.clock.elapsedSeconds = 300;
+    game = markUnavailable(
+      game,
+      Object.values(game.assignments)[0],
+      team.sideSize,
+      2_000,
+    );
+
+    game.clock.elapsedSeconds = 599;
+    expect(getSubstitutionReminderStatus(game).due).toBe(false);
+    game.clock.elapsedSeconds = 600;
+    expect(getSubstitutionReminderStatus(game).due).toBe(true);
+  });
+
   it("adds or updates one bench player inside the queued batch", () => {
     const team = INITIAL_TEAMS.u8;
     const game = createGame(
@@ -688,7 +771,7 @@ describe("substitutions", () => {
     ];
     team.roster.find(
       (player) => player.id === preferredBenchPlayer,
-    )!.preferredRoles = ["goalkeeper"];
+    )!.preferredRoles = ["midfielder"];
 
     const [pair] = suggestSubstitutions(game, 1, team);
 
@@ -719,6 +802,13 @@ describe("substitutions", () => {
 
   it("keeps a second goalkeeper in reserve until they are due to rotate in goal", () => {
     const team = structuredClone(INITIAL_TEAMS.u8);
+    team.roster.forEach((player) => {
+      player.preferredRoles = player.preferredRoles.filter(
+        (role) => role !== "goalkeeper",
+      );
+    });
+    team.roster[0].preferredRoles = ["goalkeeper", "defender"];
+    team.roster[5].preferredRoles = ["goalkeeper", "defender"];
     const game = createGame(
       team,
       "5-1-2-1",

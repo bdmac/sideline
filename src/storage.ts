@@ -8,6 +8,27 @@ type StoredState = Omit<Partial<AppState>, "version"> & {
   version?: number;
 };
 
+const applyCurrentRosterPreferences = (
+  teams: AppState["teams"],
+): AppState["teams"] => {
+  const nextTeams = structuredClone(teams);
+  (["u8", "u12"] as const).forEach((teamId) => {
+    const currentPreferences = new Map(
+      INITIAL_STATE.teams[teamId].roster.map((player) => [
+        player.id,
+        player.preferredRoles,
+      ]),
+    );
+    nextTeams[teamId].roster = nextTeams[teamId].roster.map((player) => ({
+      ...player,
+      preferredRoles: [
+        ...(currentPreferences.get(player.id) ?? player.preferredRoles),
+      ],
+    }));
+  });
+  return nextTeams;
+};
+
 const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
   const team = INITIAL_STATE.teams[game.teamId];
   const guestPlayers = (game.guestPlayers ?? []).filter(
@@ -58,7 +79,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     parsed.version === 10
   ) {
     return {
-      version: 11,
+      version: 12,
       teams: structuredClone(INITIAL_STATE.teams),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -67,6 +88,16 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   }
 
   if (parsed.version === 11) {
+    return {
+      version: 12,
+      teams: applyCurrentRosterPreferences(parsed.teams as AppState["teams"]),
+      activeGame: parsed.activeGame
+        ? normalizeActiveGame(parsed.activeGame)
+        : null,
+    };
+  }
+
+  if (parsed.version === 12) {
     return parsed as AppState;
   }
 
