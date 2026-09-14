@@ -1873,7 +1873,7 @@ function LiveGameScreen({
             >
               <Clock3 size={22} />
             </span>
-            <strong>{formatDuration(period.periodElapsedSeconds)}</strong>
+            <strong>{formatDuration(displayed.clock.elapsedSeconds)}</strong>
           </div>
 
           <div className="scoreboard" aria-label="Score">
@@ -1955,7 +1955,7 @@ function LiveGameScreen({
             aria-hidden="true"
           />
           <span>
-            <strong>{formatDuration(period.periodElapsedSeconds)}</strong>
+            <strong>{formatDuration(displayed.clock.elapsedSeconds)}</strong>
             {periodBoundaryReached && (
               <small>+{formatDuration(period.addedTimeSeconds)} added</small>
             )}
