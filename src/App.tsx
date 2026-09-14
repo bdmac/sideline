@@ -59,6 +59,7 @@ import {
   cancelQueuedSubstitutions,
   createGame,
   endCurrentPeriod,
+  finalizeGame,
   formatDuration,
   getCurrentBenchSeconds,
   getCurrentFieldSeconds,
@@ -1928,11 +1929,9 @@ function LiveGameScreen({
         </span>
         <span className="compact-match-clock">
           <strong>{formatDuration(period.periodElapsedSeconds)}</strong>
-          <small>
-            {periodBoundaryReached
-              ? `+${formatDuration(period.addedTimeSeconds)} added`
-              : `${formatDuration(period.remainingSeconds)} left`}
-          </small>
+          {periodBoundaryReached && (
+            <small>+{formatDuration(period.addedTimeSeconds)} added</small>
+          )}
         </span>
         <span className="compact-match-score" aria-label="Score">
           <button
@@ -2813,7 +2812,7 @@ function LiveGameScreen({
           onCancel={() => setEndConfirm(false)}
           onConfirm={() => {
             const finalGame = cancelQueuedSubstitutions(
-              setClockRunning(game, false, Date.now()),
+              finalizeGame(game, Date.now()),
             );
             onChange(finalGame);
             setEndConfirm(false);
@@ -5077,7 +5076,7 @@ function GameSummary({
           })}
         </ol>
 
-        <GameLog game={game} formation={formation} team={team} />
+        <GameLog game={game} formation={formation} team={team} completed />
       </main>
 
       <footer className="game-summary-actions">
@@ -5175,25 +5174,103 @@ function GameLog({
   formation,
   team,
   onUndo,
+  completed = false,
 }: {
   game: ActiveGame;
   formation: ReturnType<typeof getFormation>;
   team: Team;
   onUndo?: () => void;
+  completed?: boolean;
 }) {
+  const periodLength = game.durationSeconds / game.periodCount;
+  const periodLabel = game.periodCount === 4 ? "Quarter" : "Half";
+  const periodEndByNumber = new Map(
+    game.periodEnds.map((periodEnd) => [periodEnd.period, periodEnd]),
+  );
+  const periodMarkers = game.periodEnds.map((periodEnd) => {
+    const previousEnd = periodEndByNumber.get(periodEnd.period - 1);
+    const periodStartedAt = previousEnd?.atSeconds ?? 0;
+    const addedTimeSeconds = Math.max(
+      0,
+      periodEnd.atSeconds - periodStartedAt - periodLength,
+    );
+    const nextPeriodStarted = game.period.current > periodEnd.period;
+    const gameEnded = completed && periodEnd.period === game.period.current;
+    return {
+      kind: "period" as const,
+      id: `period-${periodEnd.period}`,
+      atSeconds: periodEnd.atSeconds,
+      order: 2,
+      title: gameEnded
+        ? "Game ended"
+        : nextPeriodStarted
+          ? `${periodLabel} ${periodEnd.period + 1} started`
+          : `${periodLabel} ${periodEnd.period} ended`,
+      detail:
+        gameEnded || nextPeriodStarted
+          ? `${periodLabel} ${periodEnd.period} ended${
+              addedTimeSeconds > 0
+                ? ` · +${formatDuration(addedTimeSeconds)} added time`
+                : ""
+            }`
+          : `Period break${
+              addedTimeSeconds > 0
+                ? ` · +${formatDuration(addedTimeSeconds)} added time`
+                : ""
+            }`,
+    };
+  });
+  const timelineItems = [
+    ...(game.clock.elapsedSeconds > 0 ||
+    game.clock.running ||
+    game.history.length > 0 ||
+    game.periodEnds.length > 0
+      ? [
+          {
+            kind: "period" as const,
+            id: "period-start-1",
+            atSeconds: 0,
+            order: 0,
+            title: `${periodLabel} 1 started`,
+            detail: "Game clock started",
+          },
+        ]
+      : []),
+    ...periodMarkers,
+    ...game.history.map((event) => ({
+      kind: "event" as const,
+      id: event.id,
+      atSeconds: event.atSeconds,
+      order: 1,
+      event,
+    })),
+  ].sort((a, b) => b.atSeconds - a.atSeconds || b.order - a.order);
+
   return (
     <details className="game-log">
       <summary className="disclosure-summary">
         <span>
           <strong>Game timeline</strong>
-          <small>Review confirmed game changes</small>
+          <small>Review periods and confirmed game changes</small>
         </span>
         <span>{game.history.length} events</span>
       </summary>
       <div className="game-log-content">
-        {game.history.length ? (
+        {timelineItems.length ? (
           <ol>
-            {[...game.history].reverse().map((event) => {
+            {timelineItems.map((item) => {
+              if (item.kind === "period") {
+                return (
+                  <li className="period-timeline-marker" key={item.id}>
+                    <time>{formatDuration(item.atSeconds)}</time>
+                    <span>
+                      <strong>{item.title}</strong>
+                      <small>{item.detail}</small>
+                    </span>
+                  </li>
+                );
+              }
+              const { event } = item;
               const eventPlayer = event.playerId
                 ? playerName(team, event.playerId)
                 : null;

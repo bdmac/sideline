@@ -297,6 +297,7 @@ describe("period accounting", () => {
     expect(ended.clock.running).toBe(false);
     expect(ended.clock.elapsedSeconds).toBe(10 * 60 + 5);
     expect(ended.periodBreak).toEqual({ completedPeriod: 1, final: false });
+    expect(ended.periodEnds).toEqual([{ period: 1, atSeconds: 10 * 60 + 5 }]);
 
     const nextPeriod = startNextPeriod(ended, 8_000);
     expect(nextPeriod.period).toEqual({

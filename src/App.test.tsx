@@ -756,6 +756,13 @@ describe("Sideline app", () => {
     expect(gameLog).toBeInTheDocument();
     expect(gameLog).not.toHaveAttribute("open");
     expect(gameLog).toHaveTextContent("0 events");
+    fireEvent.click(within(summary).getByText("Game timeline"));
+    expect(
+      within(gameLog as HTMLElement).getByText("Game ended"),
+    ).toBeVisible();
+    expect(
+      within(gameLog as HTMLElement).getByText("Quarter 1 ended"),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Return to teams" }));
     expect(
       screen.getByRole("heading", { name: "Which team is playing?" }),
@@ -1854,8 +1861,8 @@ describe("Sideline app", () => {
       within(compactHeader as HTMLElement).getByLabelText("Score"),
     ).toBeInTheDocument();
     expect(
-      within(compactHeader as HTMLElement).getByText("10:00 left"),
-    ).toBeInTheDocument();
+      within(compactHeader as HTMLElement).queryByText("10:00 left"),
+    ).not.toBeInTheDocument();
     expect(
       within(compactHeader as HTMLElement).getByText("Q1 / 4"),
     ).toBeInTheDocument();
@@ -2648,6 +2655,11 @@ describe("Sideline app", () => {
     expect(screen.getByText("Quarter 2 of 4")).toBeInTheDocument();
     expect(screen.getByText("Clock running")).toBeInTheDocument();
     expect(screen.getByLabelText("Game clock")).toHaveTextContent("0:00");
+    fireEvent.click(screen.getByText("Game timeline"));
+    expect(screen.getByText("Quarter 2 started")).toBeInTheDocument();
+    expect(
+      screen.getByText("Quarter 1 ended · +0:04 added time"),
+    ).toBeVisible();
 
     act(() => {
       vi.advanceTimersByTime(10 * 60 * 1_000);

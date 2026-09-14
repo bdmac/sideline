@@ -42,6 +42,24 @@ const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
         Math.floor(game.clock.elapsedSeconds / periodLength) + 1,
     ),
   );
+  const period = game.period ?? {
+    current: currentPeriod,
+    startedAtSeconds: (currentPeriod - 1) * periodLength,
+  };
+  const completedPeriodCount =
+    game.periodBreak?.completedPeriod ?? Math.max(0, period.current - 1);
+  const periodEnds =
+    game.periodEnds ??
+    Array.from({ length: completedPeriodCount }, (_, index) => {
+      const completedPeriod = index + 1;
+      const atSeconds =
+        game.periodBreak && completedPeriod === period.current
+          ? game.clock.elapsedSeconds
+          : completedPeriod === period.current - 1
+            ? period.startedAtSeconds
+            : completedPeriod * periodLength;
+      return { period: completedPeriod, atSeconds };
+    });
   const guestPlayers = (game.guestPlayers ?? []).filter(
     (player) => player.guest && player.active,
   );
@@ -66,10 +84,8 @@ const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
     ...game,
     ...(guestPlayers.length ? { guestPlayers } : {}),
     periodCount,
-    period: game.period ?? {
-      current: currentPeriod,
-      startedAtSeconds: (currentPeriod - 1) * periodLength,
-    },
+    period,
+    periodEnds,
     presentIds,
     unavailableIds,
     totals,
@@ -94,7 +110,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     parsed.version === 10
   ) {
     return {
-      version: 13,
+      version: 14,
       teams: structuredClone(INITIAL_STATE.teams),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -104,7 +120,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 11) {
     return {
-      version: 13,
+      version: 14,
       teams: applyCurrentRosterPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -114,7 +130,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 12) {
     return {
-      version: 13,
+      version: 14,
       teams: parsed.teams as AppState["teams"],
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -123,6 +139,16 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   }
 
   if (parsed.version === 13) {
+    return {
+      version: 14,
+      teams: parsed.teams as AppState["teams"],
+      activeGame: parsed.activeGame
+        ? normalizeActiveGame(parsed.activeGame)
+        : null,
+    };
+  }
+
+  if (parsed.version === 14) {
     return {
       ...(parsed as AppState),
       activeGame: parsed.activeGame

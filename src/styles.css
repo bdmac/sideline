@@ -2184,6 +2184,19 @@ select:hover {
   border-bottom: 1px solid var(--line);
 }
 
+.game-log li.period-timeline-marker {
+  border-top: 2px solid var(--rule-strong);
+  background: var(--wash);
+}
+
+.game-log li.period-timeline-marker strong {
+  color: var(--turf-dark);
+}
+
+.game-log li.period-timeline-marker time {
+  color: var(--ink-soft);
+}
+
 .game-log time {
   font-weight: 850;
   font-variant-numeric: tabular-nums;

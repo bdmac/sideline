@@ -223,7 +223,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 13,
+  version: 14,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
@@ -309,6 +309,7 @@ export const createGame = (
     benchIds: validPresent.slice(team.sideSize),
     clock: { elapsedSeconds: 0, running: false, lastStartedAt: null },
     period: { current: 1, startedAtSeconds: 0 },
+    periodEnds: [],
     totals,
     history: [],
   };
@@ -385,10 +386,43 @@ export const endCurrentPeriod = (
   }
   return {
     ...current,
+    periodEnds: [
+      ...current.periodEnds.filter(
+        (periodEnd) => periodEnd.period !== current.period.current,
+      ),
+      {
+        period: current.period.current,
+        atSeconds: current.clock.elapsedSeconds,
+      },
+    ].sort((a, b) => a.period - b.period),
     periodBreak: {
       completedPeriod: current.period.current,
       final: current.period.current >= current.periodCount,
     },
+    clock: {
+      ...current.clock,
+      running: false,
+      lastStartedAt: null,
+    },
+  };
+};
+
+export const finalizeGame = (
+  game: ActiveGame,
+  now = Date.now(),
+): ActiveGame => {
+  const current = materializeGame(game, now);
+  return {
+    ...current,
+    periodEnds: [
+      ...current.periodEnds.filter(
+        (periodEnd) => periodEnd.period !== current.period.current,
+      ),
+      {
+        period: current.period.current,
+        atSeconds: current.clock.elapsedSeconds,
+      },
+    ].sort((a, b) => a.period - b.period),
     clock: {
       ...current.clock,
       running: false,
