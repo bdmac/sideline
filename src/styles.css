@@ -3573,9 +3573,11 @@ select:hover {
     left: 0;
     right: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+    grid-template-columns:
+      minmax(0, 1.25fr) minmax(38px, 0.55fr) minmax(58px, 0.75fr)
+      minmax(66px, 0.75fr) auto;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
     min-height: 58px;
     padding-inline: max(1rem, calc((100vw - 1180px) / 2 + 1rem));
     border-bottom: 2px solid var(--rule-strong);
@@ -3600,6 +3602,7 @@ select:hover {
   .compact-match-clock {
     display: flex;
     align-items: center;
+    justify-self: center;
     gap: 0.3rem;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -3615,6 +3618,7 @@ select:hover {
   }
 
   .compact-match-period {
+    justify-self: center;
     color: var(--ink-soft);
     font-size: 0.68rem;
     font-weight: 900;
@@ -3660,6 +3664,7 @@ select:hover {
   .compact-match-actions {
     display: flex;
     align-items: center;
+    justify-self: end;
     gap: 0.25rem;
   }
 
