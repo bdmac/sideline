@@ -4,6 +4,7 @@ import {
   Button,
   Dialog,
   IconButton,
+  Label,
   type DialogWidth,
 } from "@primer/react";
 import {
@@ -1637,6 +1638,20 @@ function LiveGameScreen({
         </section>
 
         <aside className="bench-section">
+          {game.benchIds.length > 0 && (
+            <div className="rotation-status" aria-label="Rotation timer">
+              <span>Rotation</span>
+              <strong>
+                {formatDuration(
+                  substitutionReminder.secondsSinceLastSubstitution,
+                )}{" "}
+                since{" "}
+                {substitutionReminder.hasExecutedSubstitution
+                  ? "swap"
+                  : "start"}
+              </strong>
+            </div>
+          )}
           <div
             className="roster-tabs"
             role="tablist"
@@ -1667,7 +1682,10 @@ function LiveGameScreen({
               tabIndex={rosterView === "bench" ? 0 : -1}
               onClick={() => setRosterView("bench")}
             >
-              Bench <span>{game.benchIds.length}</span>
+              <span className="roster-tab-label">
+                Bench{" "}
+                <span className="roster-tab-count">{game.benchIds.length}</span>
+              </span>
             </button>
             <button
               id="roster-field-tab"
@@ -1678,7 +1696,10 @@ function LiveGameScreen({
               tabIndex={rosterView === "field" ? 0 : -1}
               onClick={() => setRosterView("field")}
             >
-              On field <span>{fieldIds.length}</span>
+              <span className="roster-tab-label">
+                On field{" "}
+                <span className="roster-tab-count">{fieldIds.length}</span>
+              </span>
             </button>
           </div>
 
@@ -1879,6 +1900,7 @@ function LiveGameScreen({
           labelWrap
           leadingVisual={CirclePlus}
           aria-label="Record a goal"
+          disabled={!displayed.clock.running}
           onClick={() => setGoalScorerOpen(true)}
         >
           Goal
@@ -3570,6 +3592,7 @@ function ReadySwapList({
                 team={team}
                 playerId={pair.outPlayerId}
                 goalCount={playerGoalCount(game, pair.outPlayerId)}
+                direction="out"
               />
             </span>
             <span className="ready-direction">
@@ -3581,6 +3604,7 @@ function ReadySwapList({
                 team={team}
                 playerId={pair.inPlayerId}
                 goalCount={playerGoalCount(game, pair.inPlayerId)}
+                direction="in"
               />
             </span>
           </div>
@@ -3594,10 +3618,12 @@ function ReadyPlayerIdentity({
   team,
   playerId,
   goalCount,
+  direction,
 }: {
   team: Team;
   playerId: string;
   goalCount: number;
+  direction: "out" | "in";
 }) {
   const player = team.roster.find((item) => item.id === playerId);
 
@@ -3608,7 +3634,12 @@ function ReadyPlayerIdentity({
         goalCount={goalCount}
       />{" "}
       {player?.number && (
-        <span className="ready-player-number">#{player.number}</span>
+        <Label
+          className="ready-player-number"
+          variant={direction === "out" ? "danger" : "success"}
+        >
+          #{player.number}
+        </Label>
       )}
     </span>
   );
@@ -4079,7 +4110,7 @@ function PositionEditor({
   const targetPositions = formation.positions.filter(
     (position) => game.assignments[position.id] !== playerId,
   );
-  const [positionId, setPositionId] = useState(targetPositions[0]?.id ?? "");
+  const [positionId, setPositionId] = useState("");
 
   return (
     <SidelineDialog
@@ -4101,9 +4132,10 @@ function PositionEditor({
             className="primary-action"
             variant="primary"
             size="large"
+            disabled={!positionId}
             onClick={() => onConfirm(playerId, positionId)}
           >
-            Save positions
+            Confirm change
           </Button>
         </>
       }
@@ -4144,9 +4176,6 @@ function PositionEditor({
                   <strong>Open</strong>
                 )}
                 <small>{position.label}</small>
-              </span>
-              <span className="replacement-fit">
-                {occupant ? "Swap" : "Move"}
               </span>
             </button>
           );

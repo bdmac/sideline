@@ -504,6 +504,17 @@ describe("scorekeeping", () => {
     expect(() => recordGoal(game, "us", game.benchIds[0], 2_000)).toThrow(
       "The scorer must be on the field",
     );
+    expect(() =>
+      recordGoal(
+        {
+          ...game,
+          clock: { elapsedSeconds: 10, running: false, lastStartedAt: null },
+        },
+        "opponent",
+        undefined,
+        11_000,
+      ),
+    ).toThrow("Start the clock before recording a goal");
   });
 });
 
@@ -521,6 +532,7 @@ describe("substitutions", () => {
     game.clock.elapsedSeconds = 299;
     expect(getSubstitutionReminderStatus(game)).toMatchObject({
       due: false,
+      hasExecutedSubstitution: false,
       intervalSeconds: 300,
       secondsSinceLastSubstitution: 299,
     });
@@ -540,6 +552,7 @@ describe("substitutions", () => {
     game.clock.elapsedSeconds = 600;
     expect(getSubstitutionReminderStatus(game)).toMatchObject({
       due: true,
+      hasExecutedSubstitution: true,
       secondsSinceLastSubstitution: 300,
     });
   });

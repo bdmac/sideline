@@ -408,6 +408,7 @@ export const getSubstitutionReminderStatus = (game: ActiveGame) => {
 
   return {
     due: secondsSinceLastSubstitution >= intervalSeconds,
+    hasExecutedSubstitution: Boolean(lastExecutedSubstitution),
     intervalSeconds,
     secondsSinceLastSubstitution,
   };
@@ -430,6 +431,9 @@ export const recordGoal = (
   now = Date.now(),
 ): ActiveGame => {
   const current = materializeGame(game, now);
+  if (!current.clock.running) {
+    throw new Error("Start the clock before recording a goal");
+  }
   if (side === "us") {
     if (!playerId) throw new Error("Choose the player who scored");
     if (!Object.values(current.assignments).includes(playerId)) {
