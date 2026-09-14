@@ -3588,9 +3588,7 @@ select:hover {
     left: 0;
     right: 0;
     display: grid;
-    grid-template-columns:
-      minmax(0, 1.25fr) minmax(38px, 0.55fr) minmax(58px, 0.75fr)
-      minmax(66px, 0.75fr) auto;
+    grid-template-columns: minmax(0, 1.25fr) auto auto minmax(66px, 0.75fr) auto;
     align-items: center;
     gap: 0.25rem;
     min-height: 58px;
