@@ -1483,7 +1483,11 @@ describe("Sideline app", () => {
         name: "Edit queued substitution for Dylan",
       }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Remove from queue" }));
+    const removeFromQueue = screen.getByRole("button", {
+      name: "Remove from queue",
+    });
+    expect(removeFromQueue).toHaveAttribute("data-variant", "danger");
+    fireEvent.click(removeFromQueue);
 
     expect(screen.queryByText(/Queued for/)).not.toBeInTheDocument();
     expect(screen.queryByText("1 substitution queued")).not.toBeInTheDocument();
@@ -2018,6 +2022,9 @@ describe("Sideline app", () => {
     expect(
       within(breakBanner).getByRole("button", { name: "Plan subs" }),
     ).toBeInTheDocument();
+    expect(
+      document.querySelector(".mobile-control-dock .clock-button"),
+    ).toHaveTextContent("Start Q2");
     fireEvent.click(
       within(breakBanner).getByRole("button", { name: "Start Quarter 2" }),
     );

@@ -1549,7 +1549,9 @@ function LiveGameScreen({
   const clockActionLabel = game.clock.running
     ? "Pause"
     : periodBreak && !periodBreak.final
-      ? `Start ${period.label} ${periodBreak.completedPeriod + 1}`
+      ? `Start ${period.count === 4 ? "Q" : "H"}${
+          periodBreak.completedPeriod + 1
+        }`
       : periodBreak?.final
         ? "Resume"
         : "Start clock";
@@ -2246,7 +2248,6 @@ function LiveGameScreen({
           variant="invisible"
           size="large"
           block
-          labelWrap
           leadingVisual={game.clock.running ? Pause : Play}
           onClick={() =>
             safeChange(() => setClockRunning(game, !game.clock.running))
@@ -3083,8 +3084,8 @@ function BenchSubstitutionPicker({
         currentPair ? (
           <div className="bench-picker-actions">
             <Button
-              className="secondary-action remove-from-plan-action"
-              variant="default"
+              className="danger-action remove-from-plan-action"
+              variant="danger"
               size="large"
               leadingVisual={Trash2}
               onClick={onRemove}
@@ -3204,8 +3205,8 @@ function FieldSubstitutionPicker({
         currentPair ? (
           <div className="bench-picker-actions">
             <Button
-              className="secondary-action remove-from-plan-action"
-              variant="default"
+              className="danger-action remove-from-plan-action"
+              variant="danger"
               size="large"
               leadingVisual={Trash2}
               onClick={onRemove}

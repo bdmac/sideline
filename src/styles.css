@@ -2724,8 +2724,6 @@ select:hover {
 }
 
 .bench-picker-actions .remove-from-plan-action {
-  border-color: var(--danger);
-  color: var(--danger);
   white-space: nowrap;
 }
 
@@ -3407,7 +3405,7 @@ select:hover {
     position: relative;
     display: block;
     overflow: hidden;
-    background: var(--danger-fill);
+    background: var(--paper);
   }
 
   .ready-swap-list.removable .ready-swap {
