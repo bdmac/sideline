@@ -61,7 +61,7 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 | Golden Dragons | 5v5    | 40 minutes · 4 × 10-minute quarters | 1-2-1, 2-2, 1-1-2            |
 | Fireballers    | 9v9    | 60 minutes · 2 × 30-minute halves   | 3-3-2, 3-2-3, 2-3-3, 3-1-3-1 |
 
-Game durations are fixed. Golden Dragons games can be switched from the default four quarters to two halves while starting a game. Fireballers always play two halves, so that format is not shown as a configuration step.
+Game formats are fixed presets. Golden Dragons games default to four 10-minute quarters and can be switched during setup to two 20-minute halves or two 25-minute halves. Fireballers always play two 30-minute halves, so that format is not shown as a configuration step.
 Fireballers default to the 3-1-3-1 formation; coaches can still select another listed U12 formation during game setup.
 
 The fixed U8 roster is Simon, Noah, Maddox, Ollie, Malik, Dylan, Henry, Haru, and Evan.

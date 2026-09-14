@@ -647,6 +647,27 @@ function GuestPlayerSheet({
   );
 }
 
+const U8_GAME_FORMATS = [
+  {
+    id: "quarters-10",
+    label: "4 quarters · 10:00 each",
+    durationMinutes: 40,
+    periodCount: 4,
+  },
+  {
+    id: "halves-20",
+    label: "2 halves · 20:00 each",
+    durationMinutes: 40,
+    periodCount: 2,
+  },
+  {
+    id: "halves-25",
+    label: "2 halves · 25:00 each",
+    durationMinutes: 50,
+    periodCount: 2,
+  },
+] as const;
+
 function SetupScreen({
   team,
   onBack,
@@ -676,9 +697,16 @@ function SetupScreen({
       ? team.defaultFormationId
       : formations[0].id,
   );
-  const [periodCount, setPeriodCount] = useState<2 | 4>(
-    team.defaultPeriodCount,
-  );
+  const defaultGameFormat =
+    U8_GAME_FORMATS.find(
+      (format) =>
+        format.durationMinutes === team.defaultDurationMinutes &&
+        format.periodCount === team.defaultPeriodCount,
+    ) ?? U8_GAME_FORMATS[0];
+  const [gameFormatId, setGameFormatId] = useState(defaultGameFormat.id);
+  const gameFormat =
+    U8_GAME_FORMATS.find((format) => format.id === gameFormatId) ??
+    defaultGameFormat;
   const [setupStep, setSetupStep] = useState<0 | 1 | 2>(0);
   const [starterPositionId, setStarterPositionId] = useState<string | null>(
     null,
@@ -835,9 +863,11 @@ function SetupScreen({
       setupTeam,
       formationId,
       presentIds,
-      team.defaultDurationMinutes,
+      team.id === "u8"
+        ? gameFormat.durationMinutes
+        : team.defaultDurationMinutes,
       Date.now(),
-      periodCount,
+      team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
     );
     game.assignments = Object.fromEntries(
       Object.entries(assignments).filter(([, id]) => Boolean(id)),
@@ -988,19 +1018,19 @@ function SetupScreen({
             <label className="field setup-format">
               <span>Game format</span>
               <select
-                value={periodCount}
+                value={gameFormatId}
                 onChange={(event) =>
-                  setPeriodCount(Number(event.target.value) as 2 | 4)
+                  setGameFormatId(
+                    event.target
+                      .value as (typeof U8_GAME_FORMATS)[number]["id"],
+                  )
                 }
               >
-                <option value={4}>
-                  4 quarters ·{" "}
-                  {formatDuration((team.defaultDurationMinutes * 60) / 4)} each
-                </option>
-                <option value={2}>
-                  2 halves ·{" "}
-                  {formatDuration((team.defaultDurationMinutes * 60) / 2)} each
-                </option>
+                {U8_GAME_FORMATS.map((format) => (
+                  <option key={format.id} value={format.id}>
+                    {format.label}
+                  </option>
+                ))}
               </select>
             </label>
           )}

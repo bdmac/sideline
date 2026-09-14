@@ -176,6 +176,31 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
+  it("starts a Golden Dragons game with two 25-minute halves", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+
+    const gameFormat = screen.getByLabelText("Game format");
+    expect(gameFormat).toHaveValue("quarters-10");
+    expect(
+      within(gameFormat).getByRole("option", {
+        name: "2 halves · 25:00 each",
+      }),
+    ).toBeInTheDocument();
+    fireEvent.change(gameFormat, { target: { value: "halves-25" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+
+    const activeGame = JSON.parse(
+      localStorage.getItem(STORAGE_KEY) ?? "{}",
+    ).activeGame;
+    expect(activeGame.durationSeconds).toBe(50 * 60);
+    expect(activeGame.periodCount).toBe(2);
+    expect(screen.getByText("Half 1 of 2")).toBeInTheDocument();
+  });
+
   it("warns when attendance drops below the required side size", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
