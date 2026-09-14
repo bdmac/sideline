@@ -577,6 +577,24 @@ h3 {
   border-color: var(--turf-fill-hover);
 }
 
+.primary-action:disabled {
+  background: var(--wash);
+  border-color: var(--line);
+  color: var(--ink-soft);
+  opacity: 1;
+}
+
+.turf-clock-action {
+  background: var(--turf-fill);
+  border-color: var(--turf-fill);
+  color: var(--on-accent);
+}
+
+.turf-clock-action:hover:not(:disabled) {
+  background: var(--turf-fill-hover);
+  border-color: var(--turf-fill-hover);
+}
+
 .secondary-action {
   background: var(--paper);
   border-color: var(--control-border);

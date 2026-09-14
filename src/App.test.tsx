@@ -1896,12 +1896,16 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
 
-    expect(
-      container.querySelector(".match-header .match-clock-button"),
-    ).toHaveAccessibleName("Start Q1");
-    expect(
-      container.querySelector(".match-header .match-clock-button"),
-    ).toHaveTextContent("Start Q1");
+    const expandedClockButton = container.querySelector(
+      ".match-header .match-clock-button",
+    );
+    expect(expandedClockButton).toHaveAccessibleName("Start Q1");
+    expect(expandedClockButton).toHaveTextContent("Start Q1");
+    expect(expandedClockButton).toHaveClass("turf-clock-action");
+    expect(expandedClockButton).toHaveAttribute("data-variant", "default");
+    expect(container.querySelector(".compact-clock-button")).toHaveClass(
+      "turf-clock-action",
+    );
     expect(
       container.querySelector(".match-header .match-end-copy-short"),
     ).toHaveTextContent("End");
@@ -1916,6 +1920,12 @@ describe("Sideline app", () => {
     expect(
       screen.queryByRole("button", { name: "Positions" }),
     ).not.toBeInTheDocument();
+
+    fireEvent.click(expandedClockButton as HTMLElement);
+    expect(expandedClockButton).not.toHaveClass("turf-clock-action");
+    expect(container.querySelector(".compact-clock-button")).not.toHaveClass(
+      "turf-clock-action",
+    );
   });
 
   it("adds a game-only guest directly to the live bench", () => {

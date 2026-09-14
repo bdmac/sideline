@@ -1838,8 +1838,10 @@ function LiveGameScreen({
           </div>
           <div className="match-header-actions" aria-label="Match controls">
             <Button
-              className="match-clock-button"
-              variant={game.clock.running ? "default" : "primary"}
+              className={`match-clock-button ${
+                game.clock.running ? "" : "turf-clock-action"
+              }`}
+              variant="default"
               size="medium"
               leadingVisual={game.clock.running ? Pause : Play}
               aria-label={clockActionLabel}
@@ -1981,8 +1983,10 @@ function LiveGameScreen({
         </span>
         <div className="compact-match-actions" aria-label="Match controls">
           <IconButton
-            className="compact-clock-button"
-            variant={game.clock.running ? "default" : "primary"}
+            className={`compact-clock-button ${
+              game.clock.running ? "" : "turf-clock-action"
+            }`}
+            variant="default"
             size="large"
             icon={game.clock.running ? Pause : Play}
             aria-label={clockActionLabel}
