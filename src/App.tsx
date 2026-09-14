@@ -128,11 +128,21 @@ const playerGoalCount = (game: ActiveGame, playerId: string) =>
     (event) => event.type === "goal-for" && event.playerId === playerId,
   ).length;
 
-const formatPlayerDuration = (seconds: number) => {
+const formatPlayerDuration = (seconds: number, zeroLabel = "0:00") => {
   const safe = Math.max(0, seconds);
+  if (safe === 0) return zeroLabel;
   if (safe < 60) return formatDuration(safe);
   return `${Math.round(safe / 60)} min`;
 };
+
+const formatPlayedDuration = (seconds: number) =>
+  seconds <= 0 ? "Not played yet" : `${formatPlayerDuration(seconds)} played`;
+
+const formatFieldStintDuration = (seconds: number) =>
+  `${formatPlayerDuration(seconds)} current stint`;
+
+const formatBenchStintDuration = (seconds: number) =>
+  `${formatPlayerDuration(seconds)} sitting`;
 
 const preferredRoleLabel = (role: Player["preferredRoles"][number]) =>
   role === "goalkeeper"
@@ -142,6 +152,20 @@ const preferredRoleLabel = (role: Player["preferredRoles"][number]) =>
       : role === "midfielder"
         ? "Midfield"
         : "Forward";
+
+const preferredRoleAbbreviation = (role: Player["preferredRoles"][number]) =>
+  role === "goalkeeper"
+    ? "GK"
+    : role === "defender"
+      ? "DEF"
+      : role === "midfielder"
+        ? "MID"
+        : "FWD";
+
+const compactPreferredRolesLabel = (roles: Player["preferredRoles"]) =>
+  roles.length > 1
+    ? roles.map(preferredRoleAbbreviation).join(" · ")
+    : roles.map(preferredRoleLabel).join("");
 
 const buildGuestPlayer = (
   teamId: TeamId,
@@ -3253,13 +3277,12 @@ function BenchSubstitutionPicker({
     <SidelineDialog
       title={
         <>
-          Plan{" "}
           <GoalMarkedPlayerName
             label={playerLabel(team, playerId)}
             goalCount={playerGoalCount(game, playerId)}
             emphasized={false}
-          />{" "}
-          in
+          />
+          {" - Plan in"}
         </>
       }
       description="Choose the player they will replace."
@@ -3278,13 +3301,11 @@ function BenchSubstitutionPicker({
               Remove from plan
             </Button>
           )}
-          <Button variant="default" size="large" onClick={onClose}>
-            Cancel
-          </Button>
           <Button
             className="primary-action"
             variant="primary"
             size="large"
+            leadingVisual={Check}
             disabled={
               !selectedOutPlayerId ||
               selectedOutPlayerId === currentPair?.outPlayerId
@@ -3301,11 +3322,14 @@ function BenchSubstitutionPicker({
         items={[
           {
             label: "Bench stint",
-            value: formatDuration(getCurrentBenchSeconds(game, playerId)),
+            value: formatPlayerDuration(getCurrentBenchSeconds(game, playerId)),
           },
           {
             label: "Playing total",
-            value: formatDuration(game.totals[playerId]?.fieldSeconds ?? 0),
+            value: formatPlayerDuration(
+              game.totals[playerId]?.fieldSeconds ?? 0,
+              "Not played yet",
+            ),
           },
           {
             label: "Preferred roles",
@@ -3336,14 +3360,19 @@ function BenchSubstitutionPicker({
               aria-pressed={selected}
               onClick={() => setSelectedOutPlayerId(outPlayerId)}
             >
-              <span>
+              <span className="replacement-player-summary">
                 <GoalMarkedPlayerName
                   label={playerLabel(team, outPlayerId)}
                   goalCount={playerGoalCount(game, outPlayerId)}
                 />
-                <small>{position.label}</small>
               </span>
-              <span className="replacement-fit">
+              <span
+                className={
+                  Number.isFinite(preferenceIndex)
+                    ? "replacement-fit"
+                    : "replacement-fit outside-preference"
+                }
+              >
                 {selected && (
                   <Check
                     className="replacement-selected-icon"
@@ -3354,7 +3383,29 @@ function BenchSubstitutionPicker({
                 <span>
                   {Number.isFinite(preferenceIndex)
                     ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
-                    : "Other role"}
+                    : "Outside preferences"}
+                </span>
+              </span>
+              <span className="replacement-player-position">
+                {position.label}
+              </span>
+              <span className="replacement-player-times">
+                <span>
+                  <span>Stint</span>
+                  <strong>
+                    {formatPlayerDuration(
+                      getCurrentFieldSeconds(game, outPlayerId),
+                    )}
+                  </strong>
+                </span>
+                <span>
+                  <span>Total</span>
+                  <strong>
+                    {formatPlayerDuration(
+                      game.totals[outPlayerId]?.fieldSeconds ?? 0,
+                      "Not played yet",
+                    )}
+                  </strong>
                 </span>
               </span>
             </button>
@@ -3418,13 +3469,12 @@ function FieldSubstitutionPicker({
     <SidelineDialog
       title={
         <>
-          Plan{" "}
           <GoalMarkedPlayerName
             label={playerLabel(team, playerId)}
             goalCount={playerGoalCount(game, playerId)}
             emphasized={false}
-          />{" "}
-          out
+          />
+          {" - Plan out"}
         </>
       }
       description={`Choose who will enter at ${position.label}.`}
@@ -3443,13 +3493,11 @@ function FieldSubstitutionPicker({
               Remove from plan
             </Button>
           )}
-          <Button variant="default" size="large" onClick={onClose}>
-            Cancel
-          </Button>
           <Button
             className="primary-action"
             variant="primary"
             size="large"
+            leadingVisual={Check}
             disabled={
               !selectedInPlayerId ||
               selectedInPlayerId === currentPair?.inPlayerId
@@ -3470,11 +3518,14 @@ function FieldSubstitutionPicker({
           },
           {
             label: "Playing total",
-            value: formatDuration(game.totals[playerId]?.fieldSeconds ?? 0),
+            value: formatPlayerDuration(
+              game.totals[playerId]?.fieldSeconds ?? 0,
+              "Not played yet",
+            ),
           },
           {
             label: "Field stint",
-            value: formatDuration(getCurrentFieldSeconds(game, playerId)),
+            value: formatPlayerDuration(getCurrentFieldSeconds(game, playerId)),
           },
           ...(selectedInPlayerId
             ? [
@@ -3499,19 +3550,19 @@ function FieldSubstitutionPicker({
               aria-pressed={selected}
               onClick={() => setSelectedInPlayerId(incoming.id)}
             >
-              <span>
+              <span className="replacement-player-summary">
                 <GoalMarkedPlayerName
                   label={playerLabel(team, incoming.id)}
                   goalCount={playerGoalCount(game, incoming.id)}
                 />
-                <small>
-                  {formatDuration(game.totals[incoming.id]?.fieldSeconds ?? 0)}{" "}
-                  played ·{" "}
-                  {formatDuration(getCurrentBenchSeconds(game, incoming.id))}{" "}
-                  sitting
-                </small>
               </span>
-              <span className="replacement-fit">
+              <span
+                className={
+                  Number.isFinite(preferenceIndex)
+                    ? "replacement-fit"
+                    : "replacement-fit outside-preference"
+                }
+              >
                 {selected && (
                   <Check
                     className="replacement-selected-icon"
@@ -3522,7 +3573,37 @@ function FieldSubstitutionPicker({
                 <span>
                   {Number.isFinite(preferenceIndex)
                     ? `${preferenceIndex + 1}${preferenceIndex === 0 ? "st" : preferenceIndex === 1 ? "nd" : "rd"} preference`
-                    : "Other role"}
+                    : "Outside preferences"}
+                </span>
+              </span>
+              <span
+                className="replacement-player-preferences"
+                aria-label={`Preferred roles: ${incoming.preferredRoles
+                  .map(preferredRoleLabel)
+                  .join(" and ")}`}
+              >
+                <span>Prefers</span>
+                <strong>
+                  {compactPreferredRolesLabel(incoming.preferredRoles)}
+                </strong>
+              </span>
+              <span className="replacement-player-times">
+                <span>
+                  <span>Bench</span>
+                  <strong>
+                    {formatPlayerDuration(
+                      getCurrentBenchSeconds(game, incoming.id),
+                    )}
+                  </strong>
+                </span>
+                <span>
+                  <span>Played</span>
+                  <strong>
+                    {formatPlayerDuration(
+                      game.totals[incoming.id]?.fieldSeconds ?? 0,
+                      "Not played yet",
+                    )}
+                  </strong>
                 </span>
               </span>
             </button>
@@ -3553,6 +3634,7 @@ function FieldPlayerActionsSheet({
   onUnavailable: () => void;
 }) {
   const label = playerName(team, playerId);
+  const displayLabel = playerLabel(team, playerId);
   const formation = getFormation(game.formationId);
   const positionEntry = Object.entries(game.assignments).find(
     ([, assignedPlayerId]) => assignedPlayerId === playerId,
@@ -3570,7 +3652,7 @@ function FieldPlayerActionsSheet({
     <SidelineDialog
       title={
         <GoalMarkedPlayerName
-          label={label}
+          label={displayLabel}
           goalCount={playerGoalCount(game, playerId)}
           emphasized={false}
         />
@@ -3587,11 +3669,14 @@ function FieldPlayerActionsSheet({
           },
           {
             label: "Playing total",
-            value: formatDuration(game.totals[playerId]?.fieldSeconds ?? 0),
+            value: formatPlayerDuration(
+              game.totals[playerId]?.fieldSeconds ?? 0,
+              "Not played yet",
+            ),
           },
           {
             label: "Field stint",
-            value: formatDuration(getCurrentFieldSeconds(game, playerId)),
+            value: formatPlayerDuration(getCurrentFieldSeconds(game, playerId)),
           },
           ...(incomingName
             ? [
@@ -3638,10 +3723,10 @@ function FieldPlayerActionsSheet({
               variant="primary"
               size="large"
               leadingVisual={ArrowRightLeft}
-              aria-label="Plan substitution"
+              aria-label={`Plan ${label} out`}
               onClick={onQueue}
             >
-              Plan sub
+              Plan out
             </Button>
           )}
         </div>
@@ -4177,11 +4262,11 @@ function SubstitutionPlanner({
                 return {
                   id: playerId,
                   label: playerName(team, playerId),
-                  description: `${formatDuration(
+                  description: `${formatFieldStintDuration(
                     getCurrentFieldSeconds(game, playerId),
-                  )} playing · ${formatDuration(
+                  )} · ${formatPlayedDuration(
                     game.totals[playerId]?.fieldSeconds ?? 0,
-                  )} total`,
+                  )}`,
                   trailing: [
                     player?.number ? `#${player.number}` : undefined,
                     positionLabel,
@@ -4208,11 +4293,11 @@ function SubstitutionPlanner({
                 return {
                   id: playerId,
                   label: playerName(team, playerId),
-                  description: `${formatDuration(
+                  description: `${formatBenchStintDuration(
                     getCurrentBenchSeconds(game, playerId),
-                  )} sitting · ${formatDuration(
+                  )} · ${formatPlayedDuration(
                     game.totals[playerId]?.fieldSeconds ?? 0,
-                  )} played`,
+                  )}`,
                   detailText: player
                     ? `Prefers: ${player.preferredRoles
                         .map(preferredRoleLabel)
@@ -4987,57 +5072,86 @@ function PositionEditor({
     (position) => game.assignments[position.id] !== playerId,
   );
   const [positionId, setPositionId] = useState("");
+  const selectedPosition = formation.positions.find(
+    (position) => position.id === positionId,
+  );
+  const selectedOccupant = positionId
+    ? game.assignments[positionId]
+    : undefined;
+  const confirmLabel = selectedOccupant
+    ? `Swap with ${playerName(team, selectedOccupant)}`
+    : selectedPosition
+      ? `Move to ${selectedPosition.shortLabel}`
+      : "Choose a position";
+  const confirmAccessibleLabel = selectedOccupant
+    ? `Swap ${playerName(team, playerId)} with ${playerName(
+        team,
+        selectedOccupant,
+      )}`
+    : selectedPosition
+      ? `Move ${playerName(team, playerId)} to ${selectedPosition.label}`
+      : "Choose a position";
 
   return (
     <SidelineDialog
-      title="Change positions"
+      title={
+        <>
+          <GoalMarkedPlayerName
+            label={playerLabel(team, playerId)}
+            goalCount={playerGoalCount(game, playerId)}
+            emphasized={false}
+          />
+          {" - Change position"}
+        </>
+      }
       description="Position changes do not count as substitutions. You can also drag players directly on the field."
       className="compact-sheet"
       onClose={onClose}
       footer={
-        <>
-          <Button
-            className="secondary-action"
-            variant="default"
-            size="large"
-            onClick={onClose}
-          >
-            Cancel
-          </Button>
-          <Button
-            className="primary-action"
-            variant="primary"
-            size="large"
-            disabled={!positionId}
-            onClick={() => onConfirm(playerId, positionId)}
-          >
-            Confirm change
-          </Button>
-        </>
+        <Button
+          className="primary-action"
+          variant="primary"
+          size="large"
+          leadingVisual={Check}
+          aria-label={confirmAccessibleLabel}
+          disabled={!positionId}
+          onClick={() => onConfirm(playerId, positionId)}
+        >
+          {confirmLabel}
+        </Button>
       }
     >
       <PlayerContextPanel
         items={[
           {
-            label: "Player",
-            value: (
-              <GoalMarkedPlayerName
-                label={playerName(team, playerId)}
-                goalCount={playerGoalCount(game, playerId)}
-              />
+            label: "Position",
+            value: selectedPosition ? (
+              <span
+                className="position-change-preview"
+                aria-label={`Position changing from ${
+                  currentPosition?.label ?? "Open"
+                } to ${selectedPosition.label}`}
+              >
+                <span>{currentPosition?.label ?? "Open"}</span>
+                <ArrowRightLeft size={15} aria-hidden="true" />
+                <span className="position-change-destination">
+                  {selectedPosition.shortLabel}
+                </span>
+              </span>
+            ) : (
+              (currentPosition?.label ?? "Open")
             ),
           },
           {
-            label: "Position",
-            value: currentPosition?.label ?? "Open",
-          },
-          {
             label: "Playing total",
-            value: formatDuration(game.totals[playerId]?.fieldSeconds ?? 0),
+            value: formatPlayerDuration(
+              game.totals[playerId]?.fieldSeconds ?? 0,
+              "Not played yet",
+            ),
           },
           {
             label: "Field stint",
-            value: formatDuration(getCurrentFieldSeconds(game, playerId)),
+            value: formatPlayerDuration(getCurrentFieldSeconds(game, playerId)),
           },
           ...(currentPair
             ? [
@@ -5057,26 +5171,61 @@ function PositionEditor({
         {targetPositions.map((position) => {
           const occupant = game.assignments[position.id];
           const label = occupant ? playerName(team, occupant) : "Open";
+          const selected = positionId === position.id;
           return (
             <button
-              className={positionId === position.id ? "selected" : ""}
+              className={selected ? "selected" : ""}
               type="button"
               key={position.id}
               aria-label={`${label} (${position.label})`}
-              aria-pressed={positionId === position.id}
+              aria-pressed={selected}
               onClick={() => setPositionId(position.id)}
             >
-              <span>
+              <span className="replacement-player-summary">
                 {occupant ? (
                   <GoalMarkedPlayerName
-                    label={label}
+                    label={playerLabel(team, occupant)}
                     goalCount={playerGoalCount(game, occupant)}
                   />
                 ) : (
                   <strong>Open</strong>
                 )}
-                <small>{position.label}</small>
               </span>
+              <span className="replacement-fit">
+                {selected && (
+                  <Check
+                    className="replacement-selected-icon"
+                    size={15}
+                    aria-hidden="true"
+                  />
+                )}
+                <span>{position.label}</span>
+              </span>
+              {occupant ? (
+                <span className="replacement-player-times replacement-player-times-wide">
+                  <span>
+                    <span>Stint</span>
+                    <strong>
+                      {formatPlayerDuration(
+                        getCurrentFieldSeconds(game, occupant),
+                      )}
+                    </strong>
+                  </span>
+                  <span>
+                    <span>Total</span>
+                    <strong>
+                      {formatPlayerDuration(
+                        game.totals[occupant]?.fieldSeconds ?? 0,
+                        "Not played yet",
+                      )}
+                    </strong>
+                  </span>
+                </span>
+              ) : (
+                <span className="replacement-player-position">
+                  Unoccupied position
+                </span>
+              )}
             </button>
           );
         })}

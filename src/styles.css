@@ -314,7 +314,8 @@ h3 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 1rem;
+  column-gap: 1rem;
+  row-gap: 0.25rem;
   padding: 1rem;
   border-bottom: 1px solid var(--line);
 }
@@ -2822,6 +2823,24 @@ select:hover {
   color: var(--warm-dark);
 }
 
+.position-change-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.position-change-preview svg {
+  flex: none;
+  color: var(--turf-dark);
+  stroke-width: 2.5;
+}
+
+.position-change-destination {
+  flex: none;
+  color: var(--turf-dark);
+}
+
 .bench-replacement-list {
   min-height: 124px;
   max-height: 20rem;
@@ -2879,6 +2898,75 @@ select:hover {
   text-align: right;
 }
 
+.replacement-fit.outside-preference {
+  color: var(--ink-soft);
+}
+
+.replacement-player-position {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.replacement-player-preferences {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.replacement-player-preferences > span {
+  color: var(--ink-soft);
+  font-size: 0.6rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.replacement-player-preferences strong {
+  color: var(--ink);
+  font-size: 0.73rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.replacement-player-times {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.replacement-player-times-wide {
+  grid-column: 1 / -1;
+}
+
+.replacement-player-times > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.replacement-player-times > span + span {
+  padding-left: 0.65rem;
+  border-left: 1px solid var(--line);
+}
+
+.replacement-player-times > span > span {
+  color: var(--ink-soft);
+}
+
+.replacement-player-times strong {
+  color: var(--ink);
+  font-size: inherit;
+  font-weight: 800;
+}
+
 .replacement-selected-icon {
   flex: none;
   stroke-width: 3;
@@ -2887,7 +2975,7 @@ select:hover {
 .bench-picker-actions {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.5rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
@@ -2895,7 +2983,7 @@ select:hover {
 }
 
 .bench-picker-actions.editing {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .bench-picker-actions button {
@@ -2906,11 +2994,7 @@ select:hover {
 
 @media (max-width: 420px) {
   .bench-picker-actions.editing {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .bench-picker-actions.editing .remove-from-plan-action {
-    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
