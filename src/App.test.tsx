@@ -1157,6 +1157,7 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
     const planButton = screen.getByRole("button", { name: "Plan subs" });
+    expect(planButton).not.toHaveAttribute("data-label-wrap");
     planButton.focus();
     fireEvent.click(planButton);
 
@@ -1891,7 +1892,50 @@ describe("Sideline app", () => {
     ).toHaveLength(1);
   });
 
-  it("collapses four or more goals into one marker with an exact count", () => {
+  it("uses a hatted ball for a hat trick across player markers", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const scorerId = Object.values(game.assignments)[1];
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    for (let goal = 0; goal < 3; goal += 1) {
+      game = recordGoal(game, "us", scorerId, 1_000 + goal);
+    }
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+
+    const scorerName = team.roster.find(
+      (player) => player.id === scorerId,
+    )!.name;
+    const pitchCard = screen.getByRole("button", {
+      name: `Open actions for ${scorerName}`,
+    });
+    const goalTotal = within(pitchCard).getByLabelText(
+      `${scorerName} scored 3 goals`,
+    );
+    expect(goalTotal.querySelectorAll(".soccer-ball-icon")).toHaveLength(1);
+    expect(goalTotal.querySelector(".hat-trick-icon")).toBeInTheDocument();
+    expect(goalTotal).not.toHaveTextContent("×3");
+
+    fireEvent.click(screen.getByRole("tab", { name: /On field/ }));
+    const visibleMarkers = screen.getAllByLabelText(
+      `${scorerName} scored 3 goals`,
+    );
+    expect(visibleMarkers).toHaveLength(2);
+    visibleMarkers.forEach((marker) => {
+      expect(marker.querySelector(".hat-trick-icon")).toBeInTheDocument();
+    });
+  });
+
+  it("adds the exact count after the hatted marker above three goals", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;
     let game = createGame(
@@ -1920,7 +1964,7 @@ describe("Sideline app", () => {
     const goalTotal = within(pitchCard).getByLabelText(
       `${scorerName} scored 4 goals`,
     );
-    expect(goalTotal.querySelectorAll(".soccer-ball-icon")).toHaveLength(1);
+    expect(goalTotal.querySelector(".hat-trick-icon")).toBeInTheDocument();
     expect(goalTotal).toHaveTextContent("×4");
   });
 

@@ -2261,7 +2261,6 @@ function LiveGameScreen({
           variant="invisible"
           size="large"
           block
-          labelWrap
           leadingVisual={ArrowRightLeft}
           aria-label={queuedPairs.length ? "Review substitutions" : undefined}
           disabled={game.benchIds.length === 0 && queuedPairs.length === 0}
@@ -4469,7 +4468,7 @@ function GoalMarkedPlayerName({
   goalCount: number;
   emphasized?: boolean;
 }) {
-  const compactGoalCount = goalCount > 3;
+  const hatTrick = goalCount >= 3;
 
   return (
     <span className="player-name-with-goals">
@@ -4481,13 +4480,14 @@ function GoalMarkedPlayerName({
             goalCount === 1 ? "goal" : "goals"
           }`}
         >
-          {Array.from(
-            { length: compactGoalCount ? 1 : goalCount },
-            (_, index) => (
+          {hatTrick ? (
+            <HatTrickBallIcon />
+          ) : (
+            Array.from({ length: goalCount }, (_, index) => (
               <SoccerBallIcon key={index} />
-            ),
+            ))
           )}
-          {compactGoalCount && (
+          {goalCount > 3 && (
             <span className="goal-count-overflow" aria-hidden="true">
               ×{goalCount}
             </span>
@@ -4507,6 +4507,26 @@ function SoccerBallIcon() {
         d="M9 9.2 5.4 9.1m4.7 3.6-2.3 3m6.1-3 2.3 3M15 9.2l3.6-.1M7.8 15.7 7 19m9.2-3.3.8 3"
         fill="none"
       />
+    </svg>
+  );
+}
+
+function HatTrickBallIcon() {
+  return (
+    <svg
+      className="soccer-ball-icon hat-trick-icon"
+      viewBox="0 0 24 28"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="18" r="8" />
+      <path d="m12 13.5 2.7 2-1 3.1h-3.4l-1-3.1 2.7-2Z" fill="currentColor" />
+      <path
+        d="m9.3 15.5-3.2-.1m4.2 3.2-2.1 2.7m5.5-2.7 2.1 2.7m-1.1-5.8 3.2-.1m-9.7 5.9-.7 2.9m8.3-2.9.7 2.9"
+        fill="none"
+      />
+      <path d="M7.5 2.5h9L17.8 10H6.2l1.3-7.5Z" fill="currentColor" />
+      <path d="M4.5 10h15" fill="none" strokeWidth="2.2" />
+      <path d="M6.7 7.5h10.6" fill="none" stroke="var(--paper)" />
     </svg>
   );
 }

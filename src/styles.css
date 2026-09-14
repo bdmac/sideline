@@ -1542,6 +1542,11 @@ select:hover {
   height: 13px;
 }
 
+.pitch-player-name .hat-trick-icon {
+  width: 14px;
+  height: 16px;
+}
+
 .pitch-player small {
   font-size: clamp(0.58rem, 2.2vw, 0.7rem);
   color: var(--ink-soft);
@@ -2027,6 +2032,10 @@ select:hover {
   font-size: 0.78rem;
   font-family: inherit;
   font-weight: 850;
+}
+
+.mobile-control-dock .sub-button [data-component="text"] {
+  white-space: nowrap;
 }
 
 .position-player-summary {
@@ -2891,6 +2900,11 @@ select:hover {
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.hat-trick-icon {
+  width: 17px;
+  height: 19px;
 }
 
 .player-game-summaries ul {
