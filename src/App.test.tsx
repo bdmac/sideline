@@ -717,7 +717,7 @@ describe("Sideline app", () => {
     expect(
       screen.getByRole("heading", { name: "On the field" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Clock running")).toBeInTheDocument();
+    expect(screen.getByLabelText("Game clock, running")).toBeInTheDocument();
   });
 
   it("shows each player's position time before closing an ended game", () => {
@@ -1813,7 +1813,9 @@ describe("Sideline app", () => {
     ).toHaveTextContent("Us1–Opponent1");
 
     fireEvent.click(screen.getByText("Game timeline"));
-    expect(screen.getByText("Simon scored")).toBeInTheDocument();
+    const scoredEvent = screen.getByText("Simon scored").closest("li");
+    expect(scoredEvent).toBeInTheDocument();
+    expect(scoredEvent?.querySelector(".soccer-ball-icon")).toBeInTheDocument();
     expect(
       screen.getByText(/^Goal for Golden Dragons · /),
     ).not.toHaveTextContent("Goalkeeper");
@@ -1859,6 +1861,9 @@ describe("Sideline app", () => {
     await waitFor(() => expect(compactHeader).toHaveClass("interactive"));
     expect(
       within(compactHeader as HTMLElement).getByLabelText("Score"),
+    ).toBeInTheDocument();
+    expect(
+      compactHeader?.querySelector(".compact-match-clock svg"),
     ).toBeInTheDocument();
     expect(
       within(compactHeader as HTMLElement).queryByText("10:00 left"),
@@ -2542,7 +2547,7 @@ describe("Sideline app", () => {
     );
 
     expect(screen.queryByLabelText("End of Quarter 1")).not.toBeInTheDocument();
-    expect(screen.getByText("Clock running")).toBeInTheDocument();
+    expect(screen.getByLabelText("Game clock, running")).toBeInTheDocument();
   });
 
   it("uses a period-specific Resume label for a persisted final break", () => {
@@ -2618,7 +2623,9 @@ describe("Sideline app", () => {
       screen.queryByLabelText("Substitution reminder"),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Record a goal" })).toBeEnabled();
-    expect(screen.getByLabelText("Game clock")).toHaveTextContent("10:04");
+    const gameClock = screen.getByLabelText("Game clock, running");
+    expect(gameClock).toHaveTextContent("10:04");
+    expect(gameClock.querySelector(".game-clock-icon svg")).toBeInTheDocument();
 
     const compactHeader = document.querySelector(".compact-match-header");
     Object.defineProperty(window, "scrollY", {
@@ -2653,10 +2660,16 @@ describe("Sideline app", () => {
       within(breakBanner).getByRole("button", { name: "Start Quarter 2" }),
     );
     expect(screen.getByText("Quarter 2 of 4")).toBeInTheDocument();
-    expect(screen.getByText("Clock running")).toBeInTheDocument();
-    expect(screen.getByLabelText("Game clock")).toHaveTextContent("0:00");
+    expect(screen.getByLabelText("Game clock, running")).toBeInTheDocument();
+    expect(screen.getByLabelText("Game clock, running")).toHaveTextContent(
+      "0:00",
+    );
     fireEvent.click(screen.getByText("Game timeline"));
-    expect(screen.getByText("Quarter 2 started")).toBeInTheDocument();
+    const periodMarker = screen.getByText("Quarter 2 started").closest("li");
+    expect(periodMarker).toBeInTheDocument();
+    expect(
+      periodMarker?.querySelector(".timeline-event-icon svg"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Quarter 1 ended · +0:04 added time"),
     ).toBeVisible();
@@ -2667,7 +2680,9 @@ describe("Sideline app", () => {
     expect(screen.getByLabelText("Quarter 2 time reached")).toHaveTextContent(
       "+0:00 added time",
     );
-    expect(screen.getByLabelText("Game clock")).toHaveTextContent("10:00");
+    expect(screen.getByLabelText("Game clock, running")).toHaveTextContent(
+      "10:00",
+    );
   });
 
   it("keeps final regulation running until the coach ends the game", () => {

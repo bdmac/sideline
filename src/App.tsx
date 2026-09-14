@@ -1850,11 +1850,17 @@ function LiveGameScreen({
         </header>
 
         <section className="match-metrics" aria-label="Match status">
-          <div className="game-clock" aria-label="Game clock">
+          <div
+            className="game-clock"
+            aria-label={`Game clock, ${game.clock.running ? "running" : "paused"}`}
+          >
             <span
-              className={`clock-state ${game.clock.running ? "running" : ""}`}
+              className={`game-clock-icon ${
+                game.clock.running ? "running" : ""
+              } ${periodBoundaryReached ? "added-time" : ""}`}
+              aria-hidden="true"
             >
-              {game.clock.running ? "Clock running" : "Clock paused"}
+              <Clock3 size={22} />
             </span>
             <strong>{formatDuration(period.periodElapsedSeconds)}</strong>
           </div>
@@ -1927,11 +1933,22 @@ function LiveGameScreen({
         >
           {periodShortLabel} / {period.count}
         </span>
-        <span className="compact-match-clock">
-          <strong>{formatDuration(period.periodElapsedSeconds)}</strong>
-          {periodBoundaryReached && (
-            <small>+{formatDuration(period.addedTimeSeconds)} added</small>
-          )}
+        <span
+          className={`compact-match-clock ${
+            periodBoundaryReached ? "added-time" : ""
+          }`}
+        >
+          <Clock3
+            className="compact-clock-glyph"
+            size={16}
+            aria-hidden="true"
+          />
+          <span>
+            <strong>{formatDuration(period.periodElapsedSeconds)}</strong>
+            {periodBoundaryReached && (
+              <small>+{formatDuration(period.addedTimeSeconds)} added</small>
+            )}
+          </span>
         </span>
         <span className="compact-match-score" aria-label="Score">
           <button
@@ -5245,6 +5262,21 @@ function GameLog({
       event,
     })),
   ].sort((a, b) => b.atSeconds - a.atSeconds || b.order - a.order);
+  const eventIcon = (event: GameEvent) => {
+    switch (event.type) {
+      case "substitution":
+        return <ArrowRightLeft size={18} aria-hidden="true" />;
+      case "position-change":
+        return <Move size={18} aria-hidden="true" />;
+      case "goal-for":
+      case "goal-against":
+        return <SoccerBallIcon />;
+      case "available":
+        return <CirclePlus size={18} aria-hidden="true" />;
+      case "unavailable":
+        return <UserRoundX size={18} aria-hidden="true" />;
+    }
+  };
 
   return (
     <details className="game-log">
@@ -5263,6 +5295,13 @@ function GameLog({
                 return (
                   <li className="period-timeline-marker" key={item.id}>
                     <time>{formatDuration(item.atSeconds)}</time>
+                    <span className="timeline-event-icon" aria-hidden="true">
+                      {completed && item.title === "Game ended" ? (
+                        <Flag size={18} />
+                      ) : (
+                        <Clock3 size={18} />
+                      )}
+                    </span>
                     <span>
                       <strong>{item.title}</strong>
                       <small>{item.detail}</small>
@@ -5317,6 +5356,12 @@ function GameLog({
               return (
                 <li key={event.id}>
                   <time>{formatDuration(event.atSeconds)}</time>
+                  <span
+                    className={`timeline-event-icon timeline-event-${event.type}`}
+                    aria-hidden="true"
+                  >
+                    {eventIcon(event)}
+                  </span>
                   <span>
                     <strong>{eventTitle}</strong>
                     <small>{eventDetail}</small>

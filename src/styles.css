@@ -1247,6 +1247,7 @@ select:hover {
 
 .game-clock {
   display: flex;
+  align-self: center;
   align-items: center;
   gap: 1rem;
 }
@@ -1257,19 +1258,25 @@ select:hover {
   font-variant-numeric: tabular-nums;
 }
 
-.clock-state {
-  min-width: 100px;
-  padding: 0.35rem 0.5rem;
-  background: var(--wash);
+.game-clock-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  flex: none;
+  place-items: center;
   color: var(--ink-soft);
-  font-size: 0.72rem;
-  font-weight: 850;
-  text-align: center;
 }
 
-.clock-state.running {
-  background: var(--turf-pale);
+.game-clock-icon.running {
   color: var(--turf-dark);
+}
+
+.game-clock-icon.added-time {
+  color: var(--warm-dark);
+}
+
+.game-clock-icon svg {
+  display: block;
 }
 
 .clock-secondary {
@@ -2178,10 +2185,41 @@ select:hover {
 
 .game-log li {
   display: grid;
-  grid-template-columns: 60px 1fr;
-  gap: 1rem;
+  grid-template-columns: 60px 24px minmax(0, 1fr);
+  gap: 0.75rem;
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--line);
+}
+
+.timeline-event-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+}
+
+.timeline-event-icon .soccer-ball-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.timeline-event-substitution {
+  color: var(--warm-dark);
+}
+
+.timeline-event-goal-for,
+.timeline-event-goal-against {
+  color: var(--goal);
+}
+
+.timeline-event-available,
+.period-timeline-marker .timeline-event-icon {
+  color: var(--turf-dark);
+}
+
+.timeline-event-unavailable {
+  color: var(--danger);
 }
 
 .game-log li.period-timeline-marker {
@@ -3474,10 +3512,9 @@ select:hover {
 
   .game-clock {
     position: static;
-    display: grid;
-    grid-template-rows: 1.45rem auto;
-    align-items: start;
-    gap: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
   }
 
   .match-metrics {
@@ -3486,16 +3523,9 @@ select:hover {
     gap: 0.7rem;
   }
 
-  .clock-state {
-    min-width: 0;
-    height: 1.45rem;
-    display: grid;
-    place-items: center;
-    justify-self: start;
-    padding: 0 0.25rem;
-    font-size: 0.62rem;
-    line-height: 1;
-    white-space: nowrap;
+  .game-clock-icon {
+    width: 24px;
+    height: 24px;
   }
 
   .scoreboard-team,
@@ -3568,8 +3598,20 @@ select:hover {
   }
 
   .compact-match-clock {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+
+  .compact-clock-glyph {
+    flex: none;
+    color: var(--ink-soft);
+  }
+
+  .compact-match-clock.added-time .compact-clock-glyph {
+    color: var(--warm-dark);
   }
 
   .compact-match-period {
