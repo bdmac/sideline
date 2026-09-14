@@ -3661,7 +3661,7 @@ select:hover {
     grid-template-columns: 32px auto 32px;
     align-items: center;
     justify-items: center;
-    column-gap: 0.15rem;
+    column-gap: 0;
     color: var(--turf-dark);
     font-size: 1.05rem;
     font-weight: 950;
@@ -3669,10 +3669,18 @@ select:hover {
     white-space: nowrap;
   }
 
+  .compact-match-score .compact-score-button {
+    display: grid;
+    place-items: center end;
+    padding: 0 0.1rem 0 0;
+  }
+
   .compact-opponent-score {
     width: 32px;
     display: grid;
-    place-items: center;
+    place-items: center start;
+    box-sizing: border-box;
+    padding-left: 0.1rem;
   }
 
   .compact-match-actions {
