@@ -953,14 +953,16 @@ describe("Sideline app", () => {
     fireEvent.click(repeatedIncoming!);
     expect(incomingPlayers[1]).toHaveTextContent(firstIncomingName);
     expect(incomingPlayers[0]).not.toHaveTextContent(firstIncomingName);
-    expect(
-      screen.getByRole("button", { name: "Queue 3 swaps" }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Queue 3 swaps" }));
+    const queueButton = screen.getByRole("button", { name: "Queue 3 swaps" });
+    expect(queueButton).toHaveClass("primary-action");
+    fireEvent.click(queueButton);
 
     const summary = screen.getByRole("dialog", {
       name: "Review substitutions (3)",
     });
+    expect(
+      within(summary).getByRole("button", { name: "Execute subs" }),
+    ).toHaveClass("primary-action");
 
     expect(summary).toHaveTextContent("OUT");
     expect(summary).toHaveTextContent("IN");
@@ -1745,6 +1747,9 @@ describe("Sideline app", () => {
     const dylanRow = screen
       .getByRole("button", { name: "Queue Dylan" })
       .closest(".player-time-row");
+    expect(screen.getByRole("button", { name: "Queue Dylan" })).toHaveClass(
+      "primary-action",
+    );
     expect(dylanRow).toHaveTextContent("Waiting to enter");
     expect(dylanRow).not.toHaveTextContent("Sitting");
     expect(dylanRow).not.toHaveTextContent("total bench");
@@ -1855,6 +1860,70 @@ describe("Sideline app", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows goal markers on the scorer's pitch card", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const scorerId = Object.values(game.assignments)[1];
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    game = recordGoal(game, "us", scorerId, 1_000);
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+
+    const scorerName = team.roster.find(
+      (player) => player.id === scorerId,
+    )!.name;
+    const pitchCard = screen.getByRole("button", {
+      name: `Open actions for ${scorerName}`,
+    });
+    expect(
+      within(pitchCard)
+        .getByLabelText(`${scorerName} scored 1 goal`)
+        .querySelectorAll(".soccer-ball-icon"),
+    ).toHaveLength(1);
+  });
+
+  it("collapses four or more goals into one marker with an exact count", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const scorerId = Object.values(game.assignments)[1];
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    for (let goal = 0; goal < 4; goal += 1) {
+      game = recordGoal(game, "us", scorerId, 1_000 + goal);
+    }
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+
+    const scorerName = team.roster.find(
+      (player) => player.id === scorerId,
+    )!.name;
+    const pitchCard = screen.getByRole("button", {
+      name: `Open actions for ${scorerName}`,
+    });
+    const goalTotal = within(pitchCard).getByLabelText(
+      `${scorerName} scored 4 goals`,
+    );
+    expect(goalTotal.querySelectorAll(".soccer-ball-icon")).toHaveLength(1);
+    expect(goalTotal).toHaveTextContent("×4");
+  });
+
   it("switches between bench and on-field lists with tabs and swipe", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -1874,6 +1943,9 @@ describe("Sideline app", () => {
     expect(
       screen.getByRole("button", { name: "Queue Simon out" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Queue Simon out" })).toHaveClass(
+      "primary-action",
+    );
     expect(
       screen
         .getByRole("button", { name: "Queue Simon out" })

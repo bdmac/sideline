@@ -1950,7 +1950,7 @@ function LiveGameScreen({
               Review
             </Button>
             <Button
-              className="sub-confirm"
+              className="primary-action"
               variant="primary"
               size="large"
               leadingVisual={Check}
@@ -1986,6 +1986,7 @@ function LiveGameScreen({
             formation={formation}
             assignments={game.assignments}
             team={team}
+            game={displayed}
             totals={displayed.totals}
             elapsedSeconds={displayed.clock.elapsedSeconds}
             onEditPlayer={(playerId) =>
@@ -2547,6 +2548,7 @@ function Pitch({
   formation,
   assignments,
   team,
+  game,
   totals,
   elapsedSeconds,
   onEditPlayer,
@@ -2556,6 +2558,7 @@ function Pitch({
   formation: ReturnType<typeof getFormation>;
   assignments: Record<string, string>;
   team: Team;
+  game: ActiveGame;
   totals: ActiveGame["totals"];
   elapsedSeconds: number;
   onEditPlayer: (playerId: string) => void;
@@ -2664,7 +2667,16 @@ function Pitch({
         const content = (
           <>
             <span className="position-label">{position.shortLabel}</span>
-            <strong>{player?.name ?? "Open"}</strong>
+            {player ? (
+              <span className="pitch-player-name">
+                <GoalMarkedPlayerName
+                  label={player.name}
+                  goalCount={playerGoalCount(game, player.id)}
+                />
+              </span>
+            ) : (
+              <strong>Open</strong>
+            )}
             {player ? (
               playedSeconds !== elapsedSeconds && (
                 <small>
@@ -3387,7 +3399,7 @@ function FieldPlayerTimeRow({
       )}
       <span className="player-row-actions">
         <IconButton
-          className="queue-player-button"
+          className="queue-player-button primary-action"
           variant="primary"
           size="medium"
           icon={queued ? Pencil : ArrowRightLeft}
@@ -3473,7 +3485,7 @@ function PlayerTimeRow({
       )}
       <span className="player-row-actions">
         <IconButton
-          className="queue-player-button"
+          className="queue-player-button primary-action"
           variant="primary"
           size="medium"
           icon={queued ? Pencil : ArrowRightLeft}
@@ -3778,7 +3790,7 @@ function SubstitutionPlanner({
             Cancel
           </Button>
           <Button
-            className="sub-confirm"
+            className="primary-action"
             variant="primary"
             size="large"
             leadingVisual={Check}
@@ -4209,7 +4221,7 @@ function QueuedSubstitutionSummary({
             Delete plan
           </Button>
           <Button
-            className="sub-confirm"
+            className="primary-action"
             variant="primary"
             size="large"
             leadingVisual={Check}
@@ -4457,6 +4469,8 @@ function GoalMarkedPlayerName({
   goalCount: number;
   emphasized?: boolean;
 }) {
+  const compactGoalCount = goalCount > 3;
+
   return (
     <span className="player-name-with-goals">
       {emphasized ? <strong>{label}</strong> : <span>{label}</span>}
@@ -4467,9 +4481,17 @@ function GoalMarkedPlayerName({
             goalCount === 1 ? "goal" : "goals"
           }`}
         >
-          {Array.from({ length: goalCount }, (_, index) => (
-            <SoccerBallIcon key={index} />
-          ))}
+          {Array.from(
+            { length: compactGoalCount ? 1 : goalCount },
+            (_, index) => (
+              <SoccerBallIcon key={index} />
+            ),
+          )}
+          {compactGoalCount && (
+            <span className="goal-count-overflow" aria-hidden="true">
+              ×{goalCount}
+            </span>
+          )}
         </span>
       )}
     </span>
