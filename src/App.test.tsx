@@ -1701,9 +1701,18 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Add guest player to bench" }),
+    const benchPanel = screen.getByRole("tabpanel");
+    const addGuestButton = within(benchPanel).getByRole("button", {
+      name: "Add guest player to bench",
+    });
+    expect(addGuestButton.closest(".bench-list")).toBeInTheDocument();
+    expect(addGuestButton).toHaveClass("live-guest-add-row");
+    expect(addGuestButton).toHaveAttribute("data-variant", "invisible");
+    expect(addGuestButton).toHaveTextContent("New playerAdd to bench");
+    expect(addGuestButton.querySelector(".guest-add-placeholder")).toHaveClass(
+      "player-number",
     );
+    fireEvent.click(addGuestButton);
     const guestDialog = screen.getByRole("dialog", {
       name: "Add guest player",
     });

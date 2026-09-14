@@ -1737,24 +1737,6 @@ select:hover {
   border-bottom: 1px solid var(--line);
 }
 
-.roster-tabs-shell {
-  position: relative;
-}
-
-.roster-tabs button:first-child {
-  padding-left: 3rem;
-}
-
-.live-guest-add-button {
-  position: absolute;
-  z-index: 1;
-  top: 2px;
-  left: 2px;
-  width: 44px;
-  height: 44px;
-  color: var(--turf-dark);
-}
-
 .roster-tabs button {
   min-height: 48px;
   border: 0;
@@ -1800,6 +1782,56 @@ select:hover {
 .roster-tab-panel {
   min-height: 76px;
   touch-action: pan-y;
+}
+
+.live-guest-add-row {
+  width: 100%;
+  min-height: 76px;
+  padding-inline: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.live-guest-add-row [data-component="buttonContent"],
+.live-guest-add-row [data-component="text"] {
+  width: 100%;
+}
+
+.live-guest-add-row [data-component="text"] {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+  text-align: left;
+}
+
+.guest-add-placeholder {
+  background: var(--ink-soft);
+  color: var(--on-ink);
+}
+
+.guest-add-copy strong,
+.guest-add-copy small {
+  display: block;
+}
+
+.guest-add-copy strong {
+  color: var(--ink);
+}
+
+.guest-add-copy small {
+  margin-top: 0.15rem;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.live-guest-add-row [data-component="buttonContent"] {
+  justify-content: flex-start;
+}
+
+.live-guest-add-row:hover:not(:disabled) {
+  color: var(--turf-dark);
 }
 
 .cohort-time-summary {

@@ -27,6 +27,7 @@ import {
   Pause,
   Pencil,
   Play,
+  Plus,
   RotateCcw,
   Settings,
   Square,
@@ -2089,67 +2090,55 @@ function LiveGameScreen({
               </strong>
             </div>
           )}
-          <div className="roster-tabs-shell">
-            <div
-              className="roster-tabs"
-              role="tablist"
-              aria-label="Player status"
-              onKeyDown={(event) => {
-                let nextView: "field" | "bench" | null = null;
-                if (event.key === "ArrowRight") {
-                  nextView = rosterView === "bench" ? "field" : "bench";
-                } else if (event.key === "ArrowLeft") {
-                  nextView = rosterView === "field" ? "bench" : "field";
-                } else if (event.key === "Home") {
-                  nextView = "bench";
-                } else if (event.key === "End") {
-                  nextView = "field";
-                }
-                if (nextView) {
-                  event.preventDefault();
-                  moveRosterTabFocus(nextView);
-                }
-              }}
+          <div
+            className="roster-tabs"
+            role="tablist"
+            aria-label="Player status"
+            onKeyDown={(event) => {
+              let nextView: "field" | "bench" | null = null;
+              if (event.key === "ArrowRight") {
+                nextView = rosterView === "bench" ? "field" : "bench";
+              } else if (event.key === "ArrowLeft") {
+                nextView = rosterView === "field" ? "bench" : "field";
+              } else if (event.key === "Home") {
+                nextView = "bench";
+              } else if (event.key === "End") {
+                nextView = "field";
+              }
+              if (nextView) {
+                event.preventDefault();
+                moveRosterTabFocus(nextView);
+              }
+            }}
+          >
+            <button
+              id="roster-bench-tab"
+              type="button"
+              role="tab"
+              aria-selected={rosterView === "bench"}
+              aria-controls="roster-status-panel"
+              tabIndex={rosterView === "bench" ? 0 : -1}
+              onClick={() => setRosterView("bench")}
             >
-              <button
-                id="roster-bench-tab"
-                type="button"
-                role="tab"
-                aria-selected={rosterView === "bench"}
-                aria-controls="roster-status-panel"
-                tabIndex={rosterView === "bench" ? 0 : -1}
-                onClick={() => setRosterView("bench")}
-              >
-                <span className="roster-tab-label">
-                  Bench{" "}
-                  <span className="roster-tab-count">
-                    {game.benchIds.length}
-                  </span>
-                </span>
-              </button>
-              <button
-                id="roster-field-tab"
-                type="button"
-                role="tab"
-                aria-selected={rosterView === "field"}
-                aria-controls="roster-status-panel"
-                tabIndex={rosterView === "field" ? 0 : -1}
-                onClick={() => setRosterView("field")}
-              >
-                <span className="roster-tab-label">
-                  On field{" "}
-                  <span className="roster-tab-count">{fieldIds.length}</span>
-                </span>
-              </button>
-            </div>
-            <IconButton
-              className="live-guest-add-button"
-              variant="invisible"
-              size="large"
-              icon={CirclePlus}
-              onClick={() => setGuestBenchOpen(true)}
-              aria-label="Add guest player to bench"
-            />
+              <span className="roster-tab-label">
+                Bench{" "}
+                <span className="roster-tab-count">{game.benchIds.length}</span>
+              </span>
+            </button>
+            <button
+              id="roster-field-tab"
+              type="button"
+              role="tab"
+              aria-selected={rosterView === "field"}
+              aria-controls="roster-status-panel"
+              tabIndex={rosterView === "field" ? 0 : -1}
+              onClick={() => setRosterView("field")}
+            >
+              <span className="roster-tab-label">
+                On field{" "}
+                <span className="roster-tab-count">{fieldIds.length}</span>
+              </span>
+            </button>
           </div>
 
           <div
@@ -2266,14 +2255,19 @@ function LiveGameScreen({
                       />
                     );
                   })}
+                  <AddGuestBenchRow onClick={() => setGuestBenchOpen(true)} />
                 </div>
               </>
             ) : (
-              <div className="bench-empty">
-                <strong>No available substitutes</strong>
-                <span>
-                  Position changes are still available. Tiny legs, big minutes.
-                </span>
+              <div className="bench-list">
+                <div className="bench-empty">
+                  <strong>No available substitutes</strong>
+                  <span>
+                    Position changes are still available. Tiny legs, big
+                    minutes.
+                  </span>
+                </div>
+                <AddGuestBenchRow onClick={() => setGuestBenchOpen(true)} />
               </div>
             )}
           </div>
@@ -3440,6 +3434,27 @@ function FieldPlayerActionsSheet({
         </Button>
       </div>
     </SidelineDialog>
+  );
+}
+
+function AddGuestBenchRow({ onClick }: { onClick: () => void }) {
+  return (
+    <Button
+      className="live-guest-add-row"
+      variant="invisible"
+      size="large"
+      block
+      onClick={onClick}
+      aria-label="Add guest player to bench"
+    >
+      <span className="player-number guest-add-placeholder" aria-hidden="true">
+        <Plus size={18} />
+      </span>
+      <span className="guest-add-copy">
+        <strong>New player</strong>
+        <small>Add to bench</small>
+      </span>
+    </Button>
   );
 }
 
