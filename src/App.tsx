@@ -4675,8 +4675,8 @@ function SubstitutionPlanner({
                   goalCount={playerGoalCount(game, pair.inPlayerId)}
                 />
                 <span className="review-direction">
-                  <small>{position?.shortLabel}</small>
                   <ArrowRightLeft size={17} aria-hidden="true" />
+                  <small>{position?.shortLabel}</small>
                 </span>
                 <GoalMarkedPlayerName
                   label={playerName(team, pair.outPlayerId)}
