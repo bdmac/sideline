@@ -1154,6 +1154,48 @@ describe("Sideline app", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("removes a specific row from the substitution planner", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+
+    const planner = screen.getByRole("dialog", {
+      name: "Plan substitutions",
+    });
+    const originalIncoming = within(planner)
+      .getAllByLabelText(/incoming player/)
+      .map((button) => button.textContent);
+    const originalOutgoing = within(planner)
+      .getAllByLabelText(/outgoing player/)
+      .map((button) => button.textContent);
+
+    fireEvent.click(
+      within(planner).getByRole("button", {
+        name: /^Remove substitution 2:/,
+      }),
+    );
+
+    expect(
+      within(planner)
+        .getAllByLabelText(/incoming player/)
+        .map((button) => button.textContent),
+    ).toEqual([originalIncoming[0], originalIncoming[2]]);
+    expect(
+      within(planner)
+        .getAllByLabelText(/outgoing player/)
+        .map((button) => button.textContent),
+    ).toEqual([originalOutgoing[0], originalOutgoing[2]]);
+    expect(
+      within(planner).getAllByRole("button", {
+        name: /^Remove substitution \d+:/,
+      }),
+    ).toHaveLength(2);
+    expect(
+      within(planner).getByRole("button", { name: "Ready 2 swaps" }),
+    ).toBeEnabled();
+  });
+
   it("keeps a ready plan valid when its outgoing player changes positions", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;

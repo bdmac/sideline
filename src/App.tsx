@@ -4412,6 +4412,14 @@ function SubstitutionPlanner({
       reassignOutgoingSubstitution(game, current, index, outPlayerId),
     );
   };
+  const removePair = (index: number) => {
+    if (pairs.length <= 1) return;
+    const nextPairs = pairs.filter((_, pairIndex) => pairIndex !== index);
+    setHasCoachSelections(true);
+    setActivePlayerMenuId(null);
+    setPairs(nextPairs);
+    setCount(nextPairs.length);
+  };
   const duplicateOuts =
     new Set(pairs.map((pair) => pair.outPlayerId)).size !== pairs.length;
   const duplicateIns =
@@ -4645,6 +4653,18 @@ function SubstitutionPlanner({
                     }
                   />
                 </div>
+                <IconButton
+                  className="swap-remove-action"
+                  variant="invisible"
+                  size="large"
+                  icon={Trash2}
+                  aria-label={`Remove substitution ${index + 1}: ${playerName(
+                    team,
+                    pair.inPlayerId,
+                  )} for ${playerName(team, pair.outPlayerId)}`}
+                  disabled={pairs.length <= 1}
+                  onClick={() => removePair(index)}
+                />
               </div>
             );
           })}

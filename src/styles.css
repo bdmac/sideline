@@ -2447,7 +2447,7 @@ select:hover {
 }
 
 .swap-column-headings {
-  grid-template-columns: 34px minmax(0, 1fr) 120px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr) 120px minmax(0, 1fr) 44px;
   gap: 0.65rem;
   padding: 0.65rem 0 0.15rem;
 }
@@ -2465,7 +2465,7 @@ select:hover {
 
 .swap-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 120px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr) 120px minmax(0, 1fr) 44px;
   gap: 0.65rem;
   align-items: start;
   padding: 0.8rem 0;
@@ -2767,6 +2767,19 @@ select:hover {
   line-height: 1;
   text-align: center;
   white-space: nowrap;
+}
+
+.swap-remove-action {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  align-self: center;
+  color: var(--danger);
+}
+
+.swap-remove-action:hover:not(:disabled) {
+  color: var(--danger-dark);
+  background: var(--danger-pale);
 }
 
 .ready-swap-number {
@@ -3939,7 +3952,7 @@ select:hover {
 
   .swap-column-headings,
   .swap-row {
-    grid-template-columns: 24px minmax(0, 1fr) 108px minmax(0, 1fr);
+    grid-template-columns: 24px minmax(0, 1fr) 108px minmax(0, 1fr) 44px;
     gap: 0.35rem;
   }
 
