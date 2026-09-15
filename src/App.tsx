@@ -6028,10 +6028,10 @@ function HatTrickBallIcon() {
   return (
     <svg
       className="soccer-ball-icon hat-trick-icon"
-      viewBox="0 0 24 34"
+      viewBox="0 0 24 31"
       aria-hidden="true"
     >
-      <g transform="translate(1.333 13.333) scale(0.889)">
+      <g transform="translate(1.333 11.333) scale(0.889)">
         <SoccerBallPanels />
       </g>
       <path d="M7.2 1.5h9.6l.8 14H6.4l.8-14Z" fill="currentColor" />
