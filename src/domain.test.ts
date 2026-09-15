@@ -379,7 +379,11 @@ describe("team rosters", () => {
       INITIAL_TEAMS.u12.roster
         .filter((player) => player.preferredRoles.includes("goalkeeper"))
         .map((player) => player.name),
-    ).toEqual(["Jackson", "William", "Matt", "Rayek"]);
+    ).toEqual(["Jackson", "William", "Matt", "Rayek", "Jack"]);
+    expect(
+      INITIAL_TEAMS.u12.roster.find((player) => player.name === "Jack")
+        ?.preferredRoles,
+    ).toEqual(["defender", "midfielder", "goalkeeper"]);
     expect(u8Numbers).toMatchObject({
       Simon: 10,
       Ollie: 23,
