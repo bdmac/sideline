@@ -23,7 +23,7 @@ npm run build
 npm run preview
 ```
 
-Use **Install Sideline** on the home screen. Supported browsers open their native installation prompt. On iPhone or iPad, open the app in Safari, tap **Share**, then choose **Add to Home Screen**. Service workers require `localhost` or HTTPS.
+Use **Install Sideline** on the coach selection screen. Supported browsers open their native installation prompt. On iPhone or iPad, open the app in Safari, tap **Share**, then choose **Add to Home Screen**. Service workers require `localhost` or HTTPS.
 
 ## Quality commands
 
@@ -46,7 +46,9 @@ npm run build
 7. Undo the latest confirmed substitution/unavailable event when needed.
 8. End the game only after confirming the destructive action.
 
-An interrupted active game reopens automatically. The live timestamp and accumulated time recover from the last persisted state.
+Choose a local coach profile on first use. Brian can access both teams; Chris and Scott go directly to Fireballers, while Lindsey goes directly to Golden Dragons. The header shows the current coach’s name; use that control to change coaches. This is a device-local team filter, not password authentication.
+
+An interrupted active game reopens automatically for an assigned persisted coach. The live timestamp and accumulated time recover from the last persisted state, and signing out never clears the game.
 
 The header settings menu can keep the screen awake during an active visible game and play a chime plus supported vibration when a substitution reminder becomes due. Both features are optional and depend on browser/device capabilities.
 

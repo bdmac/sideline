@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { COACH_ID_STORAGE_KEY } from "./coaches";
 import {
   applySubstitutions,
   compareSubstitutionDestinations,
@@ -53,10 +54,242 @@ describe("Sideline app", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    window.localStorage.setItem(COACH_ID_STORAGE_KEY, "brian");
     Object.defineProperty(window, "scrollY", {
       configurable: true,
       value: 0,
     });
+  });
+
+  it("starts fresh devices on local coach selection", () => {
+    localStorage.removeItem(COACH_ID_STORAGE_KEY);
+    render(<App />);
+
+    expect(
+      screen.getByRole("heading", { name: "Who’s coaching?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Choose your name to see your teams. No password required on this device.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Continue as Brian\./ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Continue as Chris\./ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Continue as Scott\./ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Continue as Lindsey\./ }),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("button", { name: /^Continue as Brian\./ })
+        .querySelectorAll(".team-crest.mini"),
+    ).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: /Install Sideline/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows both assigned teams after continuing as Brian", () => {
+    localStorage.removeItem(COACH_ID_STORAGE_KEY);
+    render(<App />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Continue as Brian\./ }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Which team is playing?" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Golden Dragons")).toBeInTheDocument();
+    expect(screen.getByText("Fireballers")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Install Sideline/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("takes single-team coaches directly to their assigned team", () => {
+    localStorage.removeItem(COACH_ID_STORAGE_KEY);
+    render(<App />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Continue as Chris\./ }),
+    );
+
+    const setupHeading = screen
+      .getByRole("heading", { name: "Prepare game" })
+      .closest("section");
+    expect(setupHeading).toBeInTheDocument();
+    expect(
+      setupHeading?.querySelector(
+        ".setup-team-lockup .team-crest.fireballers.mini",
+      ),
+    ).toBeInTheDocument();
+    expect(setupHeading).toHaveTextContent("FireballersU12 · 9v9");
+    expect(screen.getByText("Fireballers")).toBeInTheDocument();
+    expect(screen.queryByText("Golden Dragons")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Change team/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("ends definitively before returning a single-team coach to setup", () => {
+    localStorage.removeItem(COACH_ID_STORAGE_KEY);
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Continue as Chris\./ }),
+    );
+    startGame();
+
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    expect(
+      within(
+        screen.getByRole("alertdialog", { name: "End this game?" }),
+      ).getByText(
+        "The clock will stop and you’ll see the game summary before preparing for the next Fireballers game.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", { name: "End this game?" }),
+      ).getByRole("button", { name: "End game" }),
+    );
+
+    expect(
+      JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}").activeGame,
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Prep for next game" }));
+    expect(
+      screen.getByRole("heading", { name: "Prepare game" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Fireballers")).toBeInTheDocument();
+  });
+
+  it("does not offer an ended game for resume after exiting its summary", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", { name: "End this game?" }),
+      ).getByRole("button", { name: "End game" }),
+    );
+    expect(
+      screen.getByRole("main", { name: "Game summary" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Change coaches. Current coach: Brian",
+      }),
+    );
+    expect(
+      screen.queryByText("Game in progress", { exact: false }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Continue as Brian\./ }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Which team is playing?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Game in progress", { exact: false }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("persists the coach locally and signs out cleanly", () => {
+    localStorage.removeItem(COACH_ID_STORAGE_KEY);
+    localStorage.setItem("sideline-state-v1", JSON.stringify(INITIAL_STATE));
+    const firstRender = render(<App />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Continue as Scott\./ }),
+    );
+
+    expect(localStorage.getItem(COACH_ID_STORAGE_KEY)).toBe("scott");
+    expect(screen.getByText("Fireballers")).toBeInTheDocument();
+    firstRender.unmount();
+
+    render(<App />);
+    expect(
+      screen.queryByRole("heading", { name: "Who’s coaching?" }),
+    ).not.toBeInTheDocument();
+    const coachSwitcher = screen.getByRole("button", {
+      name: "Change coaches. Current coach: Scott",
+    });
+    expect(coachSwitcher).toHaveTextContent("Scott");
+    expect(
+      coachSwitcher.querySelector(".lucide-users-round"),
+    ).toBeInTheDocument();
+    expect(
+      coachSwitcher.querySelector(".lucide-move-horizontal"),
+    ).toBeInTheDocument();
+    fireEvent.click(coachSwitcher);
+
+    expect(
+      screen.getByRole("heading", { name: "Who’s coaching?" }),
+    ).toBeInTheDocument();
+    expect(localStorage.getItem(COACH_ID_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem("sideline-state-v1")).not.toBeNull();
+  });
+
+  it("protects an active game from an unassigned coach", () => {
+    const state = structuredClone(INITIAL_STATE);
+    state.activeGame = createGame(
+      state.teams.u8,
+      state.teams.u8.defaultFormationId,
+      state.teams.u8.roster.map((player) => player.id),
+      state.teams.u8.defaultDurationMinutes,
+      1_000,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(COACH_ID_STORAGE_KEY, "chris");
+
+    render(<App />);
+
+    expect(
+      screen.getByRole("heading", { name: "Your team" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Another team has a game in progress on this device. Sign in as one of its coaches to resume it.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Fireballers/ })).toBeDisabled();
+    expect(screen.queryByText(/Game in progress ·/)).not.toBeInTheDocument();
+  });
+
+  it("signs out without losing an active game", () => {
+    const state = structuredClone(INITIAL_STATE);
+    state.activeGame = createGame(
+      state.teams.u8,
+      state.teams.u8.defaultFormationId,
+      state.teams.u8.roster.map((player) => player.id),
+      state.teams.u8.defaultDurationMinutes,
+      1_000,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Change coaches. Current coach: Brian",
+      }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Who’s coaching?" }),
+    ).toBeInTheDocument();
+    expect(
+      JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}").activeGame.teamId,
+    ).toBe("u8");
   });
 
   it("keeps teams visibly separate from the first screen", () => {
@@ -268,9 +501,7 @@ describe("Sideline app", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
     render(<App />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Go to team selection" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Go to coach home" }));
     expect(
       screen.getByText(
         "Resume the game in progress. Each team’s game state stays separate.",
@@ -647,7 +878,7 @@ describe("Sideline app", () => {
     expect(screen.getByRole("button", { name: "Start game" })).toBeEnabled();
   });
 
-  it("labels setup navigation by its team-selection destination", () => {
+  it("uses the team identity as compact team-selection navigation", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
 
@@ -656,9 +887,18 @@ describe("Sideline app", () => {
     expect(formationButton).toHaveAttribute("data-variant", "primary");
     expect(formationButton.querySelector("svg")).toBeInTheDocument();
 
-    const backButton = screen.getByRole("button", { name: "Team selection" });
-    expect(backButton).toBeInTheDocument();
-    fireEvent.click(backButton);
+    const teamSwitcher = screen.getByRole("button", {
+      name: "Change team. Current team: Golden Dragons",
+    });
+    expect(teamSwitcher).toHaveTextContent("Golden Dragons");
+    expect(teamSwitcher).toHaveTextContent("U8 · 5v5Change");
+    expect(
+      teamSwitcher.querySelector(".setup-team-change .lucide-move-horizontal"),
+    ).toBeInTheDocument();
+    expect(
+      teamSwitcher.querySelector(".team-crest.golden-dragons"),
+    ).toBeInTheDocument();
+    fireEvent.click(teamSwitcher);
     expect(
       screen.getByRole("heading", { name: "Which team is playing?" }),
     ).toBeInTheDocument();
@@ -3187,9 +3427,7 @@ describe("Sideline app", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
     render(<App />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Go to team selection" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Go to coach home" }));
 
     expect(screen.getByText("Added time +0:04 · 10:04")).toBeInTheDocument();
   });
@@ -3336,6 +3574,7 @@ describe("Sideline app", () => {
   });
 
   it("shows manual installation guidance when no native prompt is available", () => {
+    localStorage.removeItem(COACH_ID_STORAGE_KEY);
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /Install Sideline/i }));
 
@@ -3367,6 +3606,7 @@ describe("Sideline app", () => {
       },
     );
 
+    localStorage.removeItem(COACH_ID_STORAGE_KEY);
     render(<App />);
     fireEvent(window, installEvent);
     fireEvent.click(screen.getByRole("button", { name: /Install Sideline/i }));

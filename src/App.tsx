@@ -24,6 +24,7 @@ import {
   Flag,
   MoreHorizontal,
   Move,
+  MoveHorizontal,
   Moon,
   Pause,
   Pencil,
@@ -31,9 +32,11 @@ import {
   Plus,
   RotateCcw,
   Settings,
+  ShieldCheck,
   Square,
   Sun,
   Trash2,
+  UsersRound,
   UserRoundX,
   WandSparkles,
   X,
@@ -50,6 +53,14 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  COACHES,
+  type Coach,
+  type CoachId,
+  getCoach,
+  loadCoachId,
+  saveCoachId,
+} from "./coaches";
 import {
   addGuestPlayer,
   addGuestPlayerToBench,
@@ -116,7 +127,35 @@ import type {
 } from "./types";
 
 type Screen =
-  { name: "home" } | { name: "setup"; teamId: TeamId } | { name: "live" };
+  | { name: "coach" }
+  | { name: "home" }
+  | { name: "setup"; teamId: TeamId }
+  | { name: "live" }
+  | { name: "summary"; game: ActiveGame; teamId: TeamId };
+
+const coachTeamIds = (coach: Coach) =>
+  coach.assignments.map((assignment) => assignment.teamId);
+
+const coachHasTeam = (coach: Coach, teamId: TeamId) =>
+  coach.assignments.some((assignment) => assignment.teamId === teamId);
+
+const getCoachLandingScreen = (
+  coach: Coach,
+  state: AppState,
+  resumeActiveGame: boolean,
+): Screen => {
+  if (
+    state.activeGame &&
+    coachHasTeam(coach, state.activeGame.teamId) &&
+    (resumeActiveGame || coach.assignments.length === 1)
+  ) {
+    return { name: "live" };
+  }
+  if (!state.activeGame && coach.assignments.length === 1) {
+    return { name: "setup", teamId: coach.assignments[0].teamId };
+  }
+  return { name: "home" };
+};
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -441,6 +480,10 @@ function SettingsMenu({
 
 function App() {
   const [state, setState] = useState<AppState>(() => loadState());
+  const [selectedCoachId, setSelectedCoachId] = useState<CoachId | null>(
+    loadCoachId,
+  );
+  const selectedCoach = getCoach(selectedCoachId);
   const [colorMode, setColorMode] = useState<ColorMode>(() => loadColorMode());
   const [devicePreferences, setDevicePreferences] = useState<DevicePreferences>(
     () => loadDevicePreferences(),
@@ -454,7 +497,9 @@ function App() {
   const stateRef = useRef(state);
   const hasActiveGame = Boolean(state.activeGame);
   const [screen, setScreen] = useState<Screen>(() =>
-    state.activeGame ? { name: "live" } : { name: "home" },
+    selectedCoach
+      ? getCoachLandingScreen(selectedCoach, state, true)
+      : { name: "coach" },
   );
   const screenKey =
     screen.name === "setup" ? `${screen.name}:${screen.teamId}` : screen.name;
@@ -623,6 +668,36 @@ function App() {
     setDevicePreferences(next);
     saveDevicePreferences(next);
   };
+  const chooseTeam = (teamId: TeamId) => {
+    if (state.activeGame?.teamId === teamId) {
+      setScreen({ name: "live" });
+    } else {
+      setScreen({ name: "setup", teamId });
+    }
+  };
+  const goToCoachLanding = (resumeActiveGame = false) => {
+    setScreen(
+      selectedCoach
+        ? getCoachLandingScreen(
+            selectedCoach,
+            stateRef.current,
+            resumeActiveGame,
+          )
+        : { name: "coach" },
+    );
+  };
+  const selectCoach = (coachId: CoachId) => {
+    const coach = getCoach(coachId);
+    if (!coach) return;
+    saveCoachId(coachId);
+    setSelectedCoachId(coachId);
+    setScreen(getCoachLandingScreen(coach, stateRef.current, false));
+  };
+  const signOut = () => {
+    saveCoachId(null);
+    setSelectedCoachId(null);
+    setScreen({ name: "coach" });
+  };
 
   return (
     <ThemeProvider
@@ -638,13 +713,29 @@ function App() {
           <button
             className="brand"
             type="button"
-            onClick={() => setScreen({ name: "home" })}
-            aria-label="Go to team selection"
+            onClick={() => goToCoachLanding()}
+            aria-label={
+              selectedCoach ? "Go to coach home" : "Go to coach selection"
+            }
           >
             <SidelineMark />
             <span>Sideline</span>
           </button>
           <div className="topbar-actions">
+            {selectedCoach && (
+              <Button
+                className="coach-switcher"
+                variant="invisible"
+                size="large"
+                leadingVisual={UsersRound}
+                trailingVisual={MoveHorizontal}
+                aria-label={`Change coaches. Current coach: ${selectedCoach.name}`}
+                title="Change coaches"
+                onClick={signOut}
+              >
+                {selectedCoach.name}
+              </Button>
+            )}
             <IconButton
               className="theme-toggle"
               variant="invisible"
@@ -670,25 +761,30 @@ function App() {
         </header>
 
         <main id="main">
+          {screen.name === "coach" && (
+            <CoachScreen
+              state={state}
+              onChooseCoach={selectCoach}
+              showInstall={!installed}
+              onInstall={installApp}
+            />
+          )}
           {screen.name === "home" && (
             <HomeScreen
               state={state}
-              onChooseTeam={(teamId) => {
-                if (state.activeGame?.teamId === teamId) {
-                  setScreen({ name: "live" });
-                } else {
-                  setScreen({ name: "setup", teamId });
-                }
-              }}
+              teamIds={selectedCoach ? coachTeamIds(selectedCoach) : []}
+              onChooseTeam={chooseTeam}
               onResume={() => setScreen({ name: "live" })}
-              showInstall={!installed}
-              onInstall={installApp}
             />
           )}
           {screen.name === "setup" && (
             <SetupScreen
               team={state.teams[screen.teamId]}
-              onBack={() => setScreen({ name: "home" })}
+              onBack={
+                selectedCoach && selectedCoach.assignments.length > 1
+                  ? () => setScreen({ name: "home" })
+                  : undefined
+              }
               onStart={(game) => {
                 commitState((current) => ({ ...current, activeGame: game }));
                 setScreen({ name: "live" });
@@ -700,12 +796,38 @@ function App() {
               game={state.activeGame}
               team={activeTeam}
               substitutionAlertsEnabled={devicePreferences.substitutionAlerts}
+              summaryReturnLabel={
+                selectedCoach?.assignments.length === 1
+                  ? "Prep for next game"
+                  : "Return to teams"
+              }
               onChange={(game) =>
                 commitState((current) => ({ ...current, activeGame: game }))
               }
-              onEnd={() => {
+              onEnd={(game) => {
                 commitState((current) => ({ ...current, activeGame: null }));
-                setScreen({ name: "home" });
+                setScreen({ name: "summary", game, teamId: game.teamId });
+              }}
+            />
+          )}
+          {screen.name === "summary" && (
+            <GameSummary
+              game={screen.game}
+              team={teamWithGameGuests(state.teams[screen.teamId], screen.game)}
+              returnLabel={
+                selectedCoach?.assignments.length === 1
+                  ? "Prep for next game"
+                  : "Return to teams"
+              }
+              onClose={() => {
+                if (selectedCoach?.assignments.length === 1) {
+                  setScreen({
+                    name: "setup",
+                    teamId: selectedCoach.assignments[0].teamId,
+                  });
+                } else {
+                  setScreen({ name: "home" });
+                }
               }}
             />
           )}
@@ -714,7 +836,7 @@ function App() {
               title="No active game"
               body="Choose a team to prepare a new match."
               action="Choose a team"
-              onAction={() => setScreen({ name: "home" })}
+              onAction={() => goToCoachLanding()}
             />
           )}
         </main>
@@ -729,18 +851,114 @@ function App() {
   );
 }
 
-function HomeScreen({
+function PrivacyNote() {
+  return (
+    <p className="privacy-note">
+      <ShieldCheck size={17} aria-hidden="true" />
+      <span>
+        Sideline works offline. Names and game data stay in this browser.
+      </span>
+    </p>
+  );
+}
+
+function CoachScreen({
   state,
-  onChooseTeam,
-  onResume,
+  onChooseCoach,
   showInstall,
   onInstall,
 }: {
   state: AppState;
-  onChooseTeam: (teamId: TeamId) => void;
-  onResume: () => void;
+  onChooseCoach: (coachId: CoachId) => void;
   showInstall: boolean;
   onInstall: () => void;
+}) {
+  return (
+    <div className="page coach-page">
+      <section className="page-heading">
+        <div>
+          <span className="eyebrow">Local coach profile</span>
+          <h1>Who’s coaching?</h1>
+          <p>
+            Choose your name to see your teams. No password required on this
+            device.
+          </p>
+        </div>
+      </section>
+
+      <div className="coach-ledger">
+        {COACHES.map((coach) => {
+          const canResumeActiveGame = state.activeGame
+            ? coachHasTeam(coach, state.activeGame.teamId)
+            : false;
+          const assignmentLabel = coach.assignments
+            .map(
+              (assignment) =>
+                `${state.teams[assignment.teamId].name}, ${assignment.role}`,
+            )
+            .join(". ");
+          return (
+            <button
+              className="coach-row"
+              type="button"
+              key={coach.id}
+              onClick={() => onChooseCoach(coach.id)}
+              aria-label={`Continue as ${coach.name}. ${assignmentLabel}`}
+            >
+              <span className="coach-initials" aria-hidden="true">
+                {coach.name.slice(0, 1)}
+              </span>
+              <span className="coach-row-main">
+                <strong>{coach.name}</strong>
+                <span className="coach-assignments">
+                  {coach.assignments.map((assignment) => (
+                    <span className="coach-assignment" key={assignment.teamId}>
+                      <TeamCrest teamId={assignment.teamId} mini />
+                      <small>
+                        {state.teams[assignment.teamId].name} ·{" "}
+                        {assignment.role}
+                      </small>
+                    </span>
+                  ))}
+                </span>
+              </span>
+              {canResumeActiveGame && (
+                <span className="coach-active-note">Game in progress</span>
+              )}
+              <ChevronRight size={22} aria-hidden="true" />
+            </button>
+          );
+        })}
+      </div>
+
+      {showInstall && (
+        <button className="install-strip" type="button" onClick={onInstall}>
+          <Download size={22} aria-hidden="true" />
+          <span>
+            <strong>Install Sideline</strong>
+            <small>
+              Keep it on your home screen for quick game-day access.
+            </small>
+          </span>
+          <ChevronRight size={20} aria-hidden="true" />
+        </button>
+      )}
+
+      <PrivacyNote />
+    </div>
+  );
+}
+
+function HomeScreen({
+  state,
+  teamIds,
+  onChooseTeam,
+  onResume,
+}: {
+  state: AppState;
+  teamIds: TeamId[];
+  onChooseTeam: (teamId: TeamId) => void;
+  onResume: () => void;
 }) {
   const activeTeam = state.activeGame
     ? state.teams[state.activeGame.teamId]
@@ -757,20 +975,29 @@ function HomeScreen({
         displayedGame.period,
       )
     : null;
+  const canResumeActiveGame = Boolean(
+    activeTeam && teamIds.includes(activeTeam.id),
+  );
+  const hasBlockedActiveGame = Boolean(
+    state.activeGame && !canResumeActiveGame,
+  );
+  const teams = teamIds.map((teamId) => state.teams[teamId]);
   return (
     <div className="page home-page">
       <section className="page-heading">
         <div>
-          <h1>Which team is playing?</h1>
+          <h1>{teams.length === 1 ? "Your team" : "Which team is playing?"}</h1>
           <p>
-            {state.activeGame
-              ? "Resume the game in progress. Each team’s game state stays separate."
-              : "Choose a team to start a game. Each team’s game state stays separate."}
+            {hasBlockedActiveGame
+              ? "Another team has a game in progress on this device. Sign in as one of its coaches to resume it."
+              : state.activeGame
+                ? "Resume the game in progress. Each team’s game state stays separate."
+                : "Choose a team to start a game. Each team’s game state stays separate."}
           </p>
         </div>
       </section>
 
-      {displayedGame && activeTeam && (
+      {displayedGame && activeTeam && canResumeActiveGame && (
         <button className="resume-strip" type="button" onClick={onResume}>
           <span className="resume-pulse" aria-hidden="true" />
           <span>
@@ -793,7 +1020,7 @@ function HomeScreen({
       )}
 
       <div className="team-ledger">
-        {(Object.values(state.teams) as Team[]).map((team) => {
+        {teams.map((team) => {
           const hasOtherActiveGame =
             state.activeGame && state.activeGame.teamId !== team.id;
           return (
@@ -821,22 +1048,7 @@ function HomeScreen({
         })}
       </div>
 
-      {showInstall && (
-        <button className="install-strip" type="button" onClick={onInstall}>
-          <Download size={22} aria-hidden="true" />
-          <span>
-            <strong>Install Sideline</strong>
-            <small>
-              Keep it on your home screen for quick game-day access.
-            </small>
-          </span>
-          <ChevronRight size={20} aria-hidden="true" />
-        </button>
-      )}
-
-      <p className="privacy-note">
-        Sideline works offline. Names and game data stay in this browser.
-      </p>
+      <PrivacyNote />
     </div>
   );
 }
@@ -979,7 +1191,7 @@ function SetupScreen({
   onStart,
 }: {
   team: Team;
-  onBack: () => void;
+  onBack?: () => void;
   onStart: (game: ActiveGame) => void;
 }) {
   const [guestPlayers, setGuestPlayers] = useState<Player[]>([]);
@@ -1218,15 +1430,44 @@ function SetupScreen({
       </button>
     );
   };
+  const teamIdentity = (
+    <>
+      <span>
+        <strong>{team.name}</strong>
+        <span className="setup-team-meta">
+          <small>
+            {team.ageGroup} · {team.sideSize}v{team.sideSize}
+          </small>
+          {onBack && (
+            <small className="setup-team-change">
+              <MoveHorizontal size={12} aria-hidden="true" />
+              Change
+            </small>
+          )}
+        </span>
+      </span>
+      <TeamCrest teamId={team.id} mini />
+    </>
+  );
 
   return (
     <div className="page setup-page">
-      <PageBack onClick={onBack}>Team selection</PageBack>
-      <section className="page-heading">
-        <div>
-          <h1>Prepare game</h1>
-          <p>Set the squad, shape, and starters in three quick steps.</p>
-        </div>
+      <section className="page-heading setup-page-heading">
+        <h1>Prepare game</h1>
+        {onBack ? (
+          <button
+            className="setup-team-lockup setup-team-switcher"
+            type="button"
+            aria-label={`Change team. Current team: ${team.name}`}
+            title="Change team"
+            onClick={onBack}
+          >
+            {teamIdentity}
+          </button>
+        ) : (
+          <div className="setup-team-lockup">{teamIdentity}</div>
+        )}
+        <p>Set the squad, shape, and starters.</p>
       </section>
 
       <div
@@ -1547,14 +1788,16 @@ function LiveGameScreen({
   game,
   team,
   substitutionAlertsEnabled,
+  summaryReturnLabel,
   onChange,
   onEnd,
 }: {
   game: ActiveGame;
   team: Team;
   substitutionAlertsEnabled: boolean;
+  summaryReturnLabel: "Prep for next game" | "Return to teams";
   onChange: (game: ActiveGame) => void;
-  onEnd: () => void;
+  onEnd: (game: ActiveGame) => void;
 }) {
   const now = useClockNow(game.clock.running);
   const [headerCollapseProgress, setHeaderCollapseProgress] = useState(0);
@@ -1590,7 +1833,6 @@ function LiveGameScreen({
     string | null
   >(null);
   const [endConfirm, setEndConfirm] = useState(false);
-  const [endedGame, setEndedGame] = useState<ActiveGame | null>(null);
   const [error, setError] = useState("");
   const alertedReminderCycle = useRef<string | null>(null);
   const formation = getFormation(game.formationId);
@@ -1730,19 +1972,13 @@ function LiveGameScreen({
     if (
       !substitutionAlertsEnabled ||
       !showSubstitutionReminder ||
-      endedGame ||
       alertedReminderCycle.current === reminderCycleKey
     ) {
       return;
     }
     alertedReminderCycle.current = reminderCycleKey;
     void playSubstitutionAlert();
-  }, [
-    endedGame,
-    reminderCycleKey,
-    showSubstitutionReminder,
-    substitutionAlertsEnabled,
-  ]);
+  }, [reminderCycleKey, showSubstitutionReminder, substitutionAlertsEnabled]);
 
   const safeChange = (change: () => ActiveGame) => {
     try {
@@ -1839,19 +2075,6 @@ function LiveGameScreen({
     }
     setRosterView(deltaX < 0 ? "field" : "bench");
   };
-
-  if (endedGame) {
-    return (
-      <GameSummary
-        game={endedGame}
-        team={team}
-        onClose={() => {
-          setEndedGame(null);
-          onEnd();
-        }}
-      />
-    );
-  }
 
   return (
     <div className="live-page">
@@ -2880,7 +3103,11 @@ function LiveGameScreen({
       {endConfirm && (
         <ConfirmSheet
           title="End this game?"
-          body="The clock will stop and you’ll see a player summary before returning to team selection."
+          body={`The clock will stop and you’ll see the game summary before ${
+            summaryReturnLabel === "Prep for next game"
+              ? `preparing for the next ${team.name} game.`
+              : "returning to team selection."
+          }`}
           cancelLabel="Continue game"
           confirmLabel="End game"
           confirmIcon={<Flag size={18} aria-hidden="true" />}
@@ -2890,9 +3117,8 @@ function LiveGameScreen({
             const finalGame = cancelQueuedSubstitutions(
               finalizeGame(game, Date.now()),
             );
-            onChange(finalGame);
             setEndConfirm(false);
-            setEndedGame(finalGame);
+            onEnd(finalGame);
           }}
         />
       )}
@@ -5322,10 +5548,12 @@ function PlayerEntrySummary({
 function GameSummary({
   game,
   team,
+  returnLabel,
   onClose,
 }: {
   game: ActiveGame;
   team: Team;
+  returnLabel: "Prep for next game" | "Return to teams";
   onClose: () => void;
 }) {
   const formation = getFormation(game.formationId);
@@ -5423,7 +5651,7 @@ function GameSummary({
           size="large"
           onClick={onClose}
         >
-          Return to teams
+          {returnLabel}
         </Button>
       </footer>
     </div>
@@ -5971,26 +6199,6 @@ function ConfirmSheet({
   );
 }
 
-function PageBack({
-  children,
-  onClick,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      className="back-button"
-      variant="invisible"
-      size="large"
-      leadingVisual={ArrowLeft}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
-  );
-}
-
 function EmptyState({
   title,
   body,
@@ -6061,14 +6269,17 @@ function SidelineMark() {
 function TeamCrest({
   teamId,
   compact = false,
+  mini = false,
 }: {
   teamId: TeamId;
   compact?: boolean;
+  mini?: boolean;
 }) {
+  const sizeClass = mini ? "mini" : compact ? "compact" : "";
   if (teamId === "u8") {
     return (
       <svg
-        className={`team-crest golden-dragons ${compact ? "compact" : ""}`}
+        className={`team-crest golden-dragons ${sizeClass}`}
         viewBox="0 0 64 64"
         aria-hidden="true"
         focusable="false"
@@ -6107,7 +6318,7 @@ function TeamCrest({
 
   return (
     <svg
-      className={`team-crest fireballers ${compact ? "compact" : ""}`}
+      className={`team-crest fireballers ${sizeClass}`}
       viewBox="0 0 64 64"
       aria-hidden="true"
       focusable="false"

@@ -7,12 +7,16 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 ## Users and setting
 
 - A volunteer or recreational coach standing outdoors in bright light, often using one hand.
-- The same coach may manage two independent squads: U8 playing 5v5 and U12 playing 9v9.
+- Coaches see only their assigned squads; one coach may manage both U8 playing 5v5 and U12 playing 9v9.
 - Connectivity is not assumed. There is no account, backend, or cross-device sync.
 
 ## Durable behavior
 
-- Team selection asks which team is playing and keeps team state explicitly separate. Its helper copy mentions starting a game normally and switches to resuming only while a game is in progress.
+- A fresh device begins with a static local coach picker rather than credentials or remote authentication. The selected coach persists locally until **Change coaches** is used. Brian is assigned to Golden Dragons as head coach and Fireballers as assistant coach; Chris is Fireballers head coach; Scott is a Fireballers assistant coach; Lindsey is a Golden Dragons assistant coach.
+- Team selection shows only the selected coach’s assigned teams and keeps team state explicitly separate. Coaches assigned to one team skip this screen and enter that team directly; coaches assigned to multiple teams choose normally. Its helper copy mentions starting a game normally and switches to resuming only while a game is in progress.
+- Changing coaches clears only the local coach persona and never clears an active game, roster, preference, or history. A coach who is not assigned to the team with an active game cannot resume or overwrite it.
+- Confirming **End game** definitively finalizes and removes the persisted active game before showing its summary. Leaving or signing out from that summary must never expose the completed match as resumable.
+- The install-to-home-screen action lives on coach selection so it remains available even when a single-team coach normally skips team selection.
 - When a game is active, team selection shows its current clock state and live soccer match time in the resume strip rather than a stale snapshot.
 - Team names, rosters, and game durations are fixed product data.
 - Game setup is a three-step linear flow for attendance, formation (including U8 period format), and starters/bench. Navigation buttons name their destination, and step selections remain intact when moving backward. Attendance tiles pair each player’s name with a compact jersey-number label for faster visual confirmation. Attendance below the team’s side size changes the count to a danger state and explicitly states the current count, required count, and shortfall.

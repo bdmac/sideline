@@ -280,10 +280,15 @@ h3 {
 }
 
 .theme-toggle,
-.settings-button {
+.settings-button,
+.coach-switcher {
   min-width: 44px;
   min-height: 44px;
   color: var(--ink);
+}
+
+.coach-switcher [data-component="text"] {
+  font-weight: 800;
 }
 
 .settings-menu {
@@ -379,13 +384,20 @@ h3 {
   flex: 0 0 auto;
 }
 
+@media (max-width: 420px) {
+  .brand > span {
+    display: none;
+  }
+}
+
 .page {
   width: min(760px, 100%);
   margin: 0 auto;
   padding: 1.25rem 1rem 6rem;
 }
 
-.home-page {
+.home-page,
+.coach-page {
   padding-top: 2.5rem;
 }
 
@@ -405,6 +417,79 @@ h3 {
   color: var(--ink-soft);
   max-width: 58ch;
   margin-bottom: 0;
+}
+
+.setup-team-lockup {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: right;
+}
+
+.setup-team-switcher {
+  min-height: 44px;
+  padding: 0.25rem 0;
+  border: 0;
+  color: var(--ink);
+  background: transparent;
+}
+
+.setup-team-switcher:hover {
+  color: var(--turf-dark);
+}
+
+.setup-team-lockup .team-crest.mini {
+  width: 32px;
+  height: 32px;
+}
+
+.setup-team-lockup > span,
+.setup-team-lockup strong,
+.setup-team-lockup small {
+  display: block;
+}
+
+.setup-team-meta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.setup-team-lockup strong {
+  font-size: 0.9rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.setup-team-lockup small {
+  margin-top: 0.15rem;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.setup-team-lockup .setup-team-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+  color: var(--turf-dark);
+  font-weight: 900;
+}
+
+.page-heading.setup-page-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.page-heading.setup-page-heading h1 {
+  margin-bottom: 0;
+}
+
+.page-heading.setup-page-heading > p {
+  grid-column: 1 / -1;
 }
 
 .resume-strip {
@@ -447,6 +532,81 @@ h3 {
 
 .team-ledger {
   border-top: 2px solid var(--rule-strong);
+}
+
+.coach-ledger {
+  border-top: 2px solid var(--rule-strong);
+}
+
+.coach-row {
+  width: 100%;
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 0.25rem;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.coach-row:hover {
+  background: var(--wash);
+}
+
+.coach-initials {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  color: var(--paper);
+  background: var(--ink);
+  border: 2px solid var(--turf);
+  font-size: 1.1rem;
+  font-weight: 950;
+}
+
+.coach-row-main,
+.coach-row-main strong,
+.coach-assignments,
+.coach-assignments small {
+  display: block;
+}
+
+.coach-row-main {
+  min-width: 0;
+}
+
+.coach-row-main strong {
+  margin-bottom: 0.3rem;
+  font-size: 1.12rem;
+}
+
+.coach-assignments {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.coach-assignment {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.coach-assignments small {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.coach-active-note {
+  color: var(--turf-dark);
+  font-size: 0.75rem;
+  font-weight: 850;
+  white-space: nowrap;
 }
 
 .team-row {
@@ -510,6 +670,12 @@ h3 {
   height: 46px;
 }
 
+.team-crest.mini {
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 1px 0 var(--dock-shadow));
+}
+
 .team-row-main strong,
 .team-row-main small {
   display: block;
@@ -532,12 +698,38 @@ h3 {
 }
 
 .privacy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
   color: var(--ink-soft);
   font-size: 0.8rem;
   margin: 1.25rem 0 0;
 }
 
-.back-button,
+.privacy-note svg {
+  flex: none;
+  margin-top: 0.05rem;
+  color: var(--turf-dark);
+  stroke-width: 2.4;
+}
+
+@media (max-width: 520px) {
+  .coach-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.75rem;
+  }
+
+  .coach-active-note {
+    grid-column: 2;
+    margin-top: -0.2rem;
+  }
+
+  .coach-row > svg {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+}
+
 .quiet-button {
   border: 0;
   background: transparent;
@@ -546,10 +738,6 @@ h3 {
   align-items: center;
   gap: 0.45rem;
   font-weight: 750;
-}
-
-.back-button {
-  margin-bottom: 1.5rem;
 }
 
 .setup-section,
