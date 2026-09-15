@@ -6,6 +6,7 @@ import {
   applySubstitutions,
   assignPlayerToPosition,
   assignPlayersByPreference,
+  compareSubstitutionDestinations,
   createGame,
   endCurrentPeriod,
   FORMATIONS,
@@ -37,6 +38,65 @@ import {
   validateGame,
   validateSubstitutionPairs,
 } from "./domain";
+
+describe("substitution destination sorting", () => {
+  it("uses displayed timing bands before role fit and exact timing", () => {
+    const candidates = [
+      {
+        id: "outside-long-stint",
+        alreadyPlanned: false,
+        preferenceIndex: Number.POSITIVE_INFINITY,
+        currentFieldSeconds: 10 * 60,
+        totalFieldSeconds: 20 * 60,
+        formationIndex: 0,
+      },
+      {
+        id: "first-preference",
+        alreadyPlanned: false,
+        preferenceIndex: 0,
+        currentFieldSeconds: 9 * 60 + 10,
+        totalFieldSeconds: 18 * 60,
+        formationIndex: 1,
+      },
+      {
+        id: "second-preference",
+        alreadyPlanned: false,
+        preferenceIndex: 1,
+        currentFieldSeconds: 9 * 60 + 20,
+        totalFieldSeconds: 18 * 60,
+        formationIndex: 2,
+      },
+      {
+        id: "same-fit-more-total",
+        alreadyPlanned: false,
+        preferenceIndex: 1,
+        currentFieldSeconds: 9 * 60 + 20,
+        totalFieldSeconds: 19 * 60,
+        formationIndex: 3,
+      },
+      {
+        id: "planned-longest",
+        alreadyPlanned: true,
+        preferenceIndex: 0,
+        currentFieldSeconds: 30 * 60,
+        totalFieldSeconds: 40 * 60,
+        formationIndex: 4,
+      },
+    ];
+
+    expect(
+      candidates
+        .sort(compareSubstitutionDestinations)
+        .map((candidate) => candidate.id),
+    ).toEqual([
+      "outside-long-stint",
+      "same-fit-more-total",
+      "first-preference",
+      "second-preference",
+      "planned-longest",
+    ]);
+  });
+});
 
 describe("formations", () => {
   it("defines exactly one goalkeeper and the correct total side size", () => {

@@ -1615,11 +1615,14 @@ describe("Sideline app", () => {
     const reducedSummary = screen.getByRole("dialog", {
       name: "Review substitutions (2)",
     });
-    expect(
-      within(reducedSummary).getAllByRole("button", {
-        name: /^Remove .* substitution$/,
-      }),
-    ).toHaveLength(2);
+    const removeActions = within(reducedSummary).getAllByRole("button", {
+      name: /^Remove .* substitution$/,
+    });
+    expect(removeActions).toHaveLength(2);
+    removeActions.forEach((action) => {
+      expect(action).toHaveAttribute("data-variant", "invisible");
+      expect(action).toHaveClass("ready-swap-remove");
+    });
     expect(screen.getByText("2 substitutions ready")).toBeInTheDocument();
 
     fireEvent.click(

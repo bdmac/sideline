@@ -57,6 +57,7 @@ import {
   assignPlayerToPosition,
   assignPlayersByPreference,
   cancelQueuedSubstitutions,
+  compareSubstitutionDestinations,
   createGame,
   endCurrentPeriod,
   finalizeGame,
@@ -3470,20 +3471,17 @@ function BenchSubstitutionPicker({
         position,
         outPlayerId,
         formationIndex,
+        alreadyPlanned: Boolean(plannedPair),
         preferenceIndex:
           preferenceIndex === -1 ? Number.POSITIVE_INFINITY : preferenceIndex,
+        currentFieldSeconds: getCurrentFieldSeconds(game, outPlayerId),
+        totalFieldSeconds: game.totals[outPlayerId]?.fieldSeconds ?? 0,
         plannedIncomingName: plannedPair
           ? playerName(team, plannedPair.inPlayerId)
           : undefined,
       };
     })
-    .sort(
-      (a, b) =>
-        Number(Boolean(a.plannedIncomingName)) -
-          Number(Boolean(b.plannedIncomingName)) ||
-        a.preferenceIndex - b.preferenceIndex ||
-        a.formationIndex - b.formationIndex,
-    );
+    .sort(compareSubstitutionDestinations);
 
   return (
     <SidelineDialog
@@ -4427,14 +4425,7 @@ function SubstitutionPlanner({
     !duplicateOuts &&
     !duplicateIns &&
     pairErrors.length === 0;
-  const outgoingChoices = Object.entries(game.assignments).sort(
-    ([, playerA], [, playerB]) =>
-      getCurrentFieldSeconds(game, playerB) -
-        getCurrentFieldSeconds(game, playerA) ||
-      (game.totals[playerB]?.fieldSeconds ?? 0) -
-        (game.totals[playerA]?.fieldSeconds ?? 0) ||
-      playerName(team, playerA).localeCompare(playerName(team, playerB)),
-  );
+  const outgoingChoices = Object.entries(game.assignments);
   const incomingChoices = [...game.benchIds].sort(
     (playerA, playerB) =>
       (game.totals[playerA]?.fieldSeconds ?? 0) -
@@ -4506,13 +4497,16 @@ function SubstitutionPlanner({
             const position = formation.positions.find(
               (item) => item.id === pair.positionId,
             );
-            const outgoingOptions = movePlannedOptionsLast(
-              outgoingChoices.map(([positionId, playerId]) => {
+            const outgoingOptions = outgoingChoices
+              .map(([positionId, playerId]) => {
                 const usedInSwap = pairs.findIndex(
                   (otherPair, pairIndex) =>
                     pairIndex !== index && otherPair.outPlayerId === playerId,
                 );
                 const candidatePosition = formation.positions.find(
+                  (item) => item.id === positionId,
+                );
+                const formationIndex = formation.positions.findIndex(
                   (item) => item.id === positionId,
                 );
                 const incomingPlayer = team.roster.find(
@@ -4529,10 +4523,14 @@ function SubstitutionPlanner({
                   label: playerName(team, playerId),
                   displayLabel: playerLabel(team, playerId),
                   goalCount: playerGoalCount(game, playerId),
+                  alreadyPlanned: usedInSwap >= 0,
                   preferenceIndex:
                     preferenceIndex === -1
                       ? Number.POSITIVE_INFINITY
                       : preferenceIndex,
+                  currentFieldSeconds: getCurrentFieldSeconds(game, playerId),
+                  totalFieldSeconds: game.totals[playerId]?.fieldSeconds ?? 0,
+                  formationIndex,
                   positionLabel: candidatePosition?.label ?? "Open position",
                   times: [
                     {
@@ -4558,8 +4556,8 @@ function SubstitutionPlanner({
                       : undefined,
                   statusDirection: "outgoing" as const,
                 };
-              }),
-            );
+              })
+              .sort(compareSubstitutionDestinations);
             const incomingOptions = movePlannedOptionsLast(
               incomingChoices.map((playerId) => {
                 const usedInSwap = pairs.findIndex(
@@ -4778,7 +4776,7 @@ function ReadySwapList({
             {onRemove && (
               <IconButton
                 className="ready-swap-remove"
-                variant="danger"
+                variant="invisible"
                 size="large"
                 icon={Trash2}
                 aria-label={`Remove ${outgoingName} for ${incomingName} substitution`}

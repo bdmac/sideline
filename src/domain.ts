@@ -682,6 +682,31 @@ const preferenceScore = (player: Player, role: PositionRole) => {
   return preferenceIndex === -1 ? 0 : (4 - preferenceIndex) * 1_000;
 };
 
+export type SubstitutionDestinationSortKey = {
+  alreadyPlanned: boolean;
+  preferenceIndex: number;
+  currentFieldSeconds: number;
+  totalFieldSeconds: number;
+  formationIndex: number;
+};
+
+const displayedDurationBandSeconds = (seconds: number) =>
+  seconds < 60 ? seconds : Math.round(seconds / 60) * 60;
+
+export const compareSubstitutionDestinations = (
+  a: SubstitutionDestinationSortKey,
+  b: SubstitutionDestinationSortKey,
+) =>
+  Number(a.alreadyPlanned) - Number(b.alreadyPlanned) ||
+  displayedDurationBandSeconds(b.currentFieldSeconds) -
+    displayedDurationBandSeconds(a.currentFieldSeconds) ||
+  displayedDurationBandSeconds(b.totalFieldSeconds) -
+    displayedDurationBandSeconds(a.totalFieldSeconds) ||
+  a.preferenceIndex - b.preferenceIndex ||
+  b.currentFieldSeconds - a.currentFieldSeconds ||
+  b.totalFieldSeconds - a.totalFieldSeconds ||
+  a.formationIndex - b.formationIndex;
+
 const REPEATED_LINE_PENALTY_SECONDS = 60;
 const COMPLETE_LINE_PENALTY_SECONDS = 120;
 

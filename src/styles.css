@@ -2761,7 +2761,8 @@ select:hover {
   white-space: nowrap;
 }
 
-.swap-remove-action {
+.swap-remove-action,
+.ready-swap-remove {
   width: 44px;
   min-width: 44px;
   height: 44px;
@@ -2769,7 +2770,8 @@ select:hover {
   color: var(--danger);
 }
 
-.swap-remove-action:hover:not(:disabled) {
+.swap-remove-action:hover:not(:disabled),
+.ready-swap-remove:hover:not(:disabled) {
   color: var(--danger-dark);
   background: var(--danger-pale);
 }
@@ -4014,6 +4016,13 @@ select:hover {
     min-height: 0;
     margin: 0;
     border-radius: 0;
+    color: white;
+    background: var(--danger-fill);
+  }
+
+  .ready-swap-list.removable .ready-swap-remove:hover:not(:disabled) {
+    color: white;
+    background: var(--danger-hover);
   }
 
   .mobile-inline-instruction {
