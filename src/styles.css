@@ -54,8 +54,8 @@
   --pitch: #176e5e;
   --pitch-border: #0c473f;
   --pitch-card-border: var(--ink);
-  --pitch-position-bg: #dfe7e4;
-  --pitch-position-text: #27433f;
+  --pitch-position-bg: #e3e5e4;
+  --pitch-position-text: #3d4345;
   --pitch-line: rgba(255, 255, 255, 0.74);
   --pitch-stripe: rgba(255, 255, 255, 0.035);
   --pitch-shadow: rgba(7, 76, 72, 0.42);
@@ -108,8 +108,8 @@
   --pitch: #125b50;
   --pitch-border: #55ae9e;
   --pitch-card-border: #455c5e;
-  --pitch-position-bg: #293b3d;
-  --pitch-position-text: #c9d9d5;
+  --pitch-position-bg: #34383b;
+  --pitch-position-text: #d6dcde;
   --pitch-line: rgba(235, 250, 245, 0.68);
   --pitch-stripe: rgba(235, 250, 245, 0.045);
   --pitch-shadow: rgba(3, 11, 12, 0.62);
