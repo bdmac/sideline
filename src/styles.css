@@ -3945,14 +3945,7 @@ select:hover {
 }
 
 .player-game-summaries > li.hat-trick-summary {
-  margin-inline: -0.65rem;
-  padding-inline: 0.65rem;
-  border-block: 1px solid color-mix(in srgb, var(--goal) 42%, transparent);
   background: color-mix(in srgb, var(--warm-pale) 56%, var(--paper));
-}
-
-.player-game-summaries > li.hat-trick-summary + li:not(.hat-trick-summary) {
-  border-top: 0;
 }
 
 .player-summary-heading {

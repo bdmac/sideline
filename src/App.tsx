@@ -5825,7 +5825,7 @@ function GameSummary({
   const formation = getFormation(game.formationId);
   const summaries = summarizePlayerPositions(game).sort(
     (a, b) =>
-      Number(b.goals.length > 0) - Number(a.goals.length > 0) ||
+      b.goals.length - a.goals.length ||
       b.totalSeconds - a.totalSeconds ||
       playerName(team, a.playerId).localeCompare(playerName(team, b.playerId)),
   );

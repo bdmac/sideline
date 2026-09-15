@@ -3151,9 +3151,13 @@ describe("Sideline app", () => {
       10_000,
     );
     const scorerId = Object.values(game.assignments)[1];
+    const leadingScorerId = Object.values(game.assignments)[2];
     game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 10_000 };
     for (let goal = 0; goal < 3; goal += 1) {
       game = recordGoal(game, "us", scorerId, 10_000 + goal);
+    }
+    for (let goal = 0; goal < 4; goal += 1) {
+      game = recordGoal(game, "us", leadingScorerId, 10_100 + goal);
     }
     state.activeGame = game;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -3162,6 +3166,9 @@ describe("Sideline app", () => {
 
     const scorerName = team.roster.find(
       (player) => player.id === scorerId,
+    )!.name;
+    const leadingScorerName = team.roster.find(
+      (player) => player.id === leadingScorerId,
     )!.name;
     const pitchCard = screen.getByRole("button", {
       name: `Open actions for ${scorerName}`,
@@ -3204,9 +3211,15 @@ describe("Sideline app", () => {
       ).getByRole("button", { name: "End game" }),
     );
     const summary = screen.getByRole("main", { name: "Game summary" });
-    const hatTrickStamp = within(summary).getByText("Hat trick");
-    expect(hatTrickStamp).toHaveClass("hat-trick-summary-stamp");
-    expect(hatTrickStamp.closest("li")).toHaveClass("hat-trick-summary");
+    const hatTrickStamps = within(summary).getAllByText("Hat trick");
+    expect(hatTrickStamps).toHaveLength(2);
+    hatTrickStamps.forEach((hatTrickStamp) => {
+      expect(hatTrickStamp).toHaveClass("hat-trick-summary-stamp");
+      expect(hatTrickStamp.closest("li")).toHaveClass("hat-trick-summary");
+    });
+    const summaryRows = summary.querySelectorAll(".player-game-summaries > li");
+    expect(summaryRows[0]).toHaveTextContent(leadingScorerName);
+    expect(summaryRows[1]).toHaveTextContent(scorerName);
   });
 
   it("adds the exact count after the hatted marker above three goals", () => {
