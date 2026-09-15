@@ -590,7 +590,7 @@ h3 {
   width: 100%;
   min-height: 92px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 1rem;
   padding: 0.9rem 0.25rem;
@@ -615,18 +615,6 @@ h3 {
 
 .coach-row.blocked > svg {
   color: var(--warm-dark);
-}
-
-.coach-initials {
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  color: var(--paper);
-  background: var(--ink);
-  border: 2px solid var(--turf);
-  font-size: 1.1rem;
-  font-weight: 950;
 }
 
 .coach-row-main,
@@ -790,12 +778,12 @@ h3 {
   }
 
   .coach-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.75rem;
   }
 
   .coach-row > svg {
-    grid-column: 3;
+    grid-column: 2;
   }
 }
 

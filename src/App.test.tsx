@@ -156,6 +156,14 @@ describe("Sideline app", () => {
       screen.getByRole("heading", { name: "Who’s coaching?" }),
     ).toBeInTheDocument();
     expect(localStorage.getItem(COACH_ID_STORAGE_KEY)).toBeNull();
+
+    fireEvent.click(brian);
+    expect(
+      screen.getByRole("heading", { name: "On the field" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Which team is playing?" }),
+    ).not.toBeInTheDocument();
   });
 
   it("ends an active game from coach selection after confirmation", () => {
@@ -176,7 +184,9 @@ describe("Sideline app", () => {
       screen.getByRole("region", {
         name: "Golden Dragons game in progress",
       }),
-    ).toHaveTextContent("Choose an assigned coach to resume, or end it here.");
+    ).toHaveTextContent(
+      "Choose a coach assigned to Golden Dragons to resume, or end it here.",
+    );
     fireEvent.click(
       screen.getByRole("button", { name: "End Golden Dragons game" }),
     );
@@ -573,7 +583,7 @@ describe("Sideline app", () => {
     expect(screen.getByLabelText("Substitution reminder")).toBeInTheDocument();
   });
 
-  it("keeps the active-game timer live on team selection", () => {
+  it("resumes the active-game timer directly for a multi-team coach", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-13T20:00:00Z"));
     const state = structuredClone(INITIAL_STATE);
@@ -592,19 +602,17 @@ describe("Sideline app", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Go to coach home" }));
     expect(
-      screen.getByText(
-        "Resume the game in progress. Each team’s game state stays separate.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Clock running · 0:00")).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Which team is playing?" }),
+    ).not.toBeInTheDocument();
+    const gameClock = screen.getByLabelText("Game clock, running");
+    expect(gameClock).toHaveTextContent("0:00");
 
     act(() => {
       vi.advanceTimersByTime(2_000);
     });
 
-    expect(screen.getByText("Clock running · 0:02")).toBeInTheDocument();
+    expect(gameClock).toHaveTextContent("0:02");
   });
 
   it("keeps the roster fixed while allowing attendance selection", () => {
@@ -3497,7 +3505,7 @@ describe("Sideline app", () => {
     expect(screen.getByRole("button", { name: "Record a goal" })).toBeEnabled();
   });
 
-  it("identifies an interrupted added-time game before it is resumed", () => {
+  it("identifies an interrupted added-time game on direct resume", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(6_000));
     const state = structuredClone(INITIAL_STATE);
@@ -3518,9 +3526,15 @@ describe("Sideline app", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Go to coach home" }));
-
-    expect(screen.getByText("Added time +0:04 · 10:04")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Which team is playing?" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Quarter 1 time reached")).toHaveTextContent(
+      "+0:04 added time · Clock running",
+    );
+    expect(screen.getByLabelText("Game clock, running")).toHaveTextContent(
+      "10:04",
+    );
   });
 
   it("consolidates ready substitutions into the period-break banner", () => {

@@ -142,16 +142,8 @@ const coachTeamIds = (coach: Coach) =>
 const coachHasTeam = (coach: Coach, teamId: TeamId) =>
   coach.assignments.some((assignment) => assignment.teamId === teamId);
 
-const getCoachLandingScreen = (
-  coach: Coach,
-  state: AppState,
-  resumeActiveGame: boolean,
-): Screen => {
-  if (
-    state.activeGame &&
-    coachHasTeam(coach, state.activeGame.teamId) &&
-    (resumeActiveGame || coach.assignments.length === 1)
-  ) {
+const getCoachLandingScreen = (coach: Coach, state: AppState): Screen => {
+  if (state.activeGame && coachHasTeam(coach, state.activeGame.teamId)) {
     return { name: "live" };
   }
   if (!state.activeGame && coach.assignments.length === 1) {
@@ -501,7 +493,7 @@ function App() {
   const hasActiveGame = Boolean(state.activeGame);
   const [screen, setScreen] = useState<Screen>(() =>
     selectedCoach
-      ? getCoachLandingScreen(selectedCoach, state, true)
+      ? getCoachLandingScreen(selectedCoach, state)
       : { name: "coach" },
   );
   const screenKey =
@@ -678,14 +670,10 @@ function App() {
       setScreen({ name: "setup", teamId });
     }
   };
-  const goToCoachLanding = (resumeActiveGame = false) => {
+  const goToCoachLanding = () => {
     setScreen(
       selectedCoach
-        ? getCoachLandingScreen(
-            selectedCoach,
-            stateRef.current,
-            resumeActiveGame,
-          )
+        ? getCoachLandingScreen(selectedCoach, stateRef.current)
         : { name: "coach" },
     );
   };
@@ -694,7 +682,7 @@ function App() {
     if (!coach) return;
     saveCoachId(coachId);
     setSelectedCoachId(coachId);
-    setScreen(getCoachLandingScreen(coach, stateRef.current, false));
+    setScreen(getCoachLandingScreen(coach, stateRef.current));
   };
   const signOut = () => {
     saveCoachId(null);
@@ -718,7 +706,13 @@ function App() {
             type="button"
             onClick={() => goToCoachLanding()}
             aria-label={
-              selectedCoach ? "Go to coach home" : "Go to coach selection"
+              selectedCoach &&
+              state.activeGame &&
+              coachHasTeam(selectedCoach, state.activeGame.teamId)
+                ? "Go to active game"
+                : selectedCoach
+                  ? "Go to coach home"
+                  : "Go to coach selection"
             }
           >
             <SidelineMark />
@@ -910,7 +904,10 @@ function CoachScreen({
           <span className="resume-pulse" aria-hidden="true" />
           <span>
             <strong>{activeTeam.name} game in progress</strong>
-            <small>Choose an assigned coach to resume, or end it here.</small>
+            <small>
+              Choose a coach assigned to {activeTeam.name} to resume, or end it
+              here.
+            </small>
           </span>
           <Button
             className="danger-action"
@@ -955,9 +952,6 @@ function CoachScreen({
                   : `Continue as ${coach.name}. ${assignmentLabel}`
               }
             >
-              <span className="coach-initials" aria-hidden="true">
-                {coach.name.slice(0, 1)}
-              </span>
               <span className="coach-row-main">
                 <strong>{coach.name}</strong>
                 <span className="coach-assignments">
