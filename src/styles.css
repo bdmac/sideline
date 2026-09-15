@@ -53,6 +53,9 @@
   --input-line: #899b95;
   --pitch: #176e5e;
   --pitch-border: #0c473f;
+  --pitch-card-border: var(--ink);
+  --pitch-position-bg: #dfe7e4;
+  --pitch-position-text: #27433f;
   --pitch-line: rgba(255, 255, 255, 0.74);
   --pitch-stripe: rgba(255, 255, 255, 0.035);
   --pitch-shadow: rgba(7, 76, 72, 0.42);
@@ -104,6 +107,9 @@
   --input-line: #617674;
   --pitch: #125b50;
   --pitch-border: #55ae9e;
+  --pitch-card-border: #455c5e;
+  --pitch-position-bg: #293b3d;
+  --pitch-position-text: #c9d9d5;
   --pitch-line: rgba(235, 250, 245, 0.68);
   --pitch-stripe: rgba(235, 250, 245, 0.045);
   --pitch-shadow: rgba(3, 11, 12, 0.62);
@@ -1619,7 +1625,7 @@ select:hover {
   min-height: 70px;
   transform: translate(-50%, -50%);
   background: var(--paper);
-  border: 2px solid var(--ink);
+  border: 2px solid var(--pitch-card-border);
   box-shadow: 0 5px 0 var(--pitch-shadow);
   padding: 0.38rem 0.42rem 0.38rem 1.9rem;
   z-index: 2;
@@ -1762,8 +1768,8 @@ select:hover {
   height: 28px;
   display: grid;
   place-items: center;
-  background: var(--ink);
-  color: var(--on-ink);
+  background: var(--pitch-position-bg);
+  color: var(--pitch-position-text);
   font-size: 0.76rem;
   font-weight: 950;
 }
