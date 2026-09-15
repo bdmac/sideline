@@ -888,13 +888,14 @@ function CoachScreen({
 
       <div className="coach-ledger">
         {COACHES.map((coach) => {
-          const canResumeActiveGame = state.activeGame
-            ? coachHasTeam(coach, state.activeGame.teamId)
-            : false;
           const assignmentLabel = coach.assignments
             .map(
               (assignment) =>
-                `${state.teams[assignment.teamId].name}, ${assignment.role}`,
+                `${state.teams[assignment.teamId].name}, ${assignment.role}${
+                  state.activeGame?.teamId === assignment.teamId
+                    ? ", live game in progress"
+                    : ""
+                }`,
             )
             .join(". ");
           return (
@@ -917,14 +918,17 @@ function CoachScreen({
                       <small>
                         {state.teams[assignment.teamId].name} ·{" "}
                         {assignment.role}
+                        {state.activeGame?.teamId === assignment.teamId && (
+                          <span className="coach-team-active">
+                            {" "}
+                            · Live game
+                          </span>
+                        )}
                       </small>
                     </span>
                   ))}
                 </span>
               </span>
-              {canResumeActiveGame && (
-                <span className="coach-active-note">Game in progress</span>
-              )}
               <ChevronRight size={22} aria-hidden="true" />
             </button>
           );

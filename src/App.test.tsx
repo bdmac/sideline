@@ -113,6 +113,38 @@ describe("Sideline app", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("marks the exact coach assignment with the active game", () => {
+    const state = structuredClone(INITIAL_STATE);
+    state.activeGame = createGame(
+      state.teams.u8,
+      state.teams.u8.defaultFormationId,
+      state.teams.u8.roster.map((player) => player.id),
+      state.teams.u8.defaultDurationMinutes,
+      1_000,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.removeItem(COACH_ID_STORAGE_KEY);
+
+    render(<App />);
+
+    const brian = screen.getByRole("button", {
+      name: /Continue as Brian.*Golden Dragons, Head coach, live game in progress/,
+    });
+    const assignments = brian.querySelectorAll(".coach-assignment");
+    expect(assignments[0]).toHaveTextContent(
+      "Golden Dragons · Head coach · Live game",
+    );
+    expect(assignments[1]).not.toHaveTextContent("Live game");
+    expect(
+      screen.getByRole("button", { name: /^Continue as Chris\./ }),
+    ).not.toHaveTextContent("Live game");
+    expect(
+      screen.getByRole("button", {
+        name: /Continue as Lindsey.*Golden Dragons, Assistant coach, live game in progress/,
+      }),
+    ).toHaveTextContent("Golden Dragons · Assistant coach · Live game");
+  });
+
   it("takes single-team coaches directly to their assigned team", () => {
     localStorage.removeItem(COACH_ID_STORAGE_KEY);
     render(<App />);
