@@ -1034,19 +1034,14 @@ describe("Sideline app", () => {
       planner.querySelector(".swap-player-status"),
     ).not.toBeInTheDocument();
     expect(planner.querySelectorAll(".swap-transfer svg")).toHaveLength(3);
-    expect(planner.querySelectorAll(".review-direction small")).toHaveLength(3);
-    expect(
-      planner.querySelector(".review-direction")?.firstElementChild?.tagName,
-    ).toBe("svg");
-    expect(
-      planner.querySelector(".review-direction")?.lastElementChild?.tagName,
-    ).toBe("SMALL");
+    expect(planner.querySelectorAll(".swap-transfer small")).toHaveLength(3);
     expect(
       Array.from(
-        planner.querySelectorAll(".review-direction small"),
+        planner.querySelectorAll(".swap-transfer small"),
         (item) => item.textContent,
       ),
     ).toEqual(expect.arrayContaining(["Keeper", "Center Back", "Left Mid"]));
+    expect(screen.queryByText("Confirm together")).not.toBeInTheDocument();
     const outgoingPlayers =
       within(planner).getAllByLabelText(/outgoing player/);
     const incomingPlayers =

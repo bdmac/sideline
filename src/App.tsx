@@ -4622,7 +4622,7 @@ function SubstitutionPlanner({
                   />
                 </div>
                 <span className="swap-transfer">
-                  <small>{position?.shortLabel}</small>
+                  <small>{position?.mediumLabel}</small>
                   <ArrowRightLeft size={22} aria-hidden="true" />
                 </span>
                 <div className="swap-player-choice">
@@ -4656,36 +4656,6 @@ function SubstitutionPlanner({
               "Choose a different outgoing and incoming player for every swap."}
           </p>
         )}
-
-        <div className="review-checklist">
-          <h3>Confirm together</h3>
-          <div className="review-column-headings" aria-hidden="true">
-            <span className="in-label">IN</span>
-            <span className="out-label">OUT</span>
-          </div>
-          {pairs.map((pair, index) => {
-            const position = formation.positions.find(
-              (item) => item.id === pair.positionId,
-            );
-            return (
-              <div className="review-row" key={index}>
-                <span className="review-number">{index + 1}</span>
-                <GoalMarkedPlayerName
-                  label={playerName(team, pair.inPlayerId)}
-                  goalCount={playerGoalCount(game, pair.inPlayerId)}
-                />
-                <span className="review-direction">
-                  <ArrowRightLeft size={17} aria-hidden="true" />
-                  <small>{position?.mediumLabel}</small>
-                </span>
-                <GoalMarkedPlayerName
-                  label={playerName(team, pair.outPlayerId)}
-                  goalCount={playerGoalCount(game, pair.outPlayerId)}
-                />
-              </div>
-            );
-          })}
-        </div>
       </div>
     </SidelineDialog>
   );

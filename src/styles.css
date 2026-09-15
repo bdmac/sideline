@@ -2437,7 +2437,6 @@ select:hover {
 }
 
 .swap-column-headings,
-.review-column-headings,
 .ready-swap-headings {
   display: grid;
   align-items: end;
@@ -2448,19 +2447,17 @@ select:hover {
 }
 
 .swap-column-headings {
-  grid-template-columns: 34px minmax(0, 1fr) 42px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr) 120px minmax(0, 1fr);
   gap: 0.65rem;
   padding: 0.65rem 0 0.15rem;
 }
 
 .swap-column-headings .in-label,
-.review-column-headings .in-label,
 .ready-swap-headings .in-label {
   grid-column: 2;
 }
 
 .swap-column-headings .out-label,
-.review-column-headings .out-label,
 .ready-swap-headings .out-label {
   grid-column: 4;
   text-align: right;
@@ -2468,7 +2465,7 @@ select:hover {
 
 .swap-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 42px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr) 120px minmax(0, 1fr);
   gap: 0.65rem;
   align-items: start;
   padding: 0.8rem 0;
@@ -2763,63 +2760,15 @@ select:hover {
   color: var(--ink-soft);
 }
 
-.review-direction {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  align-self: center;
-  gap: 0.2rem;
-  color: var(--ink-soft);
-}
-
 .swap-transfer small {
-  color: var(--ink);
-  font-size: 0.86rem;
-  font-weight: 950;
-  line-height: 1;
-}
-
-.review-direction small {
   color: var(--ink);
   font-size: 0.74rem;
   font-weight: 900;
   line-height: 1;
+  text-align: center;
   white-space: nowrap;
 }
 
-.review-checklist {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: var(--wash);
-}
-
-.review-checklist h3 {
-  margin-bottom: 0.7rem;
-}
-
-.review-column-headings,
-.review-row {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) 120px minmax(0, 1fr);
-  gap: 0.45rem;
-  align-items: center;
-}
-
-.review-column-headings {
-  padding-bottom: 0.35rem;
-}
-
-.review-row {
-  padding: 0.45rem 0;
-  border-top: 1px solid var(--line);
-}
-
-.review-row > .player-name-with-goals:last-child {
-  justify-content: flex-end;
-  text-align: right;
-}
-
-.review-number,
 .ready-swap-number {
   font-weight: 900;
   color: var(--ink-soft);
@@ -3990,7 +3939,7 @@ select:hover {
 
   .swap-column-headings,
   .swap-row {
-    grid-template-columns: 24px minmax(0, 1fr) 32px minmax(0, 1fr);
+    grid-template-columns: 24px minmax(0, 1fr) 108px minmax(0, 1fr);
     gap: 0.35rem;
   }
 
@@ -4017,29 +3966,10 @@ select:hover {
     font-size: 0.58rem;
   }
 
-  .review-column-headings,
-  .review-row {
-    grid-template-columns: 22px minmax(0, 1fr) 108px minmax(0, 1fr);
-    gap: 0.3rem;
-  }
-
   .ready-swap-headings,
   .ready-swap {
     grid-template-columns: 24px minmax(0, 1fr) 108px minmax(0, 1fr);
     gap: 0.45rem;
-  }
-
-  .review-checklist .review-direction {
-    display: flex;
-    justify-self: center;
-    color: var(--ink-soft);
-  }
-
-  .review-checklist strong {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .sheet-actions > * {
