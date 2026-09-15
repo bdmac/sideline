@@ -4173,7 +4173,9 @@ select:hover {
     left: 0;
     right: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1.25fr) auto auto minmax(66px, 0.75fr) auto;
+    grid-template-columns:
+      minmax(0, 1.25fr) minmax(66px, 0.75fr) auto auto
+      auto;
     align-items: center;
     gap: 0.25rem;
     min-height: 58px;
@@ -4200,7 +4202,7 @@ select:hover {
   .compact-match-clock {
     display: flex;
     align-items: center;
-    justify-self: center;
+    justify-self: end;
     gap: 0.3rem;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -4217,7 +4219,7 @@ select:hover {
   }
 
   .compact-match-period {
-    justify-self: center;
+    justify-self: end;
     color: var(--ink-soft);
     font-size: 0.68rem;
     font-weight: 900;

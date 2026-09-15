@@ -2395,6 +2395,24 @@ function LiveGameScreen({
         aria-hidden={!compactHeaderInteractive}
       >
         <strong className="compact-match-team">{team.name}</strong>
+        <span className="compact-match-score" aria-label="Score">
+          <button
+            className="compact-score-button"
+            type="button"
+            tabIndex={compactHeaderInteractive ? 0 : -1}
+            aria-label={`Our score: ${score.us}. View scorers`}
+            onClick={() => setGoalSummaryOpen(true)}
+          >
+            {score.us}
+          </button>
+          <span aria-hidden="true">–</span>
+          <span
+            className="compact-opponent-score"
+            aria-label={`Opponent score: ${score.opponent}`}
+          >
+            {score.opponent}
+          </span>
+        </span>
         <span
           className={`compact-match-period ${
             periodBoundaryReached ? "added-time" : ""
@@ -2418,24 +2436,6 @@ function LiveGameScreen({
             {periodBoundaryReached && (
               <small>+{formatDuration(period.addedTimeSeconds)} added</small>
             )}
-          </span>
-        </span>
-        <span className="compact-match-score" aria-label="Score">
-          <button
-            className="compact-score-button"
-            type="button"
-            tabIndex={compactHeaderInteractive ? 0 : -1}
-            aria-label={`Our score: ${score.us}. View scorers`}
-            onClick={() => setGoalSummaryOpen(true)}
-          >
-            {score.us}
-          </button>
-          <span aria-hidden="true">–</span>
-          <span
-            className="compact-opponent-score"
-            aria-label={`Opponent score: ${score.opponent}`}
-          >
-            {score.opponent}
           </span>
         </span>
         <div className="compact-match-actions" aria-label="Match controls">
