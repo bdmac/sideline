@@ -48,6 +48,10 @@ Color never communicates state alone. Text such as “Present,” “Clock pause
 
 Use one practical system sans stack: `Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`. Headings use compact negative tracking and heavy weights. Timers use tabular numerals. Labels remain sentence case; small uppercase is reserved for position codes and substitution direction.
 
+Mobile operational text follows an outdoor-readability floor rather than shrinking uniformly to preserve density: primary body and input text remains 16px or larger; player names remain at least 16px; critical mobile action labels are 14px; pitch timing, scoreboard labels, period state, attendance numbers, and settings support copy stay roughly 12–13px. Smaller lettering is reserved for redundant crest details and formation-diagram abbreviations. Tight surfaces retain single-line labels through existing nowrap, ellipsis, and compact-copy behavior rather than reducing critical text again.
+
+The collapsed live header keeps its score on the physical viewport centerline so it aligns with the expanded scoreboard during the scroll transition. On the narrowest phones, redundant team copy yields to a compact period-and-clock cluster on the left while match controls remain on the right, protecting that centered score from collisions.
+
 ## Composition
 
 - Main configuration screens use a single centered ledger column, not nested card grids.
