@@ -6034,7 +6034,7 @@ function HatTrickBallIcon() {
       <g transform="translate(1.333 7.333) scale(0.889)">
         <SoccerBallPanels />
       </g>
-      <path d="M7.5 2.5h9L17.8 10H6.2l1.3-7.5Z" fill="currentColor" />
+      <path d="M7.5 1.4h9L17.8 10H6.2l1.3-8.6Z" fill="currentColor" />
       <path d="M4.5 10h15" fill="none" strokeWidth="2.2" />
       <path d="M6.7 7.5h10.6" fill="none" stroke="var(--paper)" />
     </svg>
