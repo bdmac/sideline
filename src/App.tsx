@@ -1692,7 +1692,9 @@ function LiveGameScreen({
         ? "Resume"
         : displayed.clock.elapsedSeconds > displayed.period.startedAtSeconds
           ? "Resume"
-          : `Start ${periodShortLabel}`;
+          : period.current === 1
+            ? "Start game"
+            : `Start ${periodShortLabel}`;
   const changeClockState = () =>
     periodBreak && !periodBreak.final
       ? startNextPeriod(game, Date.now())

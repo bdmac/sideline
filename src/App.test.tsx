@@ -682,7 +682,7 @@ describe("Sideline app", () => {
     expect(screen.queryByText("Out of game")).not.toBeInTheDocument();
     expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Start Q1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(screen.getByText("Game timeline").closest("details")).toHaveClass(
       "follows-roster",
@@ -715,7 +715,7 @@ describe("Sideline app", () => {
     const firstRender = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Start Q1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
 
     const savedGame = JSON.parse(
       window.localStorage.getItem(STORAGE_KEY) ?? "{}",
@@ -1878,7 +1878,7 @@ describe("Sideline app", () => {
     const goalButton = screen.getByRole("button", { name: "Record a goal" });
     expect(goalButton).toBeDisabled();
     expect(goalButton.querySelector(".soccer-ball-icon")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Start Q1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
     expect(goalButton).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Record a goal" }));
@@ -2002,13 +2002,16 @@ describe("Sideline app", () => {
     const expandedClockButton = container.querySelector(
       ".match-header .match-clock-button",
     );
-    expect(expandedClockButton).toHaveAccessibleName("Start Q1");
-    expect(expandedClockButton).toHaveTextContent("Start Q1");
+    expect(expandedClockButton).toHaveAccessibleName("Start game");
+    expect(expandedClockButton).toHaveTextContent("Start game");
     expect(expandedClockButton).toHaveClass("turf-clock-action");
     expect(expandedClockButton).toHaveAttribute("data-variant", "default");
     expect(container.querySelector(".compact-clock-button")).toHaveClass(
       "turf-clock-action",
     );
+    expect(
+      container.querySelector(".compact-clock-button"),
+    ).toHaveAccessibleName("Start game");
     expect(
       container.querySelector(".match-header .match-end-copy-short"),
     ).toHaveTextContent("End");
@@ -2066,14 +2069,14 @@ describe("Sideline app", () => {
     expect(screen.queryByText("Borrowed Casey")).not.toBeInTheDocument();
   });
 
-  it("labels the initial U12 clock action as the first half", () => {
+  it("labels the initial U12 clock action as starting the game", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText("Fireballers"));
     startGame();
 
     expect(
       container.querySelector(".match-header .match-clock-button"),
-    ).toHaveAccessibleName("Start H1");
+    ).toHaveAccessibleName("Start game");
   });
 
   it("keeps an unadvanced recovered game in its first quarter", () => {
