@@ -2870,8 +2870,11 @@ describe("Sideline app", () => {
     expect(screen.getByText("Quarter 2")).toBeInTheDocument();
     expect(screen.getByLabelText("Game clock, running")).toBeInTheDocument();
     expect(screen.getByLabelText("Game clock, running")).toHaveTextContent(
-      "10:04",
+      "10:00",
     );
+    expect(
+      within(compactHeader as HTMLElement).getByText("10:00"),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByText("Game timeline"));
     const periodMarker = screen.getByText("Quarter 2 started").closest("li");
     expect(periodMarker).toBeInTheDocument();
@@ -2889,7 +2892,7 @@ describe("Sideline app", () => {
       "+0:00 added time",
     );
     expect(screen.getByLabelText("Game clock, running")).toHaveTextContent(
-      "20:04",
+      "20:00",
     );
   });
 

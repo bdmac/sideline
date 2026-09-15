@@ -547,6 +547,30 @@ export const startNextPeriod = (
 export const getDisplayedSeconds = (game: ActiveGame, now = Date.now()) =>
   materializeGame(game, now).clock.elapsedSeconds;
 
+export const getMatchClockSeconds = (
+  game: ActiveGame,
+  elapsedSeconds = game.clock.elapsedSeconds,
+) => {
+  const periodLength = game.durationSeconds / game.periodCount;
+  const periodStarts = [
+    { period: 1, atSeconds: 0 },
+    ...game.periodEnds
+      .filter((periodEnd) => game.period.current > periodEnd.period)
+      .map((periodEnd) => ({
+        period: periodEnd.period + 1,
+        atSeconds: periodEnd.atSeconds,
+      })),
+  ].sort((a, b) => a.atSeconds - b.atSeconds);
+  const activePeriod =
+    periodStarts
+      .filter((periodStart) => periodStart.atSeconds <= elapsedSeconds)
+      .at(-1) ?? periodStarts[0];
+  return (
+    (activePeriod.period - 1) * periodLength +
+    Math.max(0, elapsedSeconds - activePeriod.atSeconds)
+  );
+};
+
 export const getSubstitutionReminderStatus = (game: ActiveGame) => {
   const intervalSeconds = Math.round(
     game.durationSeconds * (game.teamId === "u8" ? 0.125 : 0.25),
@@ -674,6 +698,7 @@ export const getPeriodStatus = (
     label: periodCount === 4 ? "Quarter" : "Half",
     periodLengthSeconds: periodLength,
     periodElapsedSeconds: periodElapsed,
+    matchClockSeconds: (current - 1) * periodLength + periodElapsed,
     remainingSeconds,
     regulationRemainingSeconds:
       (periodCount - current) * periodLength + remainingSeconds,

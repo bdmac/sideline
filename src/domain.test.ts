@@ -14,6 +14,7 @@ import {
   getCurrentFieldSeconds,
   getFormation,
   getFormationsForTeam,
+  getMatchClockSeconds,
   getPeriodStatus,
   getRecommendedSubstitutionCount,
   getScore,
@@ -397,6 +398,45 @@ describe("player availability", () => {
 });
 
 describe("period accounting", () => {
+  it("uses nominal period boundaries for the soccer match clock", () => {
+    const team = INITIAL_TEAMS.u12;
+    const game = createGame(
+      team,
+      "9-3-1-3-1",
+      team.roster.map((player) => player.id),
+      90,
+      1_000,
+    );
+    game.clock.elapsedSeconds = 52 * 60;
+    game.periodEnds = [{ period: 1, atSeconds: 52 * 60 }];
+    game.period = { current: 2, startedAtSeconds: 52 * 60 };
+
+    expect(getMatchClockSeconds(game)).toBe(45 * 60);
+
+    game.clock.elapsedSeconds = 70 * 60 + 37;
+    expect(getMatchClockSeconds(game)).toBe(63 * 60 + 37);
+    expect(game.clock.elapsedSeconds).toBe(70 * 60 + 37);
+  });
+
+  it("removes each prior quarter's added time from later match-clock periods", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.periodEnds = [
+      { period: 1, atSeconds: 11 * 60 },
+      { period: 2, atSeconds: 22 * 60 + 30 },
+    ];
+    game.period = { current: 3, startedAtSeconds: 22 * 60 + 30 };
+    game.clock.elapsedSeconds = 25 * 60 + 30;
+
+    expect(getMatchClockSeconds(game)).toBe(23 * 60);
+  });
+
   it("tracks U8 quarters and U12 halves at their boundaries", () => {
     expect(getPeriodStatus(40 * 60, 9 * 60, 4)).toMatchObject({
       current: 1,
@@ -467,8 +507,10 @@ describe("period accounting", () => {
       current: 2,
       startedAtSeconds: 10 * 60 + 5,
     });
+    expect(getMatchClockSeconds(nextPeriod)).toBe(10 * 60);
     const nextAddedTime = materializeGame(nextPeriod, 608_000);
     expect(nextAddedTime.clock.elapsedSeconds).toBe(20 * 60 + 5);
+    expect(getMatchClockSeconds(nextAddedTime)).toBe(20 * 60);
     expect(
       getPeriodStatus(
         nextAddedTime.durationSeconds,
@@ -478,6 +520,7 @@ describe("period accounting", () => {
       ),
     ).toMatchObject({
       current: 2,
+      matchClockSeconds: 20 * 60,
       regulationReached: true,
       addedTimeSeconds: 0,
     });

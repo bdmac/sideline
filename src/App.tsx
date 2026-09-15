@@ -66,6 +66,7 @@ import {
   getCurrentFieldSeconds,
   getFormation,
   getFormationsForTeam,
+  getMatchClockSeconds,
   getPeriodStatus,
   getRecommendedSubstitutionCount,
   getScore,
@@ -780,7 +781,7 @@ function HomeScreen({
                   : displayedGame.clock.running
                     ? "Clock running"
                     : "Clock paused"}{" "}
-              · {formatDuration(displayedGame.clock.elapsedSeconds)}
+              · {formatDuration(activePeriod?.matchClockSeconds ?? 0)}
             </small>
           </span>
           <span className="resume-action">
@@ -1902,7 +1903,7 @@ function LiveGameScreen({
             >
               <Clock3 size={22} />
             </span>
-            <strong>{formatDuration(displayed.clock.elapsedSeconds)}</strong>
+            <strong>{formatDuration(period.matchClockSeconds)}</strong>
           </div>
 
           <div className="scoreboard" aria-label="Score">
@@ -1984,7 +1985,7 @@ function LiveGameScreen({
             aria-hidden="true"
           />
           <span>
-            <strong>{formatDuration(displayed.clock.elapsedSeconds)}</strong>
+            <strong>{formatDuration(period.matchClockSeconds)}</strong>
             {periodBoundaryReached && (
               <small>+{formatDuration(period.addedTimeSeconds)} added</small>
             )}
@@ -2133,7 +2134,7 @@ function LiveGameScreen({
                 : `${period.label} ${periodBreak.completedPeriod} ended`}
             </strong>
             <small>
-              Ended at {formatDuration(displayed.clock.elapsedSeconds)}
+              Ended at {formatDuration(period.matchClockSeconds)}
               {breakAddedTimeSeconds > 0
                 ? ` · +${formatDuration(breakAddedTimeSeconds)} added time`
                 : ""}
@@ -5296,6 +5297,7 @@ function GameLog({
       kind: "period" as const,
       id: `period-${periodEnd.period}`,
       atSeconds: periodEnd.atSeconds,
+      displaySeconds: getMatchClockSeconds(game, periodEnd.atSeconds),
       order: 2,
       title: gameEnded
         ? "Game ended"
@@ -5326,6 +5328,7 @@ function GameLog({
             kind: "period" as const,
             id: "period-start-1",
             atSeconds: 0,
+            displaySeconds: 0,
             order: 0,
             title: `${periodLabel} 1 started`,
             detail: "Game clock started",
@@ -5337,6 +5340,7 @@ function GameLog({
       kind: "event" as const,
       id: event.id,
       atSeconds: event.atSeconds,
+      displaySeconds: getMatchClockSeconds(game, event.atSeconds),
       order: 1,
       event,
     })),
@@ -5375,7 +5379,7 @@ function GameLog({
               if (item.kind === "period") {
                 return (
                   <li className="period-timeline-marker" key={item.id}>
-                    <time>{formatDuration(item.atSeconds)}</time>
+                    <time>{formatDuration(item.displaySeconds)}</time>
                     <span className="timeline-event-icon" aria-hidden="true">
                       {completed && item.title === "Game ended" ? (
                         <Flag size={18} />
@@ -5440,7 +5444,11 @@ function GameLog({
                         : event.note;
               return (
                 <li key={event.id}>
-                  <time>{formatDuration(event.atSeconds)}</time>
+                  <time>
+                    {formatDuration(
+                      getMatchClockSeconds(game, event.atSeconds),
+                    )}
+                  </time>
                   <span
                     className={`timeline-event-icon timeline-event-${event.type}`}
                     aria-hidden="true"
