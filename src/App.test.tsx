@@ -158,6 +158,51 @@ describe("Sideline app", () => {
     expect(localStorage.getItem(COACH_ID_STORAGE_KEY)).toBeNull();
   });
 
+  it("ends an active game from coach selection after confirmation", () => {
+    const state = structuredClone(INITIAL_STATE);
+    state.activeGame = createGame(
+      state.teams.u8,
+      state.teams.u8.defaultFormationId,
+      state.teams.u8.roster.map((player) => player.id),
+      state.teams.u8.defaultDurationMinutes,
+      1_000,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.removeItem(COACH_ID_STORAGE_KEY);
+
+    render(<App />);
+
+    expect(
+      screen.getByRole("region", {
+        name: "Golden Dragons game in progress",
+      }),
+    ).toHaveTextContent("Choose an assigned coach to resume, or end it here.");
+    fireEvent.click(
+      screen.getByRole("button", { name: "End Golden Dragons game" }),
+    );
+    const confirmation = screen.getByRole("alertdialog", {
+      name: "End Golden Dragons game?",
+    });
+    expect(confirmation).toHaveTextContent(
+      "This will stop the clock, cancel any ready substitutions, and end the Golden Dragons game. You’ll see the game summary next.",
+    );
+    fireEvent.click(
+      within(confirmation).getByRole("button", { name: "End game" }),
+    );
+
+    expect(
+      JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}").activeGame,
+    ).toBeNull();
+    expect(
+      screen.getByRole("main", { name: "Game summary" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Return to coaches" }));
+    expect(
+      screen.getByRole("heading", { name: "Who’s coaching?" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Live game")).not.toBeInTheDocument();
+  });
+
   it("takes single-team coaches directly to their assigned team", () => {
     localStorage.removeItem(COACH_ID_STORAGE_KEY);
     render(<App />);

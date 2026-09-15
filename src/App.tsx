@@ -133,6 +133,9 @@ type Screen =
   | { name: "live" }
   | { name: "summary"; game: ActiveGame; teamId: TeamId };
 
+type SummaryReturnLabel =
+  "Prep for next game" | "Return to teams" | "Return to coaches";
+
 const coachTeamIds = (coach: Coach) =>
   coach.assignments.map((assignment) => assignment.teamId);
 
@@ -765,6 +768,10 @@ function App() {
             <CoachScreen
               state={state}
               onChooseCoach={selectCoach}
+              onEndActiveGame={(game) => {
+                commitState((current) => ({ ...current, activeGame: null }));
+                setScreen({ name: "summary", game, teamId: game.teamId });
+              }}
               showInstall={!installed}
               onInstall={installApp}
             />
@@ -815,12 +822,16 @@ function App() {
               game={screen.game}
               team={teamWithGameGuests(state.teams[screen.teamId], screen.game)}
               returnLabel={
-                selectedCoach?.assignments.length === 1
-                  ? "Prep for next game"
-                  : "Return to teams"
+                !selectedCoach
+                  ? "Return to coaches"
+                  : selectedCoach.assignments.length === 1
+                    ? "Prep for next game"
+                    : "Return to teams"
               }
               onClose={() => {
-                if (selectedCoach?.assignments.length === 1) {
+                if (!selectedCoach) {
+                  setScreen({ name: "coach" });
+                } else if (selectedCoach.assignments.length === 1) {
                   setScreen({
                     name: "setup",
                     teamId: selectedCoach.assignments[0].teamId,
@@ -865,14 +876,19 @@ function PrivacyNote() {
 function CoachScreen({
   state,
   onChooseCoach,
+  onEndActiveGame,
   showInstall,
   onInstall,
 }: {
   state: AppState;
   onChooseCoach: (coachId: CoachId) => void;
+  onEndActiveGame: (game: ActiveGame) => void;
   showInstall: boolean;
   onInstall: () => void;
 }) {
+  const [endConfirm, setEndConfirm] = useState(false);
+  const activeGame = state.activeGame;
+  const activeTeam = activeGame ? state.teams[activeGame.teamId] : null;
   return (
     <div className="page coach-page">
       <section className="page-heading">
@@ -886,11 +902,31 @@ function CoachScreen({
         </div>
       </section>
 
+      {activeGame && activeTeam && (
+        <section
+          className="coach-game-recovery"
+          aria-label={`${activeTeam.name} game in progress`}
+        >
+          <span className="resume-pulse" aria-hidden="true" />
+          <span>
+            <strong>{activeTeam.name} game in progress</strong>
+            <small>Choose an assigned coach to resume, or end it here.</small>
+          </span>
+          <Button
+            className="danger-action"
+            variant="danger"
+            size="medium"
+            leadingVisual={Flag}
+            aria-label={`End ${activeTeam.name} game`}
+            onClick={() => setEndConfirm(true)}
+          >
+            End game
+          </Button>
+        </section>
+      )}
+
       <div className="coach-ledger">
         {COACHES.map((coach) => {
-          const activeTeam = state.activeGame
-            ? state.teams[state.activeGame.teamId]
-            : null;
           const blockedByActiveGame = Boolean(
             activeTeam && !coachHasTeam(coach, activeTeam.id),
           );
@@ -971,6 +1007,24 @@ function CoachScreen({
       )}
 
       <PrivacyNote />
+      {endConfirm && activeGame && activeTeam && (
+        <ConfirmSheet
+          title={`End ${activeTeam.name} game?`}
+          body={`This will stop the clock, cancel any ready substitutions, and end the ${activeTeam.name} game. You’ll see the game summary next.`}
+          cancelLabel="Keep game"
+          confirmLabel="End game"
+          confirmIcon={<Flag size={18} aria-hidden="true" />}
+          showClose
+          onCancel={() => setEndConfirm(false)}
+          onConfirm={() => {
+            const finalGame = cancelQueuedSubstitutions(
+              finalizeGame(activeGame, Date.now()),
+            );
+            setEndConfirm(false);
+            onEndActiveGame(finalGame);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1821,7 +1875,7 @@ function LiveGameScreen({
   game: ActiveGame;
   team: Team;
   substitutionAlertsEnabled: boolean;
-  summaryReturnLabel: "Prep for next game" | "Return to teams";
+  summaryReturnLabel: SummaryReturnLabel;
   onChange: (game: ActiveGame) => void;
   onEnd: (game: ActiveGame) => void;
 }) {
@@ -5579,7 +5633,7 @@ function GameSummary({
 }: {
   game: ActiveGame;
   team: Team;
-  returnLabel: "Prep for next game" | "Return to teams";
+  returnLabel: SummaryReturnLabel;
   onClose: () => void;
 }) {
   const formation = getFormation(game.formationId);
