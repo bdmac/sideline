@@ -53,6 +53,20 @@ describe("formations", () => {
     ).toEqual(["3-1-3-1", "3-3-2", "3-2-3", "2-3-3"]);
   });
 
+  it("provides short, medium, and full labels for every position", () => {
+    FORMATIONS.forEach((formation) => {
+      formation.positions.forEach((position) => {
+        expect(position.shortLabel.length).toBeGreaterThan(0);
+        expect(position.mediumLabel.length).toBeGreaterThan(
+          position.shortLabel.length,
+        );
+        expect(position.label.length).toBeGreaterThanOrEqual(
+          position.mediumLabel.length,
+        );
+      });
+    });
+  });
+
   it("keeps attacking lines clear of the goal area and in tactical order", () => {
     FORMATIONS.forEach((formation) => {
       const goalkeeper = formation.positions.find(

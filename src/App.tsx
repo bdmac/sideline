@@ -4780,7 +4780,7 @@ function ReadySwapList({
                 />
               </span>
               <span className="ready-direction">
-                <small>{position?.shortLabel}</small>
+                <small>{position?.mediumLabel}</small>
                 <ArrowRightLeft size={24} aria-hidden="true" />
               </span>
               <span className="ready-player out">

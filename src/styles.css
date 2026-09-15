@@ -2845,7 +2845,7 @@ select:hover {
 .ready-swap-headings,
 .ready-swap {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 52px minmax(0, 1fr);
+  grid-template-columns: 30px minmax(0, 1fr) 88px minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
 }
@@ -2937,8 +2937,11 @@ select:hover {
 }
 
 .ready-direction small {
-  font-size: 0.68rem;
+  max-width: 5.5rem;
+  font-size: 0.74rem;
   font-weight: 900;
+  line-height: 1.08;
+  text-align: center;
 }
 
 .ready-entry {
@@ -4015,7 +4018,7 @@ select:hover {
 
   .ready-swap-headings,
   .ready-swap {
-    grid-template-columns: 24px minmax(0, 1fr) 40px minmax(0, 1fr);
+    grid-template-columns: 24px minmax(0, 1fr) 68px minmax(0, 1fr);
     gap: 0.45rem;
   }
 

@@ -1035,6 +1035,17 @@ describe("Sideline app", () => {
     ).not.toBeInTheDocument();
     expect(planner.querySelectorAll(".swap-transfer svg")).toHaveLength(3);
     expect(planner.querySelectorAll(".review-direction small")).toHaveLength(3);
+    expect(
+      Array.from(
+        planner.querySelectorAll(".review-direction small"),
+        (item) => item.textContent,
+      ),
+    ).toEqual(
+      Array.from(
+        planner.querySelectorAll(".swap-transfer small"),
+        (item) => item.textContent,
+      ),
+    );
     const outgoingPlayers =
       within(planner).getAllByLabelText(/outgoing player/);
     const incomingPlayers =
@@ -1114,6 +1125,12 @@ describe("Sideline app", () => {
     expect(within(summary).getAllByText("IN")).toHaveLength(1);
     expect(summary.querySelectorAll(".ready-direction svg")).toHaveLength(3);
     expect(
+      Array.from(
+        summary.querySelectorAll(".ready-direction small"),
+        (item) => item.textContent,
+      ),
+    ).toEqual(expect.arrayContaining(["Keeper", "Center Back", "Left Mid"]));
+    expect(
       summary.querySelectorAll(
         '.ready-player-number[data-component="Label"][data-variant="danger"]',
       ),
@@ -1186,7 +1203,10 @@ describe("Sideline app", () => {
     const review = screen.getByRole("dialog", {
       name: "Review substitutions (1)",
     });
-    expect(within(review).getByText(targetPosition.shortLabel)).toBeVisible();
+    expect(within(review).getByText(targetPosition.mediumLabel)).toBeVisible();
+    expect(
+      within(review).queryByText(targetPosition.shortLabel),
+    ).not.toBeInTheDocument();
     expect(
       within(review).getByRole("button", { name: "Send 'em in" }),
     ).toBeEnabled();

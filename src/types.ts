@@ -26,6 +26,7 @@ export type Position = {
   id: string;
   label: string;
   shortLabel: string;
+  mediumLabel: string;
   x: number;
   y: number;
   role: PositionRole;
