@@ -10,6 +10,7 @@ import {
   compareSubstitutionDestinations,
   createGame,
   endCurrentPeriod,
+  fastForwardGame,
   FORMATIONS,
   getCurrentBenchSeconds,
   getCurrentFieldSeconds,
@@ -43,6 +44,103 @@ import {
   validateGame,
   validateSubstitutionPairs,
 } from "./domain";
+
+describe("demo clock fast-forwarding", () => {
+  it("adds an offset after materializing the running clock", () => {
+    let game = createGame(
+      INITIAL_TEAMS.u8,
+      INITIAL_TEAMS.u8.defaultFormationId,
+      INITIAL_TEAMS.u8.roster.map((player) => player.id),
+      INITIAL_TEAMS.u8.defaultDurationMinutes,
+      1_000,
+    );
+    const unavailableId = game.benchIds.at(-1)!;
+    game = markUnavailable(
+      game,
+      unavailableId,
+      INITIAL_TEAMS.u8.sideSize,
+      1_000,
+    );
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+
+    const advanced = fastForwardGame(game, 6 * 60, 4_000);
+
+    expect(advanced.clock).toEqual({
+      elapsedSeconds: 6 * 60 + 3,
+      running: false,
+      lastStartedAt: null,
+    });
+    Object.values(advanced.assignments).forEach((playerId) => {
+      expect(advanced.totals[playerId].fieldSeconds).toBe(6 * 60 + 3);
+    });
+    advanced.benchIds.forEach((playerId) => {
+      expect(advanced.totals[playerId].benchSeconds).toBe(6 * 60 + 3);
+    });
+    expect(advanced.totals[unavailableId]).toEqual({
+      fieldSeconds: 0,
+      benchSeconds: 0,
+    });
+  });
+
+  it("continues normal accounting after substitutions and a second jump", () => {
+    let game = createGame(
+      INITIAL_TEAMS.u8,
+      INITIAL_TEAMS.u8.defaultFormationId,
+      INITIAL_TEAMS.u8.roster.map((player) => player.id),
+      INITIAL_TEAMS.u8.defaultDurationMinutes,
+      1_000,
+    );
+    game.clock = { elapsedSeconds: 0, running: true, lastStartedAt: 1_000 };
+    game = fastForwardGame(game, 6 * 60, 1_000);
+
+    const [positionId, outPlayerId] = Object.entries(game.assignments)[0];
+    const inPlayerId = game.benchIds[0];
+    game = applySubstitutions(
+      game,
+      [{ outPlayerId, inPlayerId, positionId }],
+      INITIAL_TEAMS.u8.sideSize,
+      1_000,
+    );
+    game = fastForwardGame(game, 9 * 60, 1_000);
+    const continued = materializeGame(
+      setClockRunning(game, true, 1_000),
+      6_000,
+    );
+
+    expect(game.totals[outPlayerId]).toEqual({
+      fieldSeconds: 6 * 60,
+      benchSeconds: 9 * 60,
+    });
+    expect(game.totals[inPlayerId]).toEqual({
+      fieldSeconds: 9 * 60,
+      benchSeconds: 6 * 60,
+    });
+    expect(continued.clock.elapsedSeconds).toBe(15 * 60 + 5);
+    expect(continued.totals[outPlayerId].benchSeconds).toBe(9 * 60 + 5);
+    expect(continued.totals[inPlayerId].fieldSeconds).toBe(9 * 60 + 5);
+  });
+
+  it("fast-forwards paused clocks and rejects non-positive offsets", () => {
+    const game = createGame(
+      INITIAL_TEAMS.u8,
+      INITIAL_TEAMS.u8.defaultFormationId,
+      INITIAL_TEAMS.u8.roster.map((player) => player.id),
+      INITIAL_TEAMS.u8.defaultDurationMinutes,
+      1_000,
+    );
+
+    const advanced = fastForwardGame(game, 6 * 60, 1_000);
+    expect(advanced.clock).toEqual({
+      elapsedSeconds: 6 * 60,
+      running: false,
+      lastStartedAt: null,
+    });
+
+    expect(() => fastForwardGame(advanced, 0, 1_000)).toThrow(
+      "Fast-forward time must be greater than zero.",
+    );
+  });
+});
 
 describe("substitution destination sorting", () => {
   it("scales fairness bands from the game rotation cadence", () => {

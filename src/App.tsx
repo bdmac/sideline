@@ -21,6 +21,7 @@ import {
   CirclePlus,
   Clock3,
   Download,
+  FastForward,
   Flag,
   MoreHorizontal,
   Move,
@@ -72,6 +73,7 @@ import {
   compareSubstitutionDestinations,
   createGame,
   endCurrentPeriod,
+  fastForwardGame,
   finalizeGame,
   formatDuration,
   getCurrentBenchSeconds,
@@ -467,9 +469,123 @@ function SettingsMenu({
               aria-describedby="substitution-alerts-description"
             />
           </div>
+          <div className="settings-option">
+            <span>
+              <strong id="demo-mode-label">Demo mode</strong>
+              <small id="demo-mode-description">
+                Become a sideline Time Lord—no blue box required.
+              </small>
+            </span>
+            <ToggleSwitch
+              checked={preferences.demoClock}
+              onChange={(enabled) => onPreferenceChange("demoClock", enabled)}
+              aria-labelledby="demo-mode-label"
+              aria-describedby="demo-mode-description"
+            />
+          </div>
         </div>
       </ActionMenu.Overlay>
     </ActionMenu>
+  );
+}
+
+function DemoClockDialog({
+  game,
+  onChange,
+  onClose,
+}: {
+  game: ActiveGame;
+  onChange: (game: ActiveGame) => void;
+  onClose: () => void;
+}) {
+  const [targetMinute, setTargetMinute] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const currentElapsedSeconds = materializeGame(game, Date.now()).clock
+    .elapsedSeconds;
+  const parsedTargetMinute = Number(targetMinute);
+  const validOffset =
+    targetMinute.trim() !== "" &&
+    Number.isInteger(parsedTargetMinute) &&
+    parsedTargetMinute > 0;
+  const jumpTargetSeconds = validOffset
+    ? currentElapsedSeconds + parsedTargetMinute * 60
+    : null;
+  const submitFastForward = () => {
+    if (!validOffset) {
+      setError("Enter a positive whole number of minutes.");
+      return;
+    }
+    try {
+      onChange(fastForwardGame(game, parsedTargetMinute * 60, Date.now()));
+      onClose();
+    } catch (fastForwardError) {
+      setError(
+        fastForwardError instanceof Error
+          ? fastForwardError.message
+          : "Sideline could not fast-forward the game clock.",
+      );
+    }
+  };
+
+  return (
+    <SidelineDialog
+      title="Fast-forward"
+      description="How far into the future would you like to travel? Sideline advances and then pauses the game clock."
+      onClose={onClose}
+      className="demo-clock-dialog"
+      bodyClassName="demo-clock-dialog-body"
+      footer={
+        <>
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="demo-clock-form"
+            variant="primary"
+            leadingVisual={FastForward}
+            disabled={!validOffset}
+          >
+            {jumpTargetSeconds === null
+              ? "Jump"
+              : `Jump to ${formatDuration(jumpTargetSeconds)}`}
+          </Button>
+        </>
+      }
+    >
+      <form
+        id="demo-clock-form"
+        className="demo-clock-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitFastForward();
+        }}
+      >
+        <small className="demo-clock-current">
+          Current elapsed time:{" "}
+          <strong>{formatDuration(currentElapsedSeconds)}</strong>
+        </small>
+        <label htmlFor="demo-clock-minute">Jump forward by minutes</label>
+        <input
+          id="demo-clock-minute"
+          type="number"
+          min="1"
+          step="1"
+          inputMode="numeric"
+          value={targetMinute}
+          autoFocus
+          onChange={(event) => {
+            setTargetMinute(event.target.value);
+            setError(null);
+          }}
+        />
+        {error && (
+          <small className="demo-clock-error" role="alert">
+            {error}
+          </small>
+        )}
+      </form>
+    </SidelineDialog>
   );
 }
 
@@ -797,6 +913,7 @@ function App() {
               game={state.activeGame}
               team={activeTeam}
               substitutionAlertsEnabled={devicePreferences.substitutionAlerts}
+              demoClockEnabled={devicePreferences.demoClock}
               summaryReturnLabel={
                 selectedCoach?.assignments.length === 1
                   ? "Prep for next game"
@@ -1862,6 +1979,7 @@ function LiveGameScreen({
   game,
   team,
   substitutionAlertsEnabled,
+  demoClockEnabled,
   summaryReturnLabel,
   onChange,
   onEnd,
@@ -1869,6 +1987,7 @@ function LiveGameScreen({
   game: ActiveGame;
   team: Team;
   substitutionAlertsEnabled: boolean;
+  demoClockEnabled: boolean;
   summaryReturnLabel: SummaryReturnLabel;
   onChange: (game: ActiveGame) => void;
   onEnd: (game: ActiveGame) => void;
@@ -1907,6 +2026,7 @@ function LiveGameScreen({
     string | null
   >(null);
   const [endConfirm, setEndConfirm] = useState(false);
+  const [demoClockOpen, setDemoClockOpen] = useState(false);
   const [error, setError] = useState("");
   const alertedReminderCycle = useRef<string | null>(null);
   const formation = getFormation(game.formationId);
@@ -2176,6 +2296,16 @@ function LiveGameScreen({
             >
               {clockActionLabel}
             </Button>
+            {demoClockEnabled && (
+              <IconButton
+                className="match-fast-forward-button"
+                variant="default"
+                size="large"
+                icon={FastForward}
+                aria-label="Fast-forward game clock"
+                onClick={() => setDemoClockOpen(true)}
+              />
+            )}
             <Button
               variant="danger"
               size="medium"
@@ -3172,6 +3302,13 @@ function LiveGameScreen({
             safeChange(() => movePlayer(game, playerId, positionId));
             setPositionEditorPlayerId(null);
           }}
+        />
+      )}
+      {demoClockOpen && (
+        <DemoClockDialog
+          game={game}
+          onChange={onChange}
+          onClose={() => setDemoClockOpen(false)}
         />
       )}
       {endConfirm && (

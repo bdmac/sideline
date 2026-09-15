@@ -26,6 +26,7 @@ import {
 import { DEVICE_PREFERENCES_STORAGE_KEY } from "./devicePreferences";
 import { STORAGE_KEY } from "./storage";
 import { THEME_STORAGE_KEY } from "./theme";
+import type { AppState } from "./types";
 
 const startGame = () => {
   fireEvent.click(screen.getByRole("button", { name: "Formation" }));
@@ -52,6 +53,7 @@ describe("Sideline app", () => {
   });
 
   beforeEach(() => {
+    window.history.replaceState({}, "", "/");
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem(COACH_ID_STORAGE_KEY, "brian");
@@ -473,6 +475,7 @@ describe("Sideline app", () => {
     ).toEqual({
       keepScreenAwake: true,
       substitutionAlerts: true,
+      demoClock: false,
     });
     expect(wakeLockRequest).not.toHaveBeenCalled();
     expect(
@@ -480,6 +483,106 @@ describe("Sideline app", () => {
         .querySelector(".settings-menu")
         ?.getAttribute("data-position-regular"),
     ).not.toBe("bottom");
+  });
+
+  it("persists demo mode and gates the expanded-header clock control", async () => {
+    const state = structuredClone(INITIAL_STATE);
+    state.activeGame = setClockRunning(
+      createGame(
+        state.teams.u8,
+        state.teams.u8.defaultFormationId,
+        state.teams.u8.roster.map((player) => player.id),
+        state.teams.u8.defaultDurationMinutes,
+        1_000,
+      ),
+      true,
+      1_000,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+    expect(
+      screen.queryByRole("button", { name: "Fast-forward game clock" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const demoModeSwitch = await screen.findByRole("button", {
+      name: "Demo mode",
+    });
+    expect(demoModeSwitch).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(demoModeSwitch);
+
+    expect(
+      JSON.parse(localStorage.getItem(DEVICE_PREFERENCES_STORAGE_KEY) ?? "{}"),
+    ).toEqual({
+      keepScreenAwake: false,
+      substitutionAlerts: false,
+      demoClock: true,
+    });
+    expect(
+      screen.getByRole("button", { name: "Fast-forward game clock" }),
+    ).toBeInTheDocument();
+  });
+
+  it("jumps by demo minute offsets and continues normal timing", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T12:00:00Z"));
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Demo mode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: /Golden Dragons/ }));
+    startGame();
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Fast-forward game clock" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Fast-forward" }),
+    ).toBeInTheDocument();
+    let minuteInput = screen.getByRole("spinbutton", {
+      name: "Jump forward by minutes",
+    });
+    fireEvent.change(minuteInput, { target: { value: "6" } });
+    fireEvent.click(screen.getByRole("button", { name: "Jump to 6:00" }));
+
+    let saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+    expect(saved.activeGame?.clock.elapsedSeconds).toBe(6 * 60);
+    expect(saved.activeGame?.clock.running).toBe(false);
+    expect(saved.activeGame?.clock.lastStartedAt).toBeNull();
+    Object.values(saved.activeGame!.assignments).forEach((playerId) => {
+      expect(saved.activeGame!.totals[playerId].fieldSeconds).toBe(6 * 60);
+    });
+    saved.activeGame!.benchIds.forEach((playerId) => {
+      expect(saved.activeGame!.totals[playerId].benchSeconds).toBe(6 * 60);
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Fast-forward game clock" }),
+    );
+    expect(screen.getByText(/Current elapsed time:/)).toHaveTextContent(
+      "Current elapsed time: 6:00",
+    );
+    minuteInput = screen.getByRole("spinbutton", {
+      name: "Jump forward by minutes",
+    });
+    fireEvent.change(minuteInput, { target: { value: "9" } });
+    expect(
+      screen.getByRole("button", { name: "Jump to 15:00" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Jump to 15:00" }));
+
+    saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+    expect(saved.activeGame?.clock.elapsedSeconds).toBe(15 * 60);
+    expect(saved.activeGame?.clock.running).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+    act(() => vi.advanceTimersByTime(5_000));
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+    expect(saved.activeGame?.clock.elapsedSeconds).toBe(15 * 60 + 5);
   });
 
   it("keeps the screen awake when a saved preference has an active game", async () => {

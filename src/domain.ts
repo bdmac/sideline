@@ -440,6 +440,39 @@ export const materializeGame = (
   };
 };
 
+export const fastForwardGame = (
+  game: ActiveGame,
+  offsetSeconds: number,
+  now = Date.now(),
+): ActiveGame => {
+  const delta = Math.floor(offsetSeconds);
+  if (!Number.isFinite(offsetSeconds) || delta <= 0) {
+    throw new Error("Fast-forward time must be greater than zero.");
+  }
+
+  const materialized = materializeGame(game, now);
+  const target = materialized.clock.elapsedSeconds + delta;
+
+  const totals = structuredClone(materialized.totals);
+  addSeconds(
+    totals,
+    Object.values(materialized.assignments),
+    "fieldSeconds",
+    delta,
+  );
+  addSeconds(totals, materialized.benchIds, "benchSeconds", delta);
+
+  return {
+    ...materialized,
+    totals,
+    clock: {
+      elapsedSeconds: target,
+      running: false,
+      lastStartedAt: null,
+    },
+  };
+};
+
 export const setClockRunning = (
   game: ActiveGame,
   running: boolean,

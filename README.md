@@ -52,6 +52,8 @@ An interrupted active game reopens automatically for an assigned persisted coach
 
 The header settings menu can keep the screen awake during an active visible game and play a chime plus supported vibration when a substitution reminder becomes due. Both features are optional and depend on browser/device capabilities.
 
+For testing or demos, enable **Settings → Demo mode**. During an active game, the expanded match header gains a fast-forward button that opens **Fast-forward**. Enter a positive number of minutes to add while advancing current field and bench time through the normal accounting path. The clock pauses automatically after the jump and leaves period transitions manual.
+
 ## Data
 
 Game data is stored in `localStorage` under `sideline-state-v1`. Device-local color mode is stored under `sideline-color-mode`, and game-day settings are stored under `sideline-device-preferences`. There is no backend or authentication. Clearing browser site data removes all Sideline data and preferences.

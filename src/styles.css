@@ -365,6 +365,67 @@ h3 {
   line-height: 1.4;
 }
 
+.demo-clock-form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.sideline-dialog [data-component="Dialog.Body"].demo-clock-dialog-body {
+  padding-top: 1rem;
+}
+
+.demo-clock-form label {
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.demo-clock-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.7rem;
+  color: var(--ink);
+  background: var(--input);
+  border: 1px solid var(--input-line);
+  border-radius: 0.35rem;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.demo-clock-form input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.demo-clock-current,
+.demo-clock-error {
+  display: block;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.demo-clock-current {
+  color: var(--ink-soft);
+}
+
+.demo-clock-current strong {
+  color: var(--ink);
+  font-weight: 850;
+}
+
+.demo-clock-error {
+  color: var(--danger) !important;
+  font-weight: 800;
+}
+
+.match-fast-forward-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .brand {
   border: 0;
   background: transparent;

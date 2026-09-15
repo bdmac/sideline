@@ -1,6 +1,7 @@
 export type DevicePreferences = {
   keepScreenAwake: boolean;
   substitutionAlerts: boolean;
+  demoClock: boolean;
 };
 
 export const DEVICE_PREFERENCES_STORAGE_KEY = "sideline-device-preferences";
@@ -8,6 +9,7 @@ export const DEVICE_PREFERENCES_STORAGE_KEY = "sideline-device-preferences";
 export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
   keepScreenAwake: false,
   substitutionAlerts: false,
+  demoClock: false,
 };
 
 export const loadDevicePreferences = (): DevicePreferences => {
@@ -24,6 +26,10 @@ export const loadDevicePreferences = (): DevicePreferences => {
         typeof saved.substitutionAlerts === "boolean"
           ? saved.substitutionAlerts
           : DEFAULT_DEVICE_PREFERENCES.substitutionAlerts,
+      demoClock:
+        typeof saved.demoClock === "boolean"
+          ? saved.demoClock
+          : DEFAULT_DEVICE_PREFERENCES.demoClock,
     };
   } catch (error) {
     console.error("Sideline could not load device preferences.", error);

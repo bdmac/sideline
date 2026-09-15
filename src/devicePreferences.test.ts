@@ -17,11 +17,13 @@ describe("device preferences", () => {
     saveDevicePreferences({
       keepScreenAwake: true,
       substitutionAlerts: true,
+      demoClock: true,
     });
 
     expect(loadDevicePreferences()).toEqual({
       keepScreenAwake: true,
       substitutionAlerts: true,
+      demoClock: true,
     });
   });
 
@@ -36,6 +38,7 @@ describe("device preferences", () => {
     expect(loadDevicePreferences()).toEqual({
       keepScreenAwake: false,
       substitutionAlerts: true,
+      demoClock: false,
     });
 
     const consoleError = vi
