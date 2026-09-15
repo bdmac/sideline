@@ -45,6 +45,38 @@ const openPositionEditor = (playerName: string) => {
   fireEvent.click(screen.getByRole("button", { name: "Change positions" }));
 };
 
+const prepareUpcomingRotation = (queued: boolean, alertsEnabled = true) => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-09-15T12:00:00Z"));
+  const vibrate = vi.fn();
+  Object.defineProperty(navigator, "vibrate", {
+    value: vibrate,
+    configurable: true,
+  });
+  localStorage.setItem(
+    DEVICE_PREFERENCES_STORAGE_KEY,
+    JSON.stringify({ substitutionAlerts: alertsEnabled }),
+  );
+  const state = structuredClone(INITIAL_STATE);
+  const team = state.teams.u8;
+  let game = createGame(
+    team,
+    "5-1-2-1",
+    team.roster.map((player) => player.id),
+    team.defaultDurationMinutes,
+    Date.now(),
+    2,
+  );
+  game.clock.elapsedSeconds = 299;
+  if (queued) {
+    game = queueSubstitutions(game, suggestSubstitutions(game, 1, team));
+  }
+  game = setClockRunning(game, true, Date.now());
+  state.activeGame = game;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  return { game, vibrate };
+};
+
 describe("Sideline app", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -688,6 +720,103 @@ describe("Sideline app", () => {
     await waitFor(() => expect(vibrate).toHaveBeenCalledWith([160, 80, 160]));
     fireEvent.click(screen.getByRole("button", { name: "Use dark mode" }));
     expect(vibrate).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { queued: false, alertsEnabled: true },
+    { queued: true, alertsEnabled: true },
+    { queued: false, alertsEnabled: false },
+    { queued: true, alertsEnabled: false },
+  ])(
+    "opens the due plan once (queued=$queued, sound=$alertsEnabled)",
+    ({ queued, alertsEnabled }) => {
+      const { game, vibrate } = prepareUpcomingRotation(queued, alertsEnabled);
+      render(<App />);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(vibrate).not.toHaveBeenCalled();
+
+      act(() => vi.advanceTimersByTime(1_000));
+
+      const review = screen.getByRole("dialog", {
+        name: queued ? /Review substitutions/ : "Plan substitutions",
+      });
+      expect(vibrate).toHaveBeenCalledTimes(alertsEnabled ? 1 : 0);
+      const persisted = JSON.parse(
+        localStorage.getItem(STORAGE_KEY) ?? "{}",
+      ).activeGame;
+      expect(persisted.assignments).toEqual(game.assignments);
+      expect(persisted.benchIds).toEqual(game.benchIds);
+      expect(persisted.clock.running).toBe(true);
+      expect(persisted.history).toEqual(game.history);
+
+      fireEvent.click(within(review).getByRole("button", { name: "Close" }));
+      act(() => vi.advanceTimersByTime(2_000));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(vibrate).toHaveBeenCalledTimes(alertsEnabled ? 1 : 0);
+    },
+  );
+
+  it.each(["settings", "goal", "pointer"] as const)(
+    "still alerts for a queued plan without interrupting %s",
+    (interaction) => {
+      const { vibrate } = prepareUpcomingRotation(true);
+      render(<App />);
+      if (interaction === "settings") {
+        fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+      } else if (interaction === "goal") {
+        fireEvent.click(screen.getByRole("button", { name: "Record a goal" }));
+      } else {
+        fireEvent.pointerDown(document, { pointerId: 1 });
+      }
+
+      act(() => vi.advanceTimersByTime(1_000));
+
+      expect(vibrate).toHaveBeenCalledOnce();
+      expect(
+        screen.queryByRole("dialog", { name: /Review substitutions/ }),
+      ).not.toBeInTheDocument();
+      if (interaction === "settings") {
+        expect(screen.getByText("Game-day settings")).toBeInTheDocument();
+        fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
+        fireEvent.keyUp(document, { key: "Escape", code: "Escape" });
+      } else if (interaction === "goal") {
+        fireEvent.click(
+          within(screen.getByRole("dialog")).getByRole("button", {
+            name: "Close",
+          }),
+        );
+      } else {
+        fireEvent.pointerUp(document, { pointerId: 1 });
+      }
+      act(() => vi.advanceTimersByTime(2_000));
+      expect(
+        screen.queryByRole("dialog", { name: /Review substitutions/ }),
+      ).not.toBeInTheDocument();
+      expect(vibrate).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("alerts and opens again after a confirmed rotation starts a new cycle", () => {
+    const { vibrate } = prepareUpcomingRotation(true);
+    render(<App />);
+    act(() => vi.advanceTimersByTime(1_000));
+    const review = screen.getByRole("dialog", {
+      name: /Review substitutions/,
+    });
+    fireEvent.click(
+      within(review).getByRole("button", { name: "Send 'em in" }),
+    );
+    const confirmation = screen.queryByRole("dialog");
+    if (confirmation) {
+      fireEvent.click(
+        within(confirmation).getByRole("button", { name: "Close" }),
+      );
+    }
+    act(() => vi.advanceTimersByTime(300_000));
+    expect(vibrate).toHaveBeenCalledTimes(2);
+    expect(
+      screen.getByRole("dialog", { name: "Plan substitutions" }),
+    ).toBeInTheDocument();
   });
 
   it("materializes a running game immediately when returning to Sideline", () => {

@@ -120,6 +120,7 @@ import {
 } from "./gameAlert";
 import { loadState, saveState } from "./storage";
 import { type ColorMode, loadColorMode, saveColorMode } from "./theme";
+import { useRotationDueReview } from "./useRotationDueReview";
 import type {
   ActiveGame,
   AppState,
@@ -2178,12 +2179,12 @@ function LiveGameScreen({
   const periodShortLabel = `${period.count === 4 ? "Q" : "H"}${period.current}`;
   const breakAddedTimeSeconds = periodBreak ? period.addedTimeSeconds : 0;
   const substitutionReminder = getSubstitutionReminderStatus(displayed);
-  const showSubstitutionReminder =
+  const rotationDue =
     substitutionReminder.due &&
     game.benchIds.length > 0 &&
-    queuedPairs.length === 0 &&
     !periodBreak &&
     !periodBoundaryReached;
+  const showSubstitutionReminder = rotationDue && queuedPairs.length === 0;
   const latestRotationEvent = game.history
     .filter(
       (event) =>
@@ -2214,14 +2215,25 @@ function LiveGameScreen({
   useEffect(() => {
     if (
       !substitutionAlertsEnabled ||
-      !showSubstitutionReminder ||
+      !rotationDue ||
       alertedReminderCycle.current === reminderCycleKey
     ) {
       return;
     }
     alertedReminderCycle.current = reminderCycleKey;
     void playSubstitutionAlert();
-  }, [reminderCycleKey, showSubstitutionReminder, substitutionAlertsEnabled]);
+  }, [reminderCycleKey, rotationDue, substitutionAlertsEnabled]);
+
+  useRotationDueReview({
+    cycleKey: reminderCycleKey,
+    due: substitutionReminder.due,
+    eligible: rotationDue && game.clock.running,
+    now,
+    onOpen: () => {
+      if (queuedPairs.length > 0) setQueuedPlanOpen(true);
+      else setPlannerOpen(true);
+    },
+  });
 
   const safeChange = (change: () => ActiveGame) => {
     try {
