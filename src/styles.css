@@ -1616,7 +1616,7 @@ select:hover {
 .pitch-player {
   position: absolute;
   width: clamp(80px, 23%, 146px);
-  min-height: 62px;
+  min-height: 70px;
   transform: translate(-50%, -50%);
   background: var(--paper);
   border: 2px solid var(--ink);
@@ -1663,8 +1663,9 @@ select:hover {
 }
 
 .pitch-player strong {
-  font-size: clamp(0.84rem, 2.8vw, 1rem);
-  line-height: 1.12;
+  font-size: clamp(0.96rem, 3vw, 1.12rem);
+  font-weight: 850;
+  line-height: 1.08;
 }
 
 .pitch-player:not(.empty) > strong {
@@ -1697,9 +1698,9 @@ select:hover {
 }
 
 .pitch-player small {
-  font-size: clamp(0.58rem, 2.2vw, 0.7rem);
+  font-size: clamp(0.58rem, 2.1vw, 0.68rem);
   color: var(--ink-soft);
-  font-weight: 800;
+  font-weight: 700;
   margin-top: 0.16rem;
 }
 
@@ -1711,12 +1712,12 @@ select:hover {
 }
 
 .pitch-time {
-  color: var(--ink);
-  font-weight: 950;
+  color: var(--ink-soft);
+  font-weight: 750;
 }
 
 .pitch-player:not(.empty) .pitch-time {
-  font-size: clamp(0.74rem, 2.5vw, 0.84rem);
+  font-size: clamp(0.64rem, 2.2vw, 0.74rem);
   letter-spacing: -0.02em;
 }
 
@@ -1761,9 +1762,9 @@ select:hover {
   height: 28px;
   display: grid;
   place-items: center;
-  background: var(--turf-pale);
-  color: var(--turf-dark);
-  font-size: 0.72rem;
+  background: var(--ink);
+  color: var(--on-ink);
+  font-size: 0.76rem;
   font-weight: 950;
 }
 
@@ -3926,8 +3927,8 @@ select:hover {
 
   .pitch-player {
     width: 28%;
-    min-height: 56px;
-    padding: 0.32rem 0.34rem;
+    min-height: 64px;
+    padding: 0.38rem 0.38rem;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
@@ -3942,26 +3943,26 @@ select:hover {
     grid-area: position;
     width: auto;
     min-width: 24px;
-    height: 22px;
-    padding: 0 0.22rem;
+    height: 24px;
+    padding: 0 0.24rem;
     transform: none;
-    font-size: 0.72rem;
+    font-size: 0.76rem;
   }
 
   .pitch-player > strong,
   .pitch-player-name,
   .pitch-player-name strong {
     grid-area: name;
-    font-size: 0.82rem;
-    line-height: 1.12;
+    font-size: 0.96rem;
+    line-height: 1.08;
     text-align: center;
   }
 
   .pitch-player small {
     grid-area: time;
     margin: 0;
-    font-size: 0.68rem;
-    font-weight: 900;
+    font-size: 0.62rem;
+    font-weight: 750;
     line-height: 1;
     text-align: right;
   }
