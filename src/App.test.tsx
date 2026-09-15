@@ -2465,6 +2465,9 @@ describe("Sideline app", () => {
     const handoffPlayerId = game.assignments[fromPositionId];
     const outgoingGoalkeeperId = game.assignments.gk;
     const incomingPlayerId = game.benchIds[0];
+    const ordinaryPositionId = Object.keys(game.assignments).find(
+      (positionId) => positionId !== "gk" && positionId !== fromPositionId,
+    )!;
     game = queueSubstitutions(game, [
       {
         positionId: "gk",
@@ -2475,6 +2478,11 @@ describe("Sideline app", () => {
           fromPositionId,
         },
       },
+      {
+        positionId: ordinaryPositionId,
+        outPlayerId: game.assignments[ordinaryPositionId],
+        inPlayerId: game.benchIds[1],
+      },
     ]);
     state.activeGame = game;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -2484,13 +2492,20 @@ describe("Sideline app", () => {
       screen.getByRole("button", { name: "Review substitutions" }),
     );
     const review = screen.getByRole("dialog", {
-      name: "Review substitutions (1)",
+      name: "Review substitutions (2)",
     });
+    const rows = review.querySelectorAll(".ready-swap");
 
-    expect(review).toHaveTextContent(
-      `MOVE ${team.roster.find((player) => player.id === handoffPlayerId)?.name}`,
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).not.toHaveTextContent("MOVE");
+    expect(rows[1]).toHaveTextContent("MOVE");
+    expect(rows[1]).toHaveTextContent(
+      `MOVE ${team.roster.find((player) => player.id === handoffPlayerId)?.name} from`,
     );
-    expect(review).toHaveTextContent("to GK");
+    expect(rows[1]).toHaveTextContent("to Keeper");
+    expect(
+      within(rows[1] as HTMLElement).getByLabelText(/to Goalkeeper/),
+    ).toBeVisible();
     expect(review).toHaveTextContent(
       team.roster.find((player) => player.id === outgoingGoalkeeperId)?.name ??
         "",

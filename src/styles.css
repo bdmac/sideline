@@ -2515,25 +2515,36 @@ select:hover {
 }
 
 .player-action-menu-trigger.fixed-player {
-  cursor: default;
-  justify-content: flex-end;
+  justify-content: center;
   border-style: dashed;
+  text-align: center;
+}
+
+.player-action-menu-trigger.fixed-player:disabled,
+.player-action-menu-trigger.fixed-player:disabled:hover {
+  color: var(--ink-soft) !important;
+  background: var(--wash) !important;
+  border-color: var(--input-line) !important;
+  font-size: 0.875rem;
+  font-weight: 500;
+  opacity: 1 !important;
 }
 
 .keeper-handoff-note,
 .ready-keeper-handoff {
-  grid-column: 2 / 5;
+  grid-column: 1 / -1;
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.78rem;
   font-weight: 700;
+  text-align: center;
 }
 
 .keeper-handoff-note {
-  padding: 0 0.6rem;
+  padding: 0.1rem 0.6rem 0;
 }
 
-.keeper-handoff-note span,
+.keeper-handoff-note strong,
 .ready-keeper-handoff strong {
   color: var(--warm-dark);
   font-size: 0.68rem;

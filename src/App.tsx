@@ -4184,6 +4184,16 @@ function movePlannedOptionsLast(options: PlayerActionMenuOption[]) {
   ];
 }
 
+function orderSubstitutionPairsForDisplay(pairs: SubstitutionPair[]) {
+  return pairs
+    .map((pair, index) => ({ pair, index }))
+    .sort(
+      (first, second) =>
+        Number(Boolean(first.pair.keeperHandoff)) -
+        Number(Boolean(second.pair.keeperHandoff)),
+    );
+}
+
 function PlayerActionMenu({
   id,
   label,
@@ -4566,198 +4576,223 @@ function SubstitutionPlanner({
             <span className="in-label">IN</span>
             <span className="out-label">OUT</span>
           </div>
-          {pairs.map((pair, index) => {
-            const position = formation.positions.find(
-              (item) => item.id === pair.positionId,
-            );
-            const handoffPosition = pair.keeperHandoff
-              ? formation.positions.find(
-                  (item) => item.id === pair.keeperHandoff?.fromPositionId,
-                )
-              : undefined;
-            const outgoingOptions = outgoingChoices
-              .map(([positionId, playerId]) => {
-                const usedInSwap = pairs.findIndex(
-                  (otherPair, pairIndex) =>
-                    pairIndex !== index &&
-                    (otherPair.outPlayerId === playerId ||
-                      otherPair.keeperHandoff?.playerId === playerId),
-                );
-                const candidatePosition = formation.positions.find(
-                  (item) => item.id === positionId,
-                );
-                const formationIndex = formation.positions.findIndex(
-                  (item) => item.id === positionId,
-                );
-                const incomingPlayer = team.roster.find(
-                  (item) => item.id === pair.inPlayerId,
-                );
-                const preferenceIndex =
-                  incomingPlayer && candidatePosition
-                    ? incomingPlayer.preferredRoles.indexOf(
-                        candidatePosition.role,
-                      )
-                    : -1;
-                return {
-                  id: playerId,
-                  label: playerName(team, playerId),
-                  displayLabel: playerLabel(team, playerId),
-                  goalCount: playerGoalCount(game, playerId),
-                  alreadyPlanned: usedInSwap >= 0,
-                  preferenceIndex:
-                    preferenceIndex === -1
-                      ? Number.POSITIVE_INFINITY
-                      : preferenceIndex,
-                  currentFieldSeconds: getCurrentFieldSeconds(
-                    planningGame,
-                    playerId,
-                  ),
-                  totalFieldSeconds: game.totals[playerId]?.fieldSeconds ?? 0,
-                  formationIndex,
-                  timeBandSeconds,
-                  rotationIntervalSeconds,
-                  positionLabel: candidatePosition?.label ?? "Open position",
-                  times: [
-                    {
-                      label: "Playing",
-                      value: formatPlayerDuration(
-                        getCurrentFieldSeconds(game, playerId),
-                      ),
-                    },
-                    {
-                      label: "Total",
-                      value: formatPlayerDuration(
-                        game.totals[playerId]?.fieldSeconds ?? 0,
-                        "Not played yet",
-                      ),
-                    },
-                  ],
-                  statusText:
-                    usedInSwap >= 0
-                      ? `Going out for ${playerName(
-                          team,
-                          pairs[usedInSwap].inPlayerId,
-                        )}`
-                      : undefined,
-                  statusDirection: "outgoing" as const,
-                };
-              })
-              .sort(compareSubstitutionDestinations);
-            const incomingOptions = movePlannedOptionsLast(
-              incomingChoices.map((playerId) => {
-                const usedInSwap = pairs.findIndex(
-                  (otherPair, pairIndex) =>
-                    pairIndex !== index && otherPair.inPlayerId === playerId,
-                );
-                const player = team.roster.find((item) => item.id === playerId);
-                return {
-                  id: playerId,
-                  label: playerName(team, playerId),
-                  displayLabel: playerLabel(team, playerId),
-                  goalCount: playerGoalCount(game, playerId),
-                  preferredRoles: player?.preferredRoles,
-                  times: [
-                    {
-                      label: "Bench",
-                      value: formatPlayerDuration(
-                        getCurrentBenchSeconds(game, playerId),
-                      ),
-                    },
-                    {
-                      label: "Played",
-                      value: formatPlayerDuration(
-                        game.totals[playerId]?.fieldSeconds ?? 0,
-                        "Not played yet",
-                      ),
-                    },
-                  ],
-                  statusText:
-                    usedInSwap >= 0
-                      ? `Going in for ${playerName(
-                          team,
-                          pairs[usedInSwap].outPlayerId,
-                        )}`
-                      : undefined,
-                  trailing: player?.number ? `#${player.number}` : undefined,
-                };
-              }),
-            );
-            return (
-              <div className="swap-row" key={index}>
-                <span className="swap-number">{index + 1}</span>
-                <div className="swap-player-choice">
-                  <PlayerActionMenu
-                    id={`in-${index}`}
-                    label={`Swap ${index + 1} incoming player`}
-                    value={pair.inPlayerId}
-                    options={incomingOptions}
-                    align="start"
-                    menuTitle="Who should go in?"
-                    showPreferenceFit={false}
-                    activeMenuId={activePlayerMenuId}
-                    onActiveMenuChange={setActivePlayerMenuId}
-                    onChange={(playerId) =>
-                      updateIncomingPlayer(index, playerId)
-                    }
-                  />
-                </div>
-                <span className="swap-transfer">
-                  <small>{(handoffPosition ?? position)?.mediumLabel}</small>
-                  <ArrowRightLeft size={22} aria-hidden="true" />
-                </span>
-                <div className="swap-player-choice">
-                  {pair.keeperHandoff ? (
-                    <div
-                      className="player-action-menu-trigger fixed-player"
-                      aria-label={`${playerName(
-                        team,
-                        pair.outPlayerId,
-                      )} leaves goal`}
-                    >
-                      <strong>{playerName(team, pair.outPlayerId)}</strong>
-                    </div>
-                  ) : (
+          {orderSubstitutionPairsForDisplay(pairs).map(
+            ({ pair, index: originalIndex }, displayIndex) => {
+              const position = formation.positions.find(
+                (item) => item.id === pair.positionId,
+              );
+              const handoffPosition = pair.keeperHandoff
+                ? formation.positions.find(
+                    (item) => item.id === pair.keeperHandoff?.fromPositionId,
+                  )
+                : undefined;
+              const outgoingOptions = outgoingChoices
+                .map(([positionId, playerId]) => {
+                  const usedInSwap = pairs.findIndex(
+                    (otherPair, pairIndex) =>
+                      pairIndex !== originalIndex &&
+                      (otherPair.outPlayerId === playerId ||
+                        otherPair.keeperHandoff?.playerId === playerId),
+                  );
+                  const candidatePosition = formation.positions.find(
+                    (item) => item.id === positionId,
+                  );
+                  const formationIndex = formation.positions.findIndex(
+                    (item) => item.id === positionId,
+                  );
+                  const incomingPlayer = team.roster.find(
+                    (item) => item.id === pair.inPlayerId,
+                  );
+                  const preferenceIndex =
+                    incomingPlayer && candidatePosition
+                      ? incomingPlayer.preferredRoles.indexOf(
+                          candidatePosition.role,
+                        )
+                      : -1;
+                  return {
+                    id: playerId,
+                    label: playerName(team, playerId),
+                    displayLabel: playerLabel(team, playerId),
+                    goalCount: playerGoalCount(game, playerId),
+                    alreadyPlanned: usedInSwap >= 0,
+                    preferenceIndex:
+                      preferenceIndex === -1
+                        ? Number.POSITIVE_INFINITY
+                        : preferenceIndex,
+                    currentFieldSeconds: getCurrentFieldSeconds(
+                      planningGame,
+                      playerId,
+                    ),
+                    totalFieldSeconds: game.totals[playerId]?.fieldSeconds ?? 0,
+                    formationIndex,
+                    timeBandSeconds,
+                    rotationIntervalSeconds,
+                    positionLabel: candidatePosition?.label ?? "Open position",
+                    times: [
+                      {
+                        label: "Playing",
+                        value: formatPlayerDuration(
+                          getCurrentFieldSeconds(game, playerId),
+                        ),
+                      },
+                      {
+                        label: "Total",
+                        value: formatPlayerDuration(
+                          game.totals[playerId]?.fieldSeconds ?? 0,
+                          "Not played yet",
+                        ),
+                      },
+                    ],
+                    statusText:
+                      usedInSwap >= 0
+                        ? `Going out for ${playerName(
+                            team,
+                            pairs[usedInSwap].inPlayerId,
+                          )}`
+                        : undefined,
+                    statusDirection: "outgoing" as const,
+                  };
+                })
+                .sort(compareSubstitutionDestinations);
+              const incomingOptions = movePlannedOptionsLast(
+                incomingChoices.map((playerId) => {
+                  const usedInSwap = pairs.findIndex(
+                    (otherPair, pairIndex) =>
+                      pairIndex !== originalIndex &&
+                      otherPair.inPlayerId === playerId,
+                  );
+                  const player = team.roster.find(
+                    (item) => item.id === playerId,
+                  );
+                  return {
+                    id: playerId,
+                    label: playerName(team, playerId),
+                    displayLabel: playerLabel(team, playerId),
+                    goalCount: playerGoalCount(game, playerId),
+                    preferredRoles: player?.preferredRoles,
+                    times: [
+                      {
+                        label: "Bench",
+                        value: formatPlayerDuration(
+                          getCurrentBenchSeconds(game, playerId),
+                        ),
+                      },
+                      {
+                        label: "Played",
+                        value: formatPlayerDuration(
+                          game.totals[playerId]?.fieldSeconds ?? 0,
+                          "Not played yet",
+                        ),
+                      },
+                    ],
+                    statusText:
+                      usedInSwap >= 0
+                        ? `Going in for ${playerName(
+                            team,
+                            pairs[usedInSwap].outPlayerId,
+                          )}`
+                        : undefined,
+                    trailing: player?.number ? `#${player.number}` : undefined,
+                  };
+                }),
+              );
+              return (
+                <div
+                  className={`swap-row ${
+                    pair.keeperHandoff ? "keeper-handoff-row" : ""
+                  }`}
+                  key={originalIndex}
+                >
+                  <span className="swap-number">{displayIndex + 1}</span>
+                  <div className="swap-player-choice">
                     <PlayerActionMenu
-                      id={`out-${index}`}
-                      label={`Swap ${index + 1} outgoing player`}
-                      value={pair.outPlayerId}
-                      options={outgoingOptions}
-                      align="end"
-                      menuTitle={`Where should ${playerName(
-                        team,
-                        pair.inPlayerId,
-                      )} play?`}
-                      positionFirst
+                      id={`in-${originalIndex}`}
+                      label={`Swap ${displayIndex + 1} incoming player`}
+                      value={pair.inPlayerId}
+                      options={incomingOptions}
+                      align="start"
+                      menuTitle="Who should go in?"
+                      showPreferenceFit={false}
                       activeMenuId={activePlayerMenuId}
                       onActiveMenuChange={setActivePlayerMenuId}
                       onChange={(playerId) =>
-                        updateOutgoingPlayer(index, playerId)
+                        updateIncomingPlayer(originalIndex, playerId)
                       }
                     />
+                  </div>
+                  <span className="swap-transfer">
+                    <small>{(handoffPosition ?? position)?.mediumLabel}</small>
+                    <ArrowRightLeft size={22} aria-hidden="true" />
+                  </span>
+                  <div className="swap-player-choice">
+                    {pair.keeperHandoff ? (
+                      <Button
+                        className="player-action-menu-trigger fixed-player"
+                        variant="default"
+                        size="large"
+                        block
+                        disabled
+                        aria-label={`${playerName(
+                          team,
+                          pair.outPlayerId,
+                        )} leaves goal`}
+                      >
+                        {playerName(team, pair.outPlayerId)}
+                      </Button>
+                    ) : (
+                      <PlayerActionMenu
+                        id={`out-${originalIndex}`}
+                        label={`Swap ${displayIndex + 1} outgoing player`}
+                        value={pair.outPlayerId}
+                        options={outgoingOptions}
+                        align="end"
+                        menuTitle={`Where should ${playerName(
+                          team,
+                          pair.inPlayerId,
+                        )} play?`}
+                        positionFirst
+                        activeMenuId={activePlayerMenuId}
+                        onActiveMenuChange={setActivePlayerMenuId}
+                        onChange={(playerId) =>
+                          updateOutgoingPlayer(originalIndex, playerId)
+                        }
+                      />
+                    )}
+                  </div>
+                  <IconButton
+                    className="swap-remove-action"
+                    variant="invisible"
+                    size="large"
+                    icon={Trash2}
+                    aria-label={`Remove substitution ${
+                      displayIndex + 1
+                    }: ${playerName(team, pair.inPlayerId)} for ${playerName(
+                      team,
+                      pair.outPlayerId,
+                    )}`}
+                    disabled={pairs.length <= 1}
+                    onClick={() => removePair(originalIndex)}
+                  />
+                  {pair.keeperHandoff && (
+                    <p
+                      className="keeper-handoff-note"
+                      aria-label={`Move ${playerName(
+                        team,
+                        pair.keeperHandoff.playerId,
+                      )} from ${
+                        handoffPosition?.label ?? "outfield"
+                      } to Goalkeeper`}
+                    >
+                      <strong>MOVE</strong>{" "}
+                      {playerName(team, pair.keeperHandoff.playerId)} from{" "}
+                      {handoffPosition?.mediumLabel ?? "outfield"} to{" "}
+                      {position?.mediumLabel ?? "Goalkeeper"}
+                    </p>
                   )}
                 </div>
-                <IconButton
-                  className="swap-remove-action"
-                  variant="invisible"
-                  size="large"
-                  icon={Trash2}
-                  aria-label={`Remove substitution ${index + 1}: ${playerName(
-                    team,
-                    pair.inPlayerId,
-                  )} for ${playerName(team, pair.outPlayerId)}`}
-                  disabled={pairs.length <= 1}
-                  onClick={() => removePair(index)}
-                />
-                {pair.keeperHandoff && (
-                  <p className="keeper-handoff-note">
-                    <span>MOVE</span>{" "}
-                    {playerName(team, pair.keeperHandoff.playerId)} from{" "}
-                    {handoffPosition?.mediumLabel ?? "outfield"} to GK
-                  </p>
-                )}
-              </div>
-            );
-          })}
+              );
+            },
+          )}
         </div>
 
         {!valid && (
@@ -4799,7 +4834,7 @@ function ReadySwapList({
         <span className="in-label">IN</span>
         <span className="out-label">OUT</span>
       </div>
-      {pairs.map((pair, index) => {
+      {orderSubstitutionPairsForDisplay(pairs).map(({ pair }, displayIndex) => {
         const position = formation.positions.find(
           (item) => item.id === pair.positionId,
         );
@@ -4857,7 +4892,7 @@ function ReadySwapList({
                 swipeStart.current = null;
               }}
             >
-              <span className="ready-swap-number">{index + 1}</span>
+              <span className="ready-swap-number">{displayIndex + 1}</span>
               <span className="ready-player in">
                 <ReadyPlayerIdentity
                   team={team}
@@ -4885,10 +4920,19 @@ function ReadySwapList({
                 />
               </span>
               {pair.keeperHandoff && (
-                <span className="ready-keeper-handoff">
+                <span
+                  className="ready-keeper-handoff"
+                  aria-label={`Move ${playerName(
+                    team,
+                    pair.keeperHandoff.playerId,
+                  )} from ${
+                    handoffPosition?.label ?? "outfield"
+                  } to Goalkeeper`}
+                >
                   <strong>MOVE</strong>{" "}
                   {playerName(team, pair.keeperHandoff.playerId)} from{" "}
-                  {handoffPosition?.mediumLabel ?? "outfield"} to GK
+                  {handoffPosition?.mediumLabel ?? "outfield"} to{" "}
+                  {position?.mediumLabel ?? "Goalkeeper"}
                 </span>
               )}
             </div>
