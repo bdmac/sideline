@@ -46,7 +46,7 @@ describe("persistence migrations", () => {
       activeGame,
     });
 
-    expect(migrated.version).toBe(15);
+    expect(migrated.version).toBe(16);
     expect(migrated.teams.u8.name).toBe("Golden Dragons");
     expect(migrated.teams.u8.roster.map((player) => player.name)).toEqual([
       "Simon",
@@ -82,7 +82,7 @@ describe("persistence migrations", () => {
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(15);
+    expect(migrated.version).toBe(16);
     expect(migrated.teams.u12.name).toBe("Fireballers");
     expect(migrated.teams.u12.roster.map((player) => player.name)).toEqual([
       "Jackson",
@@ -207,7 +207,7 @@ describe("persistence migrations", () => {
       activeGame: game,
     });
 
-    expect(migrated.version).toBe(15);
+    expect(migrated.version).toBe(16);
     expect(migrated.activeGame?.unavailableIds).toEqual(
       team.roster.slice(7).map((player) => player.id),
     );
@@ -232,7 +232,7 @@ describe("persistence migrations", () => {
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(15);
+    expect(migrated.version).toBe(16);
     expect(
       migrated.teams.u8.roster.find((player) => player.name === "Simon")
         ?.number,
@@ -257,7 +257,7 @@ describe("persistence migrations", () => {
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(15);
+    expect(migrated.version).toBe(16);
     expect(
       migrated.teams.u8.roster.every(
         (player) => player.preferredRoles.length >= 2,
@@ -298,7 +298,7 @@ describe("persistence migrations", () => {
       ]),
     );
 
-    expect(migrated.version).toBe(15);
+    expect(migrated.version).toBe(16);
     expect(preferences.Maddox).toEqual(["goalkeeper", "midfielder", "forward"]);
     expect(preferences.Henry).toEqual(["goalkeeper", "midfielder", "forward"]);
     expect(preferences.Evan).toEqual(["goalkeeper", "midfielder"]);
@@ -358,7 +358,7 @@ describe("persistence migrations", () => {
       activeGame: game,
     });
 
-    expect(migrated.version).toBe(15);
+    expect(migrated.version).toBe(16);
     expect(migrated.activeGame?.period).toEqual({
       current: 1,
       startedAtSeconds: 0,
@@ -415,7 +415,7 @@ describe("persistence migrations", () => {
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(15);
+    expect(migrated.version).toBe(16);
     expect(
       migrated.teams.u12.roster.find((player) => player.name === "William")
         ?.preferredRoles,
@@ -449,9 +449,31 @@ describe("persistence migrations", () => {
       activeGame: game,
     });
 
-    expect(migrated.version).toBe(15);
+    expect(migrated.version).toBe(16);
     expect(migrated.activeGame?.periodEnds).toEqual([
       { period: 1, atSeconds: 10 * 60 + 8 },
     ]);
+  });
+
+  it("moves existing U8 teams to the 2-2 default without changing an active formation", () => {
+    const teams = structuredClone(INITIAL_STATE.teams);
+    teams.u8.defaultFormationId = "5-1-2-1";
+    const activeGame = createGame(
+      teams.u8,
+      "5-1-2-1",
+      teams.u8.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+
+    const migrated = migrateStoredState({
+      version: 15,
+      teams,
+      activeGame,
+    });
+
+    expect(migrated.version).toBe(16);
+    expect(migrated.teams.u8.defaultFormationId).toBe("5-2-2");
+    expect(migrated.activeGame?.formationId).toBe("5-1-2-1");
   });
 });

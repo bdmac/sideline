@@ -28,6 +28,8 @@ import { THEME_STORAGE_KEY } from "./theme";
 
 const startGame = () => {
   fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+  const oneTwoOne = screen.queryByRole("button", { name: /1-2-1/ });
+  if (oneTwoOne) fireEvent.click(oneTwoOne);
   fireEvent.click(screen.getByRole("button", { name: "Starters" }));
   fireEvent.click(screen.getByRole("button", { name: "Start game" }));
 };
@@ -69,6 +71,18 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Golden Dragons")).toBeInTheDocument();
     expect(screen.getByText("Fireballers")).toBeInTheDocument();
+  });
+
+  it("opens U8 setup with 2-2 selected as the first formation", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+
+    const formationButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(".formation-picker button"),
+    );
+    expect(formationButtons[0]).toHaveTextContent("2-2");
+    expect(formationButtons[0]).toHaveClass("active");
   });
 
   it("persists the selected color mode on the local device", () => {
@@ -472,6 +486,7 @@ describe("Sideline app", () => {
       fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
     });
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    fireEvent.click(screen.getByRole("button", { name: /1-2-1/ }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Start short-sided" }));
@@ -557,6 +572,7 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    fireEvent.click(screen.getByRole("button", { name: /1-2-1/ }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
 
     expect(screen.getByRole("button", { name: "Auto-fill" })).toBeDisabled();
@@ -2394,6 +2410,43 @@ describe("Sideline app", () => {
     expect(
       document.querySelector(".pitch .soccer-ball-icon"),
     ).not.toBeInTheDocument();
+  });
+
+  it("omits goal markers from the ready substitution checklist", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock = {
+      elapsedSeconds: 5 * 60,
+      running: true,
+      lastStartedAt: 1_000,
+    };
+    const scorerId = game.assignments.dl;
+    game = recordGoal(game, "us", scorerId, 1_000);
+    game.clock = {
+      ...game.clock,
+      running: false,
+      lastStartedAt: null,
+    };
+    game = queueSubstitutions(game, suggestSubstitutions(game, 1, team));
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review substitutions" }),
+    );
+    const review = screen.getByRole("dialog", {
+      name: "Review substitutions (1)",
+    });
+
+    expect(review.querySelector(".soccer-ball-icon")).not.toBeInTheDocument();
   });
 
   it("shows goal markers on the scorer's pitch card", () => {

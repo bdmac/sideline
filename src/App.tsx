@@ -70,6 +70,7 @@ import {
   getPeriodStatus,
   getRecommendedSubstitutionCount,
   getScore,
+  getSubstitutionPlanningSnapshot,
   getSubstitutionReminderStatus,
   getSubstitutionTimeBandSize,
   markAvailable,
@@ -3471,6 +3472,7 @@ function BenchSubstitutionPicker({
   const player = team.roster.find((item) => item.id === playerId);
   if (!player) return null;
   const formation = getFormation(game.formationId);
+  const planningGame = getSubstitutionPlanningSnapshot(game);
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
   const rotationIntervalSeconds =
     getSubstitutionReminderStatus(game).intervalSeconds;
@@ -3498,7 +3500,7 @@ function BenchSubstitutionPicker({
         alreadyPlanned: Boolean(plannedPair),
         preferenceIndex:
           preferenceIndex === -1 ? Number.POSITIVE_INFINITY : preferenceIndex,
-        currentFieldSeconds: getCurrentFieldSeconds(game, outPlayerId),
+        currentFieldSeconds: getCurrentFieldSeconds(planningGame, outPlayerId),
         totalFieldSeconds: game.totals[outPlayerId]?.fieldSeconds ?? 0,
         timeBandSeconds,
         rotationIntervalSeconds,
@@ -3667,6 +3669,8 @@ function FieldSubstitutionPicker({
   const player = team.roster.find((item) => item.id === playerId);
   if (!player) return null;
   const formation = getFormation(game.formationId);
+  const planningGame = getSubstitutionPlanningSnapshot(game);
+  const timeBandSeconds = getSubstitutionTimeBandSize(game);
   const positionEntry = Object.entries(game.assignments).find(
     ([, assignedPlayerId]) => assignedPlayerId === playerId,
   );
@@ -3690,15 +3694,30 @@ function FieldSubstitutionPicker({
           : undefined,
       };
     })
-    .sort(
-      (a, b) =>
+    .sort((a, b) => {
+      const toBand = (seconds: number) =>
+        Math.floor(Math.max(0, seconds) / timeBandSeconds) * timeBandSeconds;
+      const playerAFieldSeconds = game.totals[a.player.id]?.fieldSeconds ?? 0;
+      const playerBFieldSeconds = game.totals[b.player.id]?.fieldSeconds ?? 0;
+      const playerABenchSeconds = getCurrentBenchSeconds(
+        planningGame,
+        a.player.id,
+      );
+      const playerBBenchSeconds = getCurrentBenchSeconds(
+        planningGame,
+        b.player.id,
+      );
+      return (
         Number(Boolean(a.plannedOutgoingName)) -
           Number(Boolean(b.plannedOutgoingName)) ||
-        (game.totals[a.player.id]?.fieldSeconds ?? 0) -
-          (game.totals[b.player.id]?.fieldSeconds ?? 0) ||
+        toBand(playerAFieldSeconds) - toBand(playerBFieldSeconds) ||
+        toBand(playerBBenchSeconds) - toBand(playerABenchSeconds) ||
+        playerAFieldSeconds - playerBFieldSeconds ||
+        playerBBenchSeconds - playerABenchSeconds ||
         a.preferenceIndex - b.preferenceIndex ||
-        a.player.name.localeCompare(b.player.name),
-    );
+        a.player.name.localeCompare(b.player.name)
+      );
+    });
 
   return (
     <SidelineDialog
@@ -4403,6 +4422,7 @@ function SubstitutionPlanner({
     setActivePlayerMenuId(null);
   };
   const formation = getFormation(game.formationId);
+  const planningGame = getSubstitutionPlanningSnapshot(game);
 
   const changeCount = (nextCount: number) => {
     setCount(nextCount);
@@ -4474,8 +4494,8 @@ function SubstitutionPlanner({
   const incomingChoices = [...game.benchIds].sort((playerA, playerB) => {
     const playerAFieldSeconds = game.totals[playerA]?.fieldSeconds ?? 0;
     const playerBFieldSeconds = game.totals[playerB]?.fieldSeconds ?? 0;
-    const playerABenchSeconds = getCurrentBenchSeconds(game, playerA);
-    const playerBBenchSeconds = getCurrentBenchSeconds(game, playerB);
+    const playerABenchSeconds = getCurrentBenchSeconds(planningGame, playerA);
+    const playerBBenchSeconds = getCurrentBenchSeconds(planningGame, playerB);
     const toBand = (seconds: number) =>
       Math.floor(Math.max(0, seconds) / timeBandSeconds) * timeBandSeconds;
     return (
@@ -4580,7 +4600,10 @@ function SubstitutionPlanner({
                     preferenceIndex === -1
                       ? Number.POSITIVE_INFINITY
                       : preferenceIndex,
-                  currentFieldSeconds: getCurrentFieldSeconds(game, playerId),
+                  currentFieldSeconds: getCurrentFieldSeconds(
+                    planningGame,
+                    playerId,
+                  ),
                   totalFieldSeconds: game.totals[playerId]?.fieldSeconds ?? 0,
                   formationIndex,
                   timeBandSeconds,
@@ -4727,12 +4750,14 @@ function ReadySwapList({
   team,
   game,
   onRemove,
+  showGoalMarkers = true,
 }: {
   pairs: SubstitutionPair[];
   formation: ReturnType<typeof getFormation>;
   team: Team;
   game: ActiveGame;
   onRemove?: (pair: SubstitutionPair) => void;
+  showGoalMarkers?: boolean;
 }) {
   const [revealedPairKey, setRevealedPairKey] = useState<string | null>(null);
   const swipeStart = useRef<{
@@ -4805,7 +4830,9 @@ function ReadySwapList({
                 <ReadyPlayerIdentity
                   team={team}
                   playerId={pair.inPlayerId}
-                  goalCount={playerGoalCount(game, pair.inPlayerId)}
+                  goalCount={
+                    showGoalMarkers ? playerGoalCount(game, pair.inPlayerId) : 0
+                  }
                   direction="in"
                 />
               </span>
@@ -4817,7 +4844,11 @@ function ReadySwapList({
                 <ReadyPlayerIdentity
                   team={team}
                   playerId={pair.outPlayerId}
-                  goalCount={playerGoalCount(game, pair.outPlayerId)}
+                  goalCount={
+                    showGoalMarkers
+                      ? playerGoalCount(game, pair.outPlayerId)
+                      : 0
+                  }
                   direction="out"
                 />
               </span>
@@ -4967,6 +4998,7 @@ function QueuedSubstitutionSummary({
         team={team}
         game={game}
         onRemove={onRemove}
+        showGoalMarkers={false}
       />
 
       {errors.length > 0 && (

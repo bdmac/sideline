@@ -18,6 +18,7 @@ import {
   getPeriodStatus,
   getRecommendedSubstitutionCount,
   getScore,
+  getSubstitutionPlanningSnapshot,
   getSubstitutionReminderStatus,
   getSubstitutionTimeBandSize,
   INITIAL_TEAMS,
@@ -194,7 +195,8 @@ describe("formations", () => {
       FORMATIONS.filter((formation) => formation.sideSize === 5).map(
         (formation) => formation.name,
       ),
-    ).toEqual(["1-2-1", "2-2", "1-1-2"]);
+    ).toEqual(["2-2", "1-2-1", "1-1-2"]);
+    expect(INITIAL_TEAMS.u8.defaultFormationId).toBe("5-2-2");
     expect(
       getFormationsForTeam(INITIAL_TEAMS.u12).map(
         (formation) => formation.name,
@@ -1053,6 +1055,118 @@ describe("substitutions", () => {
     expect(fiveSecondsLater.totals[pairs[0].inPlayerId].fieldSeconds).toBe(5);
   });
 
+  it("projects current intervals to the next rotation without changing real totals", () => {
+    const team = INITIAL_TEAMS.u8;
+    let game = createGame(
+      team,
+      "5-2-2",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.clock.elapsedSeconds = 5 * 60;
+    const pair = suggestSubstitutions(game, 1, team)[0];
+    game = applySubstitutions(game, [pair], team.sideSize, 2_000);
+
+    const planningGame = getSubstitutionPlanningSnapshot(game);
+
+    expect(getCurrentFieldSeconds(game, pair.inPlayerId)).toBe(0);
+    expect(getCurrentFieldSeconds(planningGame, pair.inPlayerId)).toBe(5 * 60);
+    expect(getCurrentBenchSeconds(game, pair.outPlayerId)).toBe(0);
+    expect(getCurrentBenchSeconds(planningGame, pair.outPlayerId)).toBe(5 * 60);
+    expect(planningGame.totals).toEqual(game.totals);
+    expect(game.clock.elapsedSeconds).toBe(5 * 60);
+  });
+
+  it("reduces the default to the bench players before a clear fairness gap", () => {
+    const team = structuredClone(INITIAL_TEAMS.u12);
+    team.roster.forEach((player) => {
+      player.preferredRoles = player.preferredRoles.filter(
+        (role) => role !== "goalkeeper",
+      );
+    });
+    let game = createGame(
+      team,
+      "9-3-1-3-1",
+      team.roster.map((player) => player.id),
+      60,
+      1_000,
+    );
+    team.roster.find(
+      (player) => player.id === game.assignments.gk,
+    )!.preferredRoles = ["goalkeeper"];
+    Object.values(game.assignments).forEach((playerId) => {
+      game.totals[playerId].fieldSeconds = 7 * 60;
+    });
+    game.benchIds.forEach((playerId) => {
+      game.totals[playerId].benchSeconds = 7 * 60;
+    });
+    game.clock.elapsedSeconds = 7 * 60;
+    const outfieldPositions = Object.keys(game.assignments).filter(
+      (positionId) => positionId !== "gk",
+    );
+    const incomingIds = game.benchIds.slice(0, 2);
+    game = applySubstitutions(
+      game,
+      incomingIds.map((inPlayerId, index) => ({
+        positionId: outfieldPositions[index],
+        outPlayerId: game.assignments[outfieldPositions[index]],
+        inPlayerId,
+      })),
+      team.sideSize,
+      2_000,
+    );
+
+    expect(getRecommendedSubstitutionCount(game, team)).toBe(4);
+    expect(
+      suggestSubstitutions(
+        game,
+        getRecommendedSubstitutionCount(game, team),
+        team,
+      ).map((pair) => pair.inPlayerId),
+    ).toEqual(expect.arrayContaining(game.benchIds.slice(0, 4)));
+  });
+
+  it("keeps the full default when the newly benched players form one cohort", () => {
+    const team = structuredClone(INITIAL_TEAMS.u8);
+    team.roster.forEach((player) => {
+      player.preferredRoles = player.preferredRoles.filter(
+        (role) => role !== "goalkeeper",
+      );
+    });
+    let game = createGame(
+      team,
+      "5-2-2",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    team.roster.find(
+      (player) => player.id === game.assignments.gk,
+    )!.preferredRoles = ["goalkeeper"];
+    Object.values(game.assignments).forEach((playerId) => {
+      game.totals[playerId].fieldSeconds = 5 * 60;
+    });
+    game.clock.elapsedSeconds = 5 * 60;
+    const outgoingPositions = Object.keys(game.assignments).filter(
+      (positionId) => positionId !== "gk",
+    );
+    const incomingIds = [...game.benchIds];
+    game = applySubstitutions(
+      game,
+      incomingIds.map((inPlayerId, index) => ({
+        positionId: outgoingPositions[index],
+        outPlayerId: game.assignments[outgoingPositions[index]],
+        inPlayerId,
+      })),
+      team.sideSize,
+      2_000,
+    );
+
+    expect(getRecommendedSubstitutionCount(game, team)).toBe(4);
+    expect(suggestSubstitutions(game, 4, team)).toHaveLength(4);
+  });
+
   it("keeps ready substitutions attached to outgoing players after position changes", () => {
     const team = INITIAL_TEAMS.u8;
     const game = createGame(
@@ -1213,7 +1327,7 @@ describe("substitutions", () => {
     expect(pair.outPlayerId).toBe(strikerId);
   });
 
-  it("prioritizes a rest-due player before accumulated playing time", () => {
+  it("plans for recently entered players reaching the next rotation window", () => {
     const team = structuredClone(INITIAL_TEAMS.u8);
     team.roster.forEach((player) => {
       player.preferredRoles = player.preferredRoles.filter(
@@ -1280,10 +1394,10 @@ describe("substitutions", () => {
 
     const [pair] = suggestSubstitutions(game, 1, team);
 
-    expect(pair.outPlayerId).toBe(longStintPlayer);
+    expect(recentlyEnteredPlayers).toContain(pair.outPlayerId);
   });
 
-  it("uses aggregate playing time in normal play and protects a fresh player", () => {
+  it("projects fresh players to the next window before applying aggregate fairness", () => {
     const createScenario = (substitutionAtSeconds: number) => {
       const team = structuredClone(INITIAL_TEAMS.u12);
       team.roster.forEach((player) => {
@@ -1354,7 +1468,7 @@ describe("substitutions", () => {
     expect(
       suggestSubstitutions(freshScenario.game, 1, freshScenario.team)[0]
         .outPlayerId,
-    ).toBe(freshScenario.normalComparisonId);
+    ).toBe(freshScenario.replacementId);
   });
 
   it("spreads near-equal substitutions across lines", () => {

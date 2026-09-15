@@ -23,6 +23,18 @@ const position = (
 
 export const FORMATIONS: Formation[] = [
   {
+    id: "5-2-2",
+    name: "2-2",
+    sideSize: 5,
+    positions: [
+      position("gk", "Goalkeeper", "GK", "Keeper", 50, 90, "goalkeeper"),
+      position("dl", "Left Back", "LB", "Left Back", 30, 64, "defender"),
+      position("dr", "Right Back", "RB", "Right Back", 70, 64, "defender"),
+      position("fl", "Left Striker", "LS", "Left Striker", 30, 24, "forward"),
+      position("fr", "Right Striker", "RS", "Right Striker", 70, 24, "forward"),
+    ],
+  },
+  {
     id: "5-1-2-1",
     name: "1-2-1",
     sideSize: 5,
@@ -40,18 +52,6 @@ export const FORMATIONS: Formation[] = [
         "midfielder",
       ),
       position("f", "Striker", "ST", "Striker", 50, 22, "forward"),
-    ],
-  },
-  {
-    id: "5-2-2",
-    name: "2-2",
-    sideSize: 5,
-    positions: [
-      position("gk", "Goalkeeper", "GK", "Keeper", 50, 90, "goalkeeper"),
-      position("dl", "Left Back", "LB", "Left Back", 30, 64, "defender"),
-      position("dr", "Right Back", "RB", "Right Back", 70, 64, "defender"),
-      position("fl", "Left Striker", "LS", "Left Striker", 30, 24, "forward"),
-      position("fr", "Right Striker", "RS", "Right Striker", 70, 24, "forward"),
     ],
   },
   {
@@ -296,7 +296,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
     sideSize: 5,
     defaultDurationMinutes: 40,
     defaultPeriodCount: 4,
-    defaultFormationId: "5-1-2-1",
+    defaultFormationId: "5-2-2",
     roster: makeRoster("u8", sampleNames.u8),
   },
   u12: {
@@ -312,7 +312,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 15,
+  version: 16,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
@@ -602,6 +602,26 @@ export const getSubstitutionTimeBandSize = (game: ActiveGame) =>
       60,
   );
 
+export const getSubstitutionPlanningSnapshot = (
+  game: ActiveGame,
+): ActiveGame => {
+  const reminder = getSubstitutionReminderStatus(game);
+  if (!reminder.hasExecutedSubstitution) return game;
+  const projectedSeconds = Math.max(
+    0,
+    reminder.intervalSeconds - reminder.secondsSinceLastSubstitution,
+  );
+  if (projectedSeconds === 0) return game;
+
+  return {
+    ...game,
+    clock: {
+      ...game.clock,
+      elapsedSeconds: game.clock.elapsedSeconds + projectedSeconds,
+    },
+  };
+};
+
 const toSubstitutionTimeBand = (seconds: number, bandSize: number) =>
   Math.floor(Math.max(0, seconds) / bandSize) * bandSize;
 
@@ -870,7 +890,11 @@ export const assignPlayersByPreference = (
   );
 };
 
-const getIncomingCandidateOrder = (game: ActiveGame, team: Team) => {
+const getIncomingCandidateOrder = (
+  game: ActiveGame,
+  team: Team,
+  goalkeeperTimingGame = game,
+) => {
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
   const formation = getFormation(game.formationId);
   const goalkeeperPosition = formation.positions.find(
@@ -903,15 +927,16 @@ const getIncomingCandidateOrder = (game: ActiveGame, team: Team) => {
             timeBandSeconds,
           ) ||
         toSubstitutionTimeBand(
-          game.totals[b]?.benchSeconds ?? 0,
+          getCurrentBenchSeconds(game, b),
           timeBandSeconds,
         ) -
           toSubstitutionTimeBand(
-            game.totals[a]?.benchSeconds ?? 0,
+            getCurrentBenchSeconds(game, a),
             timeBandSeconds,
           ) ||
         (game.totals[a]?.fieldSeconds ?? 0) -
           (game.totals[b]?.fieldSeconds ?? 0) ||
+        getCurrentBenchSeconds(game, b) - getCurrentBenchSeconds(game, a) ||
         (game.totals[b]?.benchSeconds ?? 0) -
           (game.totals[a]?.benchSeconds ?? 0) ||
         a.localeCompare(b),
@@ -920,8 +945,10 @@ const getIncomingCandidateOrder = (game: ActiveGame, team: Team) => {
   const goalkeeperCandidate = benchGoalkeepers[0];
   const goalkeeperStintIsDue =
     Boolean(goalkeeperPosition && goalkeeperId) &&
-    getCurrentPositionStintSeconds(game, goalkeeperPosition!.id) >=
-      getSubstitutionReminderStatus(game).intervalSeconds;
+    getCurrentPositionStintSeconds(
+      goalkeeperTimingGame,
+      goalkeeperPosition!.id,
+    ) >= getSubstitutionReminderStatus(game).intervalSeconds;
   const shouldRotateGoalkeeper =
     Boolean(goalkeeperPosition && goalkeeperCandidate && goalkeeperId) &&
     (!isGoalkeeper(goalkeeperId!) ||
@@ -1015,6 +1042,8 @@ export const suggestSubstitutions = (
   count: number,
   team: Team,
 ): SubstitutionPair[] => {
+  const goalkeeperTimingGame = game;
+  game = getSubstitutionPlanningSnapshot(game);
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
   const rotationIntervalSeconds =
     getSubstitutionReminderStatus(game).intervalSeconds;
@@ -1026,7 +1055,7 @@ export const suggestSubstitutions = (
     shouldRotateGoalkeeper,
     goalkeeperReserveOutPlayerId,
     incomingIds: orderedIncomingIds,
-  } = getIncomingCandidateOrder(game, team);
+  } = getIncomingCandidateOrder(game, team, goalkeeperTimingGame);
   const substitutionCount = Math.min(
     Math.max(0, count),
     Object.keys(game.assignments).length,
@@ -1374,6 +1403,8 @@ export const getRecommendedSubstitutionCount = (
   game: ActiveGame,
   team: Team,
 ) => {
+  const goalkeeperTimingGame = game;
+  game = getSubstitutionPlanningSnapshot(game);
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
   const maxCount = Math.min(
     game.benchIds.length,
@@ -1415,43 +1446,96 @@ export const getRecommendedSubstitutionCount = (
           (game.totals[b]?.fieldSeconds ?? 0) ||
         a.localeCompare(b),
     );
-  if (availableGoalkeepers.length < 2 || benchGoalkeepers.length === 0) {
-    return maxCount;
-  }
-  const goalkeeperCandidate = benchGoalkeepers[0];
-  const goalkeeperStintIsDue =
-    Boolean(goalkeeperPosition && goalkeeperId) &&
-    getCurrentPositionStintSeconds(game, goalkeeperPosition!.id) >=
-      getSubstitutionReminderStatus(game).intervalSeconds;
-  const rotatesGoalkeeper =
-    Boolean(goalkeeperId) &&
-    (!isGoalkeeper(goalkeeperId!) ||
-      goalkeeperStintIsDue ||
-      toSubstitutionTimeBand(
-        game.totals[goalkeeperCandidate]?.fieldSeconds ?? 0,
-        timeBandSeconds,
-      ) <
-        toSubstitutionTimeBand(
-          game.totals[goalkeeperId!]?.fieldSeconds ?? 0,
-          timeBandSeconds,
-        ));
-  const currentOutfieldGoalkeepers = Object.entries(game.assignments).filter(
-    ([positionId, playerId]) =>
-      positionId !== goalkeeperPosition?.id && isGoalkeeper(playerId),
-  ).length;
-  const allowedOutfieldGoalkeepers = Math.max(
-    0,
-    availableGoalkeepers.length - 2 - currentOutfieldGoalkeepers,
+  const goalkeeperConstrainedMax =
+    availableGoalkeepers.length < 2 || benchGoalkeepers.length === 0
+      ? maxCount
+      : (() => {
+          const goalkeeperCandidate = benchGoalkeepers[0];
+          const goalkeeperStintIsDue =
+            Boolean(goalkeeperPosition && goalkeeperId) &&
+            getCurrentPositionStintSeconds(
+              goalkeeperTimingGame,
+              goalkeeperPosition!.id,
+            ) >= getSubstitutionReminderStatus(game).intervalSeconds;
+          const rotatesGoalkeeper =
+            Boolean(goalkeeperId) &&
+            (!isGoalkeeper(goalkeeperId!) ||
+              goalkeeperStintIsDue ||
+              toSubstitutionTimeBand(
+                game.totals[goalkeeperCandidate]?.fieldSeconds ?? 0,
+                timeBandSeconds,
+              ) <
+                toSubstitutionTimeBand(
+                  game.totals[goalkeeperId!]?.fieldSeconds ?? 0,
+                  timeBandSeconds,
+                ));
+          const currentOutfieldGoalkeepers = Object.entries(
+            game.assignments,
+          ).filter(
+            ([positionId, playerId]) =>
+              positionId !== goalkeeperPosition?.id && isGoalkeeper(playerId),
+          ).length;
+          const allowedOutfieldGoalkeepers = Math.max(
+            0,
+            availableGoalkeepers.length - 2 - currentOutfieldGoalkeepers,
+          );
+          const nonGoalkeeperBench = game.benchIds.filter(
+            (playerId) =>
+              !game.unavailableIds.includes(playerId) &&
+              !isGoalkeeper(playerId),
+          ).length;
+          return Math.min(
+            maxCount,
+            nonGoalkeeperBench +
+              allowedOutfieldGoalkeepers +
+              (rotatesGoalkeeper ? 1 : 0),
+          );
+        })();
+  const {
+    goalkeeperCandidate: requiredGoalkeeper,
+    shouldRotateGoalkeeper,
+    incomingIds,
+  } = getIncomingCandidateOrder(game, team, goalkeeperTimingGame);
+  const eligibleIncomingIds = incomingIds.slice(0, goalkeeperConstrainedMax);
+  const requiredIncomingIds =
+    shouldRotateGoalkeeper && requiredGoalkeeper ? [requiredGoalkeeper] : [];
+  const cohortCandidates = eligibleIncomingIds.filter(
+    (playerId) => !requiredIncomingIds.includes(playerId),
   );
-  const nonGoalkeeperBench = game.benchIds.filter(
-    (playerId) =>
-      !game.unavailableIds.includes(playerId) && !isGoalkeeper(playerId),
-  ).length;
+  let cohortCount = cohortCandidates.length;
+  for (let index = 0; index < cohortCandidates.length - 1; index += 1) {
+    const currentPlayerId = cohortCandidates[index];
+    const nextPlayerId = cohortCandidates[index + 1];
+    const playedGap =
+      toSubstitutionTimeBand(
+        game.totals[nextPlayerId]?.fieldSeconds ?? 0,
+        timeBandSeconds,
+      ) -
+      toSubstitutionTimeBand(
+        game.totals[currentPlayerId]?.fieldSeconds ?? 0,
+        timeBandSeconds,
+      );
+    const sittingGap =
+      toSubstitutionTimeBand(
+        getCurrentBenchSeconds(game, currentPlayerId),
+        timeBandSeconds,
+      ) -
+      toSubstitutionTimeBand(
+        getCurrentBenchSeconds(game, nextPlayerId),
+        timeBandSeconds,
+      );
+    if (
+      playedGap >= timeBandSeconds * 2 ||
+      (playedGap <= timeBandSeconds && sittingGap >= timeBandSeconds * 2)
+    ) {
+      cohortCount = index + 1;
+      break;
+    }
+  }
   return Math.min(
-    maxCount,
-    nonGoalkeeperBench +
-      allowedOutfieldGoalkeepers +
-      (rotatesGoalkeeper ? 1 : 0),
+    goalkeeperConstrainedMax,
+    requiredIncomingIds.length +
+      Math.max(cohortCandidates.length ? 1 : 0, cohortCount),
   );
 };
 
