@@ -185,7 +185,7 @@ describe("Sideline app", () => {
         name: "Golden Dragons game in progress",
       }),
     ).toHaveTextContent(
-      "Choose a coach assigned to Golden Dragons to resume, or end it here.",
+      "Choose a coach assigned to Golden Dragons to resume the game, or end it here.",
     );
     fireEvent.click(
       screen.getByRole("button", { name: "End Golden Dragons game" }),

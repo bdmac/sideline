@@ -905,8 +905,8 @@ function CoachScreen({
           <span>
             <strong>{activeTeam.name} game in progress</strong>
             <small>
-              Choose a coach assigned to {activeTeam.name} to resume, or end it
-              here.
+              Choose a coach assigned to {activeTeam.name} to resume the game,
+              or end it here.
             </small>
           </span>
           <Button
