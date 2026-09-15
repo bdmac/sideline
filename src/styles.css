@@ -4411,6 +4411,25 @@ select:hover {
 }
 
 @media (max-width: 520px) {
+  .sub-count {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .sub-count > span {
+    white-space: nowrap;
+  }
+
+  .sub-count .stepper {
+    width: 100%;
+  }
+
+  .sub-count .stepper button {
+    flex: 1 1 0;
+    min-width: 44px;
+  }
+
   .guest-attendance-list {
     grid-template-columns: 1fr;
   }
