@@ -2772,12 +2772,19 @@ select:hover {
   color: var(--ink-soft);
 }
 
-.swap-transfer small,
-.review-direction small {
+.swap-transfer small {
   color: var(--ink);
   font-size: 0.86rem;
   font-weight: 950;
   line-height: 1;
+}
+
+.review-direction small {
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .review-checklist {
@@ -2793,7 +2800,7 @@ select:hover {
 .review-column-headings,
 .review-row {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) 42px minmax(0, 1fr);
+  grid-template-columns: 26px minmax(0, 1fr) 120px minmax(0, 1fr);
   gap: 0.45rem;
   align-items: center;
 }
@@ -2845,7 +2852,7 @@ select:hover {
 .ready-swap-headings,
 .ready-swap {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 88px minmax(0, 1fr);
+  grid-template-columns: 30px minmax(0, 1fr) 120px minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
 }
@@ -2937,11 +2944,11 @@ select:hover {
 }
 
 .ready-direction small {
-  max-width: 5.5rem;
   font-size: 0.74rem;
   font-weight: 900;
   line-height: 1.08;
   text-align: center;
+  white-space: nowrap;
 }
 
 .ready-entry {
@@ -4012,13 +4019,13 @@ select:hover {
 
   .review-column-headings,
   .review-row {
-    grid-template-columns: 22px minmax(0, 1fr) 40px minmax(0, 1fr);
+    grid-template-columns: 22px minmax(0, 1fr) 108px minmax(0, 1fr);
     gap: 0.3rem;
   }
 
   .ready-swap-headings,
   .ready-swap {
-    grid-template-columns: 24px minmax(0, 1fr) 68px minmax(0, 1fr);
+    grid-template-columns: 24px minmax(0, 1fr) 108px minmax(0, 1fr);
     gap: 0.45rem;
   }
 

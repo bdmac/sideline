@@ -1046,12 +1046,7 @@ describe("Sideline app", () => {
         planner.querySelectorAll(".review-direction small"),
         (item) => item.textContent,
       ),
-    ).toEqual(
-      Array.from(
-        planner.querySelectorAll(".swap-transfer small"),
-        (item) => item.textContent,
-      ),
-    );
+    ).toEqual(expect.arrayContaining(["Keeper", "Center Back", "Left Mid"]));
     const outgoingPlayers =
       within(planner).getAllByLabelText(/outgoing player/);
     const incomingPlayers =

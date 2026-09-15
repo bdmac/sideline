@@ -4676,7 +4676,7 @@ function SubstitutionPlanner({
                 />
                 <span className="review-direction">
                   <ArrowRightLeft size={17} aria-hidden="true" />
-                  <small>{position?.shortLabel}</small>
+                  <small>{position?.mediumLabel}</small>
                 </span>
                 <GoalMarkedPlayerName
                   label={playerName(team, pair.outPlayerId)}
