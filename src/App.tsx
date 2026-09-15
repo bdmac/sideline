@@ -4120,7 +4120,7 @@ type PlayerActionMenuOption = {
   label: string;
   displayLabel: string;
   goalCount: number;
-  preferenceIndex: number;
+  preferenceIndex?: number;
   positionLabel?: string;
   preferredRoles?: Player["preferredRoles"];
   times: Array<{
@@ -4146,6 +4146,7 @@ function PlayerActionMenu({
   align,
   menuTitle,
   positionFirst = false,
+  showPreferenceFit = true,
   activeMenuId,
   onActiveMenuChange,
   onChange,
@@ -4157,6 +4158,7 @@ function PlayerActionMenu({
   align: "start" | "end";
   menuTitle: string;
   positionFirst?: boolean;
+  showPreferenceFit?: boolean;
   activeMenuId: string | null;
   onActiveMenuChange: (menuId: string | null) => void;
   onChange: (value: string) => void;
@@ -4212,7 +4214,7 @@ function PlayerActionMenu({
                 <span
                   className={`player-action-menu-row ${
                     positionFirst ? "position-first" : ""
-                  }`}
+                  } ${showPreferenceFit ? "" : "preference-fit-hidden"}`}
                 >
                   {positionFirst && option.positionLabel ? (
                     <strong className="replacement-position-primary">
@@ -4224,20 +4226,34 @@ function PlayerActionMenu({
                         label={option.displayLabel}
                         goalCount={option.goalCount}
                       />
+                      {!showPreferenceFit && selected && (
+                        <Check
+                          className="replacement-selected-icon"
+                          size={15}
+                          aria-label="Selected"
+                        />
+                      )}
                     </span>
                   )}
-                  <span
-                    className={preferenceFitClassName(option.preferenceIndex)}
-                  >
-                    {selected && (
-                      <Check
-                        className="replacement-selected-icon"
-                        size={15}
-                        aria-hidden="true"
-                      />
+                  {showPreferenceFit &&
+                    option.preferenceIndex !== undefined && (
+                      <span
+                        className={preferenceFitClassName(
+                          option.preferenceIndex,
+                        )}
+                      >
+                        {selected && (
+                          <Check
+                            className="replacement-selected-icon"
+                            size={15}
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span>
+                          {preferenceFitLabel(option.preferenceIndex)}
+                        </span>
+                      </span>
                     )}
-                    <span>{preferenceFitLabel(option.preferenceIndex)}</span>
-                  </span>
                   {!positionFirst && option.positionLabel && (
                     <span className="replacement-player-position">
                       {option.positionLabel}
@@ -4570,12 +4586,6 @@ function SubstitutionPlanner({
                   label: playerName(team, playerId),
                   displayLabel: playerLabel(team, playerId),
                   goalCount: playerGoalCount(game, playerId),
-                  preferenceIndex:
-                    player &&
-                    position &&
-                    player.preferredRoles.indexOf(position.role) >= 0
-                      ? player.preferredRoles.indexOf(position.role)
-                      : Number.POSITIVE_INFINITY,
                   preferredRoles: player?.preferredRoles,
                   times: [
                     {
@@ -4614,6 +4624,7 @@ function SubstitutionPlanner({
                     options={incomingOptions}
                     align="start"
                     menuTitle="Who should go in?"
+                    showPreferenceFit={false}
                     activeMenuId={activePlayerMenuId}
                     onActiveMenuChange={setActivePlayerMenuId}
                     onChange={(playerId) =>

@@ -2653,6 +2653,25 @@ select:hover {
   overflow: hidden;
 }
 
+.player-action-menu-row.preference-fit-hidden > .replacement-player-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.player-action-menu-row.preference-fit-hidden
+  > .replacement-player-summary
+  .player-name-with-goals {
+  flex: 1;
+}
+
+.player-action-menu-row.preference-fit-hidden
+  > .replacement-player-summary
+  .replacement-selected-icon {
+  flex: none;
+  color: var(--turf-dark);
+}
+
 .replacement-position-primary {
   min-width: 0;
   color: var(--ink);

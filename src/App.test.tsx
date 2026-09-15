@@ -1090,8 +1090,16 @@ describe("Sideline app", () => {
       /Prefers.+Bench0:00PlayedNot played yet/,
     );
     expect(
-      repeatedIncoming?.querySelector(".replacement-fit"),
-    ).toHaveTextContent(/preference|Outside preferences/);
+      screen
+        .getAllByRole("menuitemradio")
+        .every((item) => !item.querySelector(".replacement-fit")),
+    ).toBe(true);
+    expect(
+      screen
+        .getAllByRole("menuitemradio")
+        .find((item) => item.getAttribute("aria-checked") === "true")
+        ?.querySelector(".replacement-selected-icon"),
+    ).toBeInTheDocument();
     expect(repeatedIncoming).toHaveTextContent(
       `Going in for ${secondOutgoingName}`,
     );
