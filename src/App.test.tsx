@@ -3541,6 +3541,12 @@ describe("Sideline app", () => {
     expect(
       within(compactHeader as HTMLElement).getByText("+0:04"),
     ).toBeInTheDocument();
+    expect(document.querySelector(".clock-secondary strong")).toHaveTextContent(
+      "+0:04",
+    );
+    expect(
+      document.querySelector(".clock-secondary strong"),
+    ).not.toHaveTextContent("added");
     expect(
       within(compactHeader as HTMLElement)
         .getByText("+0:04")

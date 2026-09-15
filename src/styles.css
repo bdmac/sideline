@@ -4133,10 +4133,6 @@ select:hover {
     justify-items: end;
   }
 
-  .clock-secondary.added-time {
-    min-width: 6rem;
-  }
-
   .clock-secondary.added-time > span:first-child strong {
     white-space: nowrap;
   }

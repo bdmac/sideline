@@ -2395,7 +2395,7 @@ function LiveGameScreen({
               </small>
               <strong>
                 {period.regulationReached
-                  ? `+${formatDuration(period.addedTimeSeconds)} added`
+                  ? `+${formatDuration(period.addedTimeSeconds)}`
                   : `${formatDuration(period.remainingSeconds)} left`}
               </strong>
             </span>
