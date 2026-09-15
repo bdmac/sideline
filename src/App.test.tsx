@@ -3193,6 +3193,20 @@ describe("Sideline app", () => {
       1,
     );
     expect(compactGoalTotal).toHaveTextContent("×3");
+
+    fireEvent.click(
+      within(scorerDialog).getByRole("button", { name: "Close" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", { name: "End this game?" }),
+      ).getByRole("button", { name: "End game" }),
+    );
+    const summary = screen.getByRole("main", { name: "Game summary" });
+    const hatTrickStamp = within(summary).getByText("Hat trick");
+    expect(hatTrickStamp).toHaveClass("hat-trick-summary-stamp");
+    expect(hatTrickStamp.closest("li")).toHaveClass("hat-trick-summary");
   });
 
   it("adds the exact count after the hatted marker above three goals", () => {

@@ -5872,14 +5872,21 @@ function GameSummary({
               (item) => item.id === summary.playerId,
             );
             const playerDisplayName = player?.name ?? "Unknown player";
+            const scoredHatTrick = summary.goals.length >= 3;
             return (
-              <li key={summary.playerId}>
+              <li
+                key={summary.playerId}
+                className={scoredHatTrick ? "hat-trick-summary" : undefined}
+              >
                 <div className="player-summary-heading">
                   <span className="player-summary-name">
                     <GoalMarkedPlayerName
                       label={playerDisplayName}
                       goalCount={summary.goals.length}
                     />
+                    {scoredHatTrick && (
+                      <span className="hat-trick-summary-stamp">Hat trick</span>
+                    )}
                   </span>
                   <span className="player-summary-total">
                     {formatDuration(summary.totalSeconds)} total
