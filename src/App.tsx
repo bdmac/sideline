@@ -2450,17 +2450,10 @@ function LiveGameScreen({
             periodBoundaryReached ? "added-time" : ""
           }`}
         >
-          <Clock3
-            className="compact-clock-glyph"
-            size={16}
-            aria-hidden="true"
-          />
-          <span>
-            <strong>{formatDuration(period.matchClockSeconds)}</strong>
-            {periodBoundaryReached && (
-              <small>+{formatDuration(period.addedTimeSeconds)}</small>
-            )}
-          </span>
+          <strong>{formatDuration(period.matchClockSeconds)}</strong>
+          {periodBoundaryReached && (
+            <small>+{formatDuration(period.addedTimeSeconds)}</small>
+          )}
         </span>
         <div className="compact-match-actions" aria-label="Match controls">
           <IconButton

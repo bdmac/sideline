@@ -2598,7 +2598,7 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     expect(
       compactHeader?.querySelector(".compact-match-clock svg"),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     expect(
       within(compactHeader as HTMLElement).queryByText("10:00 left"),
     ).not.toBeInTheDocument();
@@ -3555,6 +3555,9 @@ describe("Sideline app", () => {
     expect(
       compactHeader?.querySelector(".compact-match-score")?.nextElementSibling,
     ).toHaveClass("compact-match-period");
+    expect(
+      compactHeader?.querySelector(".compact-clock-glyph"),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(
       within(addedTimeBanner).getByRole("button", {

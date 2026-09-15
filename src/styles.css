@@ -4197,20 +4197,11 @@ select:hover {
   }
 
   .compact-match-clock {
-    display: flex;
-    align-items: center;
     justify-self: end;
-    gap: 0.3rem;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
-  .compact-clock-glyph {
-    flex: none;
-    color: var(--ink-soft);
-  }
-
-  .compact-match-clock.added-time .compact-clock-glyph,
   .compact-match-clock.added-time small {
     color: var(--warm-dark);
   }
