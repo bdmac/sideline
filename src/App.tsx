@@ -3688,7 +3688,7 @@ function Pitch({
             {content}
             {swapConfirmed && (
               <span className="pitch-swap-confirmation-mark" aria-hidden="true">
-                <Check size={18} />
+                <Check size={14} />
               </span>
             )}
           </button>
