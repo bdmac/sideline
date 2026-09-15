@@ -56,6 +56,7 @@ import {
   applySubstitutions,
   assignPlayerToPosition,
   assignPlayersByPreference,
+  assignStartingPlayersByPreference,
   cancelQueuedSubstitutions,
   compareSubstitutionDestinations,
   createGame,
@@ -1017,7 +1018,7 @@ function SetupScreen({
   );
   const formation = getFormation(formationId);
   const [assignments, setAssignments] = useState<Record<string, string>>(() =>
-    assignPlayersByPreference(
+    assignStartingPlayersByPreference(
       formation,
       activePlayers.map((player) => player.id),
       team.roster,
@@ -1031,7 +1032,7 @@ function SetupScreen({
     );
     setFormationId(nextFormationId);
     setAssignments(
-      assignPlayersByPreference(
+      assignStartingPlayersByPreference(
         nextFormation,
         present.map((player) => player.id),
         setupTeam.roster,
@@ -4569,11 +4570,18 @@ function SubstitutionPlanner({
             const position = formation.positions.find(
               (item) => item.id === pair.positionId,
             );
+            const handoffPosition = pair.keeperHandoff
+              ? formation.positions.find(
+                  (item) => item.id === pair.keeperHandoff?.fromPositionId,
+                )
+              : undefined;
             const outgoingOptions = outgoingChoices
               .map(([positionId, playerId]) => {
                 const usedInSwap = pairs.findIndex(
                   (otherPair, pairIndex) =>
-                    pairIndex !== index && otherPair.outPlayerId === playerId,
+                    pairIndex !== index &&
+                    (otherPair.outPlayerId === playerId ||
+                      otherPair.keeperHandoff?.playerId === playerId),
                 );
                 const candidatePosition = formation.positions.find(
                   (item) => item.id === positionId,
@@ -4694,27 +4702,39 @@ function SubstitutionPlanner({
                   />
                 </div>
                 <span className="swap-transfer">
-                  <small>{position?.mediumLabel}</small>
+                  <small>{(handoffPosition ?? position)?.mediumLabel}</small>
                   <ArrowRightLeft size={22} aria-hidden="true" />
                 </span>
                 <div className="swap-player-choice">
-                  <PlayerActionMenu
-                    id={`out-${index}`}
-                    label={`Swap ${index + 1} outgoing player`}
-                    value={pair.outPlayerId}
-                    options={outgoingOptions}
-                    align="end"
-                    menuTitle={`Where should ${playerName(
-                      team,
-                      pair.inPlayerId,
-                    )} play?`}
-                    positionFirst
-                    activeMenuId={activePlayerMenuId}
-                    onActiveMenuChange={setActivePlayerMenuId}
-                    onChange={(playerId) =>
-                      updateOutgoingPlayer(index, playerId)
-                    }
-                  />
+                  {pair.keeperHandoff ? (
+                    <div
+                      className="player-action-menu-trigger fixed-player"
+                      aria-label={`${playerName(
+                        team,
+                        pair.outPlayerId,
+                      )} leaves goal`}
+                    >
+                      <strong>{playerName(team, pair.outPlayerId)}</strong>
+                    </div>
+                  ) : (
+                    <PlayerActionMenu
+                      id={`out-${index}`}
+                      label={`Swap ${index + 1} outgoing player`}
+                      value={pair.outPlayerId}
+                      options={outgoingOptions}
+                      align="end"
+                      menuTitle={`Where should ${playerName(
+                        team,
+                        pair.inPlayerId,
+                      )} play?`}
+                      positionFirst
+                      activeMenuId={activePlayerMenuId}
+                      onActiveMenuChange={setActivePlayerMenuId}
+                      onChange={(playerId) =>
+                        updateOutgoingPlayer(index, playerId)
+                      }
+                    />
+                  )}
                 </div>
                 <IconButton
                   className="swap-remove-action"
@@ -4728,6 +4748,13 @@ function SubstitutionPlanner({
                   disabled={pairs.length <= 1}
                   onClick={() => removePair(index)}
                 />
+                {pair.keeperHandoff && (
+                  <p className="keeper-handoff-note">
+                    <span>MOVE</span>{" "}
+                    {playerName(team, pair.keeperHandoff.playerId)} from{" "}
+                    {handoffPosition?.mediumLabel ?? "outfield"} to GK
+                  </p>
+                )}
               </div>
             );
           })}
@@ -4776,6 +4803,11 @@ function ReadySwapList({
         const position = formation.positions.find(
           (item) => item.id === pair.positionId,
         );
+        const handoffPosition = pair.keeperHandoff
+          ? formation.positions.find(
+              (item) => item.id === pair.keeperHandoff?.fromPositionId,
+            )
+          : undefined;
         const pairKey = `${pair.outPlayerId}:${pair.inPlayerId}:${pair.positionId}`;
         const outgoingName = playerName(team, pair.outPlayerId);
         const incomingName = playerName(team, pair.inPlayerId);
@@ -4837,7 +4869,7 @@ function ReadySwapList({
                 />
               </span>
               <span className="ready-direction">
-                <small>{position?.mediumLabel}</small>
+                <small>{(handoffPosition ?? position)?.mediumLabel}</small>
                 <ArrowRightLeft size={24} aria-hidden="true" />
               </span>
               <span className="ready-player out">
@@ -4852,6 +4884,13 @@ function ReadySwapList({
                   direction="out"
                 />
               </span>
+              {pair.keeperHandoff && (
+                <span className="ready-keeper-handoff">
+                  <strong>MOVE</strong>{" "}
+                  {playerName(team, pair.keeperHandoff.playerId)} from{" "}
+                  {handoffPosition?.mediumLabel ?? "outfield"} to GK
+                </span>
+              )}
             </div>
             {onRemove && (
               <IconButton
@@ -5468,9 +5507,19 @@ function GameLog({
                       ? positionChange?.detail
                       : event.pairs.length
                         ? event.pairs
-                            .map(
-                              (pair) =>
-                                `${playerName(team, pair.outPlayerId)} → ${playerName(team, pair.inPlayerId)}`,
+                            .map((pair) =>
+                              pair.keeperHandoff
+                                ? `${playerName(team, pair.outPlayerId)} out · ${playerName(
+                                    team,
+                                    pair.keeperHandoff.playerId,
+                                  )} to GK · ${playerName(
+                                    team,
+                                    pair.inPlayerId,
+                                  )} in`
+                                : `${playerName(
+                                    team,
+                                    pair.outPlayerId,
+                                  )} → ${playerName(team, pair.inPlayerId)}`,
                             )
                             .join(" · ")
                         : event.note;

@@ -77,6 +77,10 @@ export type SubstitutionPair = {
   outPlayerId: string;
   inPlayerId: string;
   positionId: string;
+  keeperHandoff?: {
+    playerId: string;
+    fromPositionId: string;
+  };
 };
 
 export type GameEvent = {
@@ -127,7 +131,7 @@ export type ActiveGame = {
 };
 
 export type AppState = {
-  version: 16;
+  version: 17;
   teams: Record<TeamId, Team>;
   activeGame: ActiveGame | null;
 };

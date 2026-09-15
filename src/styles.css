@@ -2514,6 +2514,36 @@ select:hover {
   border-color: var(--control-border-hover);
 }
 
+.player-action-menu-trigger.fixed-player {
+  cursor: default;
+  justify-content: flex-end;
+  border-style: dashed;
+}
+
+.keeper-handoff-note,
+.ready-keeper-handoff {
+  grid-column: 2 / 5;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.keeper-handoff-note {
+  padding: 0 0.6rem;
+}
+
+.keeper-handoff-note span,
+.ready-keeper-handoff strong {
+  color: var(--warm-dark);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.ready-keeper-handoff {
+  padding-top: 0.45rem;
+}
+
 .player-action-menu-trigger > span {
   min-width: 0;
   overflow: hidden;

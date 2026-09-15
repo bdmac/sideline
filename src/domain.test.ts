@@ -6,6 +6,7 @@ import {
   applySubstitutions,
   assignPlayerToPosition,
   assignPlayersByPreference,
+  assignStartingPlayersByPreference,
   compareSubstitutionDestinations,
   createGame,
   endCurrentPeriod,
@@ -317,6 +318,28 @@ describe("preference-aware assignments", () => {
     expect(assignments.f).toBe(
       team.roster.find((player) => player.name === "Malik")?.id,
     );
+  });
+
+  it("keeps a successor goalkeeper rested when every keeper would start", () => {
+    const team = structuredClone(INITIAL_TEAMS.u8);
+    const formation = FORMATIONS.find((item) => item.id === "5-1-2-1")!;
+    team.roster.forEach((player) => {
+      player.preferredRoles = player.preferredRoles.filter(
+        (role) => role !== "goalkeeper",
+      );
+    });
+    team.roster[0].preferredRoles = ["goalkeeper", "defender"];
+    team.roster[1].preferredRoles = ["goalkeeper", "defender"];
+
+    const assignments = assignStartingPlayersByPreference(
+      formation,
+      team.roster.slice(0, 7).map((player) => player.id),
+      team.roster,
+    );
+    const assignedIds = Object.values(assignments);
+
+    expect(assignedIds).toContain(team.roster[0].id);
+    expect(assignedIds).not.toContain(team.roster[1].id);
   });
 });
 
@@ -1697,9 +1720,9 @@ describe("substitutions", () => {
     });
   });
 
-  it("reserves Rayek at six minutes and rotates him when Jackson is due", () => {
+  it("stages Rayek outfield when there is safe runway before keeper duty", () => {
     const team = structuredClone(INITIAL_TEAMS.u12);
-    const game = createGame(
+    let game = createGame(
       team,
       "9-3-1-3-1",
       team.roster.map((player) => player.id),
@@ -1715,25 +1738,39 @@ describe("substitutions", () => {
       game.totals[playerId].benchSeconds = 6 * 60;
     });
     game.clock.elapsedSeconds = 6 * 60;
+    const firstRotationPositions = Object.keys(game.assignments)
+      .filter((positionId) => positionId !== "gk")
+      .slice(0, 2);
+    game = applySubstitutions(
+      game,
+      firstRotationPositions.map((positionId, index) => ({
+        positionId,
+        outPlayerId: game.assignments[positionId],
+        inPlayerId: game.benchIds[index],
+      })),
+      team.sideSize,
+      2_000,
+    );
 
-    expect(getRecommendedSubstitutionCount(game, team)).toBe(5);
-    expect(
-      suggestSubstitutions(game, 5, team).map((pair) => pair.inPlayerId),
-    ).not.toContain(rayek.id);
+    expect(getRecommendedSubstitutionCount(game, team)).toBe(4);
+    const stagedPlan = suggestSubstitutions(game, 4, team);
+    const rayekPair = stagedPlan.find((pair) => pair.inPlayerId === rayek.id);
+    expect(rayekPair).toBeDefined();
+    expect(rayekPair?.positionId).not.toBe("gk");
 
     game.clock.elapsedSeconds =
       getSubstitutionReminderStatus(game).intervalSeconds;
     game.totals[jackson.id].fieldSeconds = game.clock.elapsedSeconds;
 
-    expect(getRecommendedSubstitutionCount(game, team)).toBe(6);
-    expect(suggestSubstitutions(game, 6, team)[0]).toEqual({
+    const dueCount = getRecommendedSubstitutionCount(game, team);
+    expect(suggestSubstitutions(game, dueCount, team)[0]).toEqual({
       positionId: "gk",
       outPlayerId: jackson.id,
       inPlayerId: rayek.id,
     });
   });
 
-  it("benches an on-field goalkeeper option before an overdue keeper rotation", () => {
+  it("performs an atomic handoff to a rested on-field goalkeeper", () => {
     const team = structuredClone(INITIAL_TEAMS.u8);
     team.roster.forEach((player) => {
       player.preferredRoles = player.preferredRoles.filter(
@@ -1751,27 +1788,49 @@ describe("substitutions", () => {
     const reservePositionId = Object.keys(game.assignments).find(
       (positionId) => positionId !== "gk",
     )!;
-    const reserveGoalkeeperId = game.assignments[reservePositionId];
+    const originalOutfieldPlayerId = game.assignments[reservePositionId];
+    const reserveGoalkeeperId = game.benchIds[0];
     team.roster.find((player) => player.id === goalkeeperId)!.preferredRoles = [
       "goalkeeper",
     ];
     team.roster.find(
       (player) => player.id === reserveGoalkeeperId,
     )!.preferredRoles = ["goalkeeper", "defender"];
+    game.clock.elapsedSeconds = 2 * 60;
+    game = applySubstitutions(
+      game,
+      [
+        {
+          positionId: reservePositionId,
+          outPlayerId: originalOutfieldPlayerId,
+          inPlayerId: reserveGoalkeeperId,
+        },
+      ],
+      team.sideSize,
+      2_000,
+    );
     game.clock.elapsedSeconds =
       getSubstitutionReminderStatus(game).intervalSeconds;
 
-    const reservePreparation = suggestSubstitutions(game, 1, team)[0];
-    expect(reservePreparation.outPlayerId).toBe(reserveGoalkeeperId);
-    expect(reservePreparation.positionId).toBe(reservePositionId);
-
-    game = applySubstitutions(game, [reservePreparation], team.sideSize, 2_000);
-
-    expect(suggestSubstitutions(game, 1, team)[0]).toEqual({
+    const handoff = suggestSubstitutions(game, 1, team)[0];
+    expect(handoff).toMatchObject({
       positionId: "gk",
       outPlayerId: goalkeeperId,
-      inPlayerId: reserveGoalkeeperId,
+      keeperHandoff: {
+        playerId: reserveGoalkeeperId,
+        fromPositionId: reservePositionId,
+      },
     });
+    expect(game.benchIds).toContain(handoff.inPlayerId);
+    const handedOff = applySubstitutions(game, [handoff], team.sideSize, 3_000);
+    expect(handedOff.assignments.gk).toBe(reserveGoalkeeperId);
+    expect(handedOff.assignments[reservePositionId]).toBe(handoff.inPlayerId);
+    expect(handedOff.benchIds).toContain(goalkeeperId);
+    expect(handedOff.benchIds).not.toContain(reserveGoalkeeperId);
+
+    const undone = undoLastEvent(handedOff, team.sideSize);
+    expect(undone.assignments).toEqual(game.assignments);
+    expect(undone.benchIds).toEqual(game.benchIds);
   });
 
   it("allows a third goalkeeper to play outfield while preserving a reserve", () => {

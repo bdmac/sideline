@@ -134,7 +134,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     parsed.version === 10
   ) {
     return {
-      version: 16,
+      version: 17,
       teams: structuredClone(INITIAL_STATE.teams),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -144,7 +144,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 11) {
     return {
-      version: 16,
+      version: 17,
       teams: applyU8DefaultFormation(
         applyCurrentRosterPreferences(parsed.teams as AppState["teams"]),
       ),
@@ -156,7 +156,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 12) {
     return {
-      version: 16,
+      version: 17,
       teams: applyU8DefaultFormation(
         applyWilliamPreferences(parsed.teams as AppState["teams"]),
       ),
@@ -168,7 +168,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 13) {
     return {
-      version: 16,
+      version: 17,
       teams: applyU8DefaultFormation(
         applyWilliamPreferences(parsed.teams as AppState["teams"]),
       ),
@@ -181,7 +181,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   if (parsed.version === 14) {
     return {
       ...(parsed as AppState),
-      version: 16,
+      version: 17,
       teams: applyU8DefaultFormation(
         applyWilliamPreferences(parsed.teams as AppState["teams"]),
       ),
@@ -194,7 +194,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   if (parsed.version === 15) {
     return {
       ...(parsed as AppState),
-      version: 16,
+      version: 17,
       teams: applyU8DefaultFormation(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -203,6 +203,16 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   }
 
   if (parsed.version === 16) {
+    return {
+      ...(parsed as AppState),
+      version: 17,
+      activeGame: parsed.activeGame
+        ? normalizeActiveGame(parsed.activeGame)
+        : null,
+    };
+  }
+
+  if (parsed.version === 17) {
     return {
       ...(parsed as AppState),
       activeGame: parsed.activeGame

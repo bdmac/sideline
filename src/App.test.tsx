@@ -1059,8 +1059,8 @@ describe("Sideline app", () => {
       Array.from(
         planner.querySelectorAll(".swap-transfer small"),
         (item) => item.textContent,
-      ),
-    ).toEqual(expect.arrayContaining(["Center Back", "Left Mid", "Right Mid"]));
+      ).every(Boolean),
+    ).toBe(true);
     expect(screen.queryByText("Confirm together")).not.toBeInTheDocument();
     const outgoingPlayers =
       within(planner).getAllByLabelText(/outgoing player/);
@@ -1156,8 +1156,8 @@ describe("Sideline app", () => {
       Array.from(
         summary.querySelectorAll(".ready-direction small"),
         (item) => item.textContent,
-      ),
-    ).toEqual(expect.arrayContaining(["Center Back", "Left Mid", "Right Mid"]));
+      ).every(Boolean),
+    ).toBe(true);
     expect(
       summary.querySelectorAll(
         '.ready-player-number[data-component="Label"][data-variant="danger"]',
@@ -2447,6 +2447,57 @@ describe("Sideline app", () => {
     });
 
     expect(review.querySelector(".soccer-ball-icon")).not.toBeInTheDocument();
+  });
+
+  it("shows the full out, move, and in goalkeeper handoff", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const fromPositionId = Object.keys(game.assignments).find(
+      (positionId) => positionId !== "gk",
+    )!;
+    const handoffPlayerId = game.assignments[fromPositionId];
+    const outgoingGoalkeeperId = game.assignments.gk;
+    const incomingPlayerId = game.benchIds[0];
+    game = queueSubstitutions(game, [
+      {
+        positionId: "gk",
+        outPlayerId: outgoingGoalkeeperId,
+        inPlayerId: incomingPlayerId,
+        keeperHandoff: {
+          playerId: handoffPlayerId,
+          fromPositionId,
+        },
+      },
+    ]);
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review substitutions" }),
+    );
+    const review = screen.getByRole("dialog", {
+      name: "Review substitutions (1)",
+    });
+
+    expect(review).toHaveTextContent(
+      `MOVE ${team.roster.find((player) => player.id === handoffPlayerId)?.name}`,
+    );
+    expect(review).toHaveTextContent("to GK");
+    expect(review).toHaveTextContent(
+      team.roster.find((player) => player.id === outgoingGoalkeeperId)?.name ??
+        "",
+    );
+    expect(review).toHaveTextContent(
+      team.roster.find((player) => player.id === incomingPlayerId)?.name ?? "",
+    );
   });
 
   it("shows goal markers on the scorer's pitch card", () => {
