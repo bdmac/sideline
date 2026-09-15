@@ -2540,6 +2540,20 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     fireEvent.click(within(goalSummary).getByRole("button", { name: "Close" }));
 
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open actions for Simon" }),
+    );
+    const scorerActions = screen.getByRole("dialog", { name: "#10 Simon" });
+    expect(
+      within(scorerActions).getByText("Goals", { selector: "dt" }),
+    ).toBeInTheDocument();
+    expect(
+      within(scorerActions).getByText("1", { selector: "dd" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(scorerActions).getByRole("button", { name: "Close" }),
+    );
+
     fireEvent.click(screen.getByRole("button", { name: "Record a goal" }));
     fireEvent.click(screen.getByRole("button", { name: "Opponent scored" }));
     expect(

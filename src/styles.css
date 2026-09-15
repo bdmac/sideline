@@ -3550,6 +3550,10 @@ select:hover {
   min-width: 0;
 }
 
+.player-context-item.wide {
+  grid-column: 1 / -1;
+}
+
 .player-context-panel dt {
   margin-bottom: 0.2rem;
   color: var(--turf-dark);

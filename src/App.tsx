@@ -4008,7 +4008,12 @@ function GoalSummarySheet({
 function PlayerContextPanel({
   items,
 }: {
-  items: Array<{ label: string; value: ReactNode; emphasis?: "warm" }>;
+  items: Array<{
+    label: string;
+    value: ReactNode;
+    emphasis?: "warm";
+    wide?: boolean;
+  }>;
 }) {
   return (
     <Card
@@ -4018,7 +4023,10 @@ function PlayerContextPanel({
     >
       <dl className="player-context-grid">
         {items.map((item) => (
-          <div className="player-context-item" key={item.label}>
+          <div
+            className={`player-context-item ${item.wide ? "wide" : ""}`}
+            key={item.label}
+          >
             <dt>{item.label}</dt>
             <dd className={item.emphasis === "warm" ? "warm" : undefined}>
               {item.value}
@@ -4146,6 +4154,10 @@ function BenchSubstitutionPicker({
             label: "Preferred roles",
             value: player.preferredRoles.map(preferredRoleLabel).join(" · "),
           },
+          {
+            label: "Goals",
+            value: playerGoalCount(game, playerId),
+          },
           ...(selectedOutPlayerId
             ? [
                 {
@@ -4154,6 +4166,7 @@ function BenchSubstitutionPicker({
                     selectedPosition?.shortLabel ?? selectedPositionEntry?.[0]
                   } for ${playerName(team, selectedOutPlayerId)}`,
                   emphasis: "warm" as const,
+                  wide: true,
                 },
               ]
             : []),
@@ -4354,12 +4367,17 @@ function FieldSubstitutionPicker({
             label: "Playing now",
             value: formatPlayerDuration(getCurrentFieldSeconds(game, playerId)),
           },
+          {
+            label: "Goals",
+            value: playerGoalCount(game, playerId),
+          },
           ...(selectedInPlayerId
             ? [
                 {
                   label: "Next rotation",
                   value: `Coming out for ${playerName(team, selectedInPlayerId)}`,
                   emphasis: "warm" as const,
+                  wide: true,
                 },
               ]
             : []),
@@ -4497,12 +4515,17 @@ function FieldPlayerActionsSheet({
             label: "Playing now",
             value: formatPlayerDuration(getCurrentFieldSeconds(game, playerId)),
           },
+          {
+            label: "Goals",
+            value: playerGoalCount(game, playerId),
+          },
           ...(incomingName
             ? [
                 {
                   label: "Next rotation",
                   value: `Coming out for ${incomingName}`,
                   emphasis: "warm" as const,
+                  wide: true,
                 },
               ]
             : []),
@@ -6298,6 +6321,10 @@ function PositionEditor({
             label: "Playing now",
             value: formatPlayerDuration(getCurrentFieldSeconds(game, playerId)),
           },
+          {
+            label: "Goals",
+            value: playerGoalCount(game, playerId),
+          },
           ...(currentPair
             ? [
                 {
@@ -6307,6 +6334,7 @@ function PositionEditor({
                     currentPair.inPlayerId,
                   )}`,
                   emphasis: "warm" as const,
+                  wide: true,
                 },
               ]
             : []),
