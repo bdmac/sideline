@@ -1502,6 +1502,33 @@ select:hover {
   background: var(--warm-pale);
 }
 
+.queued-substitution-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "copy timer"
+    "copy action";
+}
+
+.queued-substitution-copy {
+  grid-area: copy;
+}
+
+.queued-substitution-timer {
+  grid-area: timer;
+  text-align: right;
+}
+
+.queued-substitution-timer strong {
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.queued-substitution-review {
+  grid-area: action;
+  justify-self: end;
+}
+
 .queued-substitution-banner > span,
 .queued-substitution-banner strong,
 .queued-substitution-banner small,
@@ -1516,11 +1543,6 @@ select:hover {
   margin-top: 0.15rem;
   color: var(--ink-soft);
   font-size: 0.75rem;
-}
-
-.queued-substitution-banner > div {
-  display: flex;
-  gap: 0.5rem;
 }
 
 .queued-substitution-banner button,
@@ -3129,6 +3151,40 @@ select:hover {
   gap: 0.35rem 1rem;
 }
 
+.position-swap-list button.position-destination-choice {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 1rem;
+  align-items: center;
+}
+
+.position-destination-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-self: start;
+  min-width: 0;
+}
+
+.position-destination-heading .replacement-selected-icon {
+  flex: none;
+}
+
+.position-destination-player {
+  grid-column: 1;
+}
+
+.position-destination-player .player-name-with-goals > :first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.position-swap-list .replacement-player-times-wide {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
 .bench-position-choice .replacement-player-times {
   grid-column: 1 / -1;
   justify-content: flex-start;
@@ -3138,6 +3194,10 @@ select:hover {
 .bench-replacement-list button strong,
 .bench-replacement-list button small {
   display: block;
+}
+
+.bench-replacement-list button > span.position-destination-heading {
+  display: inline-flex;
 }
 
 .bench-replacement-list button small {
@@ -3883,6 +3943,9 @@ select:hover {
   .queued-substitution-banner,
   .substitution-reminder-banner {
     align-items: stretch;
+  }
+
+  .substitution-reminder-banner {
     flex-direction: column;
   }
 
@@ -3917,9 +3980,14 @@ select:hover {
     display: inline;
   }
 
-  .queued-substitution-banner > div {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+  .queued-substitution-banner {
+    grid-template-areas:
+      "copy timer"
+      "action action";
+  }
+
+  .queued-substitution-review {
+    width: 100%;
   }
 }
 

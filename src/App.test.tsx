@@ -929,6 +929,15 @@ describe("Sideline app", () => {
     expect(
       screen.getByRole("button", { name: "Simon (Center Back)" }),
     ).toBeInTheDocument();
+    const centerBackChoice = screen.getByRole("button", {
+      name: "Simon (Center Back)",
+    });
+    expect(
+      centerBackChoice.querySelector(".replacement-position-primary"),
+    ).toHaveTextContent("Center Back");
+    expect(
+      centerBackChoice.querySelector(".position-destination-player"),
+    ).toHaveTextContent("Simon");
   });
 
   it("opens position editing with the tapped pitch player selected", () => {
@@ -1615,9 +1624,21 @@ describe("Sideline app", () => {
       ).getByRole("button", { name: "Close" }),
     );
 
-    expect(screen.getByText("3 substitutions ready")).toBeInTheDocument();
+    const readyBanner = screen.getByLabelText("Ready substitutions");
+    expect(
+      within(readyBanner).getByText("3 substitutions ready"),
+    ).toBeVisible();
+    expect(within(readyBanner).getByText("Due in 5:00")).toBeVisible();
+    expect(
+      within(readyBanner).getByLabelText("Next rotation due in 5:00"),
+    ).toBeVisible();
+    expect(
+      within(readyBanner).queryByRole("button", { name: "Send 'em in" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: "Review substitutions" }),
+      within(readyBanner).getByRole("button", {
+        name: "Review plan",
+      }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Delete plan" }));
 

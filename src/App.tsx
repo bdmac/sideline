@@ -2253,7 +2253,7 @@ function LiveGameScreen({
           }`}
           aria-label="Ready substitutions"
         >
-          <span>
+          <span className="queued-substitution-copy">
             <strong>
               {queuedPairs.length} substitution
               {queuedPairs.length === 1 ? "" : "s"} ready
@@ -2264,27 +2264,41 @@ function LiveGameScreen({
                 : "Lineup and timers have not changed"}
             </small>
           </span>
-          <div>
-            <Button
-              className="secondary-action"
-              variant="default"
-              size="large"
-              leadingVisual={ArrowRightLeft}
-              onClick={() => setQueuedPlanOpen(true)}
-            >
-              Review
-            </Button>
-            <Button
-              className="primary-action"
-              variant="primary"
-              size="large"
-              leadingVisual={Check}
-              disabled={queuedPlanErrors.length > 0}
-              onClick={executeQueuedSubstitutions}
-            >
-              Send 'em in
-            </Button>
-          </div>
+          <span
+            className="queued-substitution-timer"
+            aria-label={`Next rotation ${
+              substitutionReminder.due
+                ? "due now"
+                : `due in ${formatDuration(
+                    Math.max(
+                      0,
+                      substitutionReminder.intervalSeconds -
+                        substitutionReminder.secondsSinceLastSubstitution,
+                    ),
+                  )}`
+            }`}
+          >
+            <strong>
+              {substitutionReminder.due
+                ? "Due now"
+                : `Due in ${formatDuration(
+                    Math.max(
+                      0,
+                      substitutionReminder.intervalSeconds -
+                        substitutionReminder.secondsSinceLastSubstitution,
+                    ),
+                  )}`}
+            </strong>
+          </span>
+          <Button
+            className="secondary-action queued-substitution-review"
+            variant="default"
+            size="large"
+            leadingVisual={ArrowRightLeft}
+            onClick={() => setQueuedPlanOpen(true)}
+          >
+            Review plan
+          </Button>
         </section>
       )}
 
@@ -5727,24 +5741,19 @@ function PositionEditor({
           const selected = positionId === position.id;
           return (
             <button
-              className={selected ? "selected" : ""}
+              className={`position-destination-choice ${
+                selected ? "selected" : ""
+              }`}
               type="button"
               key={position.id}
               aria-label={`${label} (${position.label})`}
               aria-pressed={selected}
               onClick={() => setPositionId(position.id)}
             >
-              <span className="replacement-player-summary">
-                {occupant ? (
-                  <GoalMarkedPlayerName
-                    label={playerLabel(team, occupant)}
-                    goalCount={playerGoalCount(game, occupant)}
-                  />
-                ) : (
-                  <strong>Open</strong>
-                )}
-              </span>
-              <span className="replacement-fit">
+              <span className="position-destination-heading">
+                <strong className="replacement-position-primary">
+                  {position.label}
+                </strong>
                 {selected && (
                   <Check
                     className="replacement-selected-icon"
@@ -5752,9 +5761,18 @@ function PositionEditor({
                     aria-hidden="true"
                   />
                 )}
-                <span>{position.label}</span>
               </span>
-              {occupant ? (
+              <span className="replacement-player-secondary position-destination-player">
+                {occupant ? (
+                  <GoalMarkedPlayerName
+                    label={playerLabel(team, occupant)}
+                    goalCount={playerGoalCount(game, occupant)}
+                  />
+                ) : (
+                  "Unoccupied position"
+                )}
+              </span>
+              {occupant && (
                 <span className="replacement-player-times replacement-player-times-wide">
                   <span>
                     <span>Playing</span>
@@ -5773,10 +5791,6 @@ function PositionEditor({
                       )}
                     </strong>
                   </span>
-                </span>
-              ) : (
-                <span className="replacement-player-position">
-                  Unoccupied position
                 </span>
               )}
             </button>
