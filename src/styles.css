@@ -557,6 +557,18 @@ h3 {
   background: var(--wash);
 }
 
+.coach-row[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.coach-row[aria-disabled="true"]:hover {
+  background: transparent;
+}
+
+.coach-row.blocked > svg {
+  color: var(--warm-dark);
+}
+
 .coach-initials {
   width: 48px;
   height: 48px;
@@ -605,6 +617,14 @@ h3 {
 .coach-team-active {
   color: var(--turf-dark);
   font-weight: 900;
+}
+
+.coach-blocked-note {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--warm-dark);
+  font-size: 0.75rem;
+  font-weight: 850;
 }
 
 .team-row {

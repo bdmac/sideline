@@ -135,14 +135,27 @@ describe("Sideline app", () => {
       "Golden Dragons · Head coach · Live game",
     );
     expect(assignments[1]).not.toHaveTextContent("Live game");
+    const chris = screen.getByRole("button", {
+      name: /Chris unavailable.*Golden Dragons game in progress/,
+    });
+    expect(chris).toHaveAttribute("aria-disabled", "true");
+    expect(chris).toHaveTextContent("Golden Dragons game active");
+    expect(chris).not.toHaveTextContent("Live game");
     expect(
-      screen.getByRole("button", { name: /^Continue as Chris\./ }),
-    ).not.toHaveTextContent("Live game");
+      screen.getByRole("button", {
+        name: /Scott unavailable.*Golden Dragons game in progress/,
+      }),
+    ).toHaveAttribute("aria-disabled", "true");
     expect(
       screen.getByRole("button", {
         name: /Continue as Lindsey.*Golden Dragons, Assistant coach, live game in progress/,
       }),
     ).toHaveTextContent("Golden Dragons · Assistant coach · Live game");
+    fireEvent.click(chris);
+    expect(
+      screen.getByRole("heading", { name: "Who’s coaching?" }),
+    ).toBeInTheDocument();
+    expect(localStorage.getItem(COACH_ID_STORAGE_KEY)).toBeNull();
   });
 
   it("takes single-team coaches directly to their assigned team", () => {
@@ -291,10 +304,11 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Another team has a game in progress on this device. Sign in as one of its coaches to resume it.",
+        "Golden Dragons has a game in progress on this device. Sign in as one of its coaches to resume it.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Fireballers/ })).toBeDisabled();
+    expect(screen.getByText("Golden Dragons active")).toBeInTheDocument();
     expect(screen.queryByText(/Game in progress ·/)).not.toBeInTheDocument();
   });
 

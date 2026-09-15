@@ -888,6 +888,12 @@ function CoachScreen({
 
       <div className="coach-ledger">
         {COACHES.map((coach) => {
+          const activeTeam = state.activeGame
+            ? state.teams[state.activeGame.teamId]
+            : null;
+          const blockedByActiveGame = Boolean(
+            activeTeam && !coachHasTeam(coach, activeTeam.id),
+          );
           const assignmentLabel = coach.assignments
             .map(
               (assignment) =>
@@ -900,11 +906,18 @@ function CoachScreen({
             .join(". ");
           return (
             <button
-              className="coach-row"
+              className={`coach-row ${blockedByActiveGame ? "blocked" : ""}`}
               type="button"
               key={coach.id}
-              onClick={() => onChooseCoach(coach.id)}
-              aria-label={`Continue as ${coach.name}. ${assignmentLabel}`}
+              aria-disabled={blockedByActiveGame}
+              onClick={() => {
+                if (!blockedByActiveGame) onChooseCoach(coach.id);
+              }}
+              aria-label={
+                blockedByActiveGame && activeTeam
+                  ? `${coach.name} unavailable. ${activeTeam.name} game in progress. ${assignmentLabel}`
+                  : `Continue as ${coach.name}. ${assignmentLabel}`
+              }
             >
               <span className="coach-initials" aria-hidden="true">
                 {coach.name.slice(0, 1)}
@@ -928,8 +941,17 @@ function CoachScreen({
                     </span>
                   ))}
                 </span>
+                {blockedByActiveGame && activeTeam && (
+                  <span className="coach-blocked-note">
+                    {activeTeam.name} game active
+                  </span>
+                )}
               </span>
-              <ChevronRight size={22} aria-hidden="true" />
+              {blockedByActiveGame ? (
+                <CircleAlert size={20} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={22} aria-hidden="true" />
+              )}
             </button>
           );
         })}
@@ -993,7 +1015,7 @@ function HomeScreen({
           <h1>{teams.length === 1 ? "Your team" : "Which team is playing?"}</h1>
           <p>
             {hasBlockedActiveGame
-              ? "Another team has a game in progress on this device. Sign in as one of its coaches to resume it."
+              ? `${activeTeam?.name ?? "Another team"} has a game in progress on this device. Sign in as one of its coaches to resume it.`
               : state.activeGame
                 ? "Resume the game in progress. Each team’s game state stays separate."
                 : "Choose a team to start a game. Each team’s game state stays separate."}
@@ -1044,7 +1066,7 @@ function HomeScreen({
                 </small>
               </span>
               {hasOtherActiveGame && (
-                <span className="locked-note">Other team active</span>
+                <span className="locked-note">{activeTeam?.name} active</span>
               )}
               <ChevronRight size={22} aria-hidden="true" />
             </button>
