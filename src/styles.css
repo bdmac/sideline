@@ -2017,7 +2017,7 @@ select:hover {
 
 .pitch-swap-confirmation-mark {
   position: absolute;
-  top: 50%;
+  top: 32%;
   left: 50%;
   z-index: 6;
   isolation: isolate;
