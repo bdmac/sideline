@@ -1049,9 +1049,12 @@ describe("Sideline app", () => {
     const firstOutgoingName = outgoingPlayers[0].textContent?.trim() ?? "";
     const secondOutgoingName = outgoingPlayers[1].textContent?.trim() ?? "";
     const firstIncomingName = incomingPlayers[0].textContent?.trim() ?? "";
+    const secondIncomingName = incomingPlayers[1].textContent?.trim() ?? "";
     fireEvent.click(outgoingPlayers[1]);
-    expect(screen.getByText("Who's coming OUT?")).toBeInTheDocument();
-    expect(screen.getByText(/^Choose the position for /)).toBeInTheDocument();
+    expect(
+      screen.getByText(`Where should ${secondIncomingName} play?`),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Who's coming OUT?")).not.toBeInTheDocument();
     const repeatedOutgoing = screen
       .getAllByRole("menuitemradio")
       .find((item) => item.textContent?.includes(firstOutgoingName));
@@ -1074,8 +1077,9 @@ describe("Sideline app", () => {
     expect(outgoingPlayers[0]).toHaveTextContent(secondOutgoingName);
 
     fireEvent.click(incomingPlayers[1]);
-    expect(screen.getByText("Who's going IN?")).toBeInTheDocument();
-    expect(screen.getByText(/^At .+ for .+$/)).toBeInTheDocument();
+    expect(screen.getByText("Who should go in?")).toBeInTheDocument();
+    expect(screen.queryByText("Who's going IN?")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^At .+ for .+$/)).not.toBeInTheDocument();
     const repeatedIncoming = screen
       .getAllByRole("menuitemradio")
       .find((item) => item.textContent?.includes(firstIncomingName));

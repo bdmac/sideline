@@ -4147,7 +4147,6 @@ function PlayerActionMenu({
   options,
   align,
   menuTitle,
-  menuDescription,
   positionFirst = false,
   activeMenuId,
   onActiveMenuChange,
@@ -4159,7 +4158,6 @@ function PlayerActionMenu({
   options: PlayerActionMenuOption[];
   align: "start" | "end";
   menuTitle: string;
-  menuDescription?: string;
   positionFirst?: boolean;
   activeMenuId: string | null;
   onActiveMenuChange: (menuId: string | null) => void;
@@ -4196,7 +4194,6 @@ function PlayerActionMenu({
       >
         <div className="player-action-menu-header">
           <strong>{menuTitle}</strong>
-          {menuDescription && <small>{menuDescription}</small>}
         </div>
         <ActionList
           variant="full"
@@ -4618,10 +4615,7 @@ function SubstitutionPlanner({
                     value={pair.inPlayerId}
                     options={incomingOptions}
                     align="start"
-                    menuTitle="Who's going IN?"
-                    menuDescription={`At ${
-                      position?.label ?? "open position"
-                    } for ${playerName(team, pair.outPlayerId)}`}
+                    menuTitle="Who should go in?"
                     activeMenuId={activePlayerMenuId}
                     onActiveMenuChange={setActivePlayerMenuId}
                     onChange={(playerId) =>
@@ -4640,11 +4634,10 @@ function SubstitutionPlanner({
                     value={pair.outPlayerId}
                     options={outgoingOptions}
                     align="end"
-                    menuTitle="Who's coming OUT?"
-                    menuDescription={`Choose the position for ${playerName(
+                    menuTitle={`Where should ${playerName(
                       team,
                       pair.inPlayerId,
-                    )}`}
+                    )} play?`}
                     positionFirst
                     activeMenuId={activePlayerMenuId}
                     onActiveMenuChange={setActivePlayerMenuId}

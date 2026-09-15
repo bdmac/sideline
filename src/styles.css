@@ -2558,21 +2558,13 @@ select:hover {
   background: var(--paper);
 }
 
-.player-action-menu-header strong,
-.player-action-menu-header small {
+.player-action-menu-header strong {
   display: block;
 }
 
 .player-action-menu-header strong {
   font-size: 0.92rem;
   font-weight: 950;
-}
-
-.player-action-menu-header small {
-  margin-top: 0.2rem;
-  color: var(--ink-soft);
-  font-size: 0.75rem;
-  font-weight: 750;
 }
 
 #__primerPortalRoot__ {
