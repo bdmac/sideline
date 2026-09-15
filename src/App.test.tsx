@@ -1028,7 +1028,7 @@ describe("Sideline app", () => {
       name: "Plan substitutions",
     });
     expect(planner.querySelector(".swap-column-headings")).toHaveTextContent(
-      "OUTIN",
+      "INOUT",
     );
     expect(
       planner.querySelector(".swap-player-status"),
@@ -1042,6 +1042,7 @@ describe("Sideline app", () => {
     const firstOutgoingName = outgoingPlayers[0].textContent?.trim() ?? "";
     fireEvent.click(outgoingPlayers[1]);
     expect(screen.getByText("Who's coming OUT?")).toBeInTheDocument();
+    expect(screen.getByText(/^Choose the position for /)).toBeInTheDocument();
     const repeatedOutgoing = screen
       .getAllByRole("menuitemradio")
       .find((item) => item.textContent?.includes(firstOutgoingName));
@@ -1056,7 +1057,7 @@ describe("Sideline app", () => {
     const firstIncomingName = incomingPlayers[0].textContent?.trim() ?? "";
     fireEvent.click(incomingPlayers[1]);
     expect(screen.getByText("Who's going IN?")).toBeInTheDocument();
-    expect(screen.getByText(/^For .+ at .+$/)).toBeInTheDocument();
+    expect(screen.getByText(/^At .+ for .+$/)).toBeInTheDocument();
     const repeatedIncoming = screen
       .getAllByRole("menuitemradio")
       .find((item) => item.textContent?.includes(firstIncomingName));
@@ -1601,9 +1602,20 @@ describe("Sideline app", () => {
     );
     expect(
       within(firstPicker).getByRole("button", {
-        name: /#10 Simon.*Center Back/,
+        name: /Center Back.*#10 Simon/,
       }),
-    ).toHaveTextContent("Center BackStint0:00TotalNot played yet");
+    ).toHaveTextContent(
+      "Center Back1st preference#10 SimonStint0:00TotalNot played yet",
+    );
+    const centerBackChoice = within(firstPicker).getByRole("button", {
+      name: /Center Back.*#10 Simon/,
+    });
+    expect(
+      centerBackChoice.querySelector(".replacement-position-primary"),
+    ).toHaveTextContent("Center Back");
+    expect(
+      centerBackChoice.querySelector(".replacement-player-secondary"),
+    ).toHaveTextContent("#10 Simon");
     expect(
       within(firstPicker).getAllByText("Outside preferences").length,
     ).toBeGreaterThan(0);
@@ -1619,7 +1631,7 @@ describe("Sideline app", () => {
     ).toHaveClass("preference-rank-outside");
     fireEvent.click(
       within(firstPicker).getByRole("button", {
-        name: /#10 Simon.*Center Back/,
+        name: /Center Back.*#10 Simon/,
       }),
     );
     expect(screen.queryByText("1 substitution ready")).not.toBeInTheDocument();
@@ -1677,7 +1689,7 @@ describe("Sideline app", () => {
       "Next rotationGoing in at CB for Simon",
     );
     const selectedOutgoing = within(editPicker).getByRole("button", {
-      name: /#10 Simon.*Center Back/,
+      name: /Center Back.*#10 Simon/,
     });
     expect(selectedOutgoing).toHaveAttribute("aria-pressed", "true");
     expect(
@@ -1685,7 +1697,7 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     fireEvent.click(
       within(editPicker).getByRole("button", {
-        name: /#23 Ollie.*Left Midfielder/,
+        name: /Left Midfielder.*#23 Ollie/,
       }),
     );
     expect(editPicker).toHaveTextContent(
@@ -1738,7 +1750,7 @@ describe("Sideline app", () => {
     fireEvent.click(
       within(
         screen.getByRole("dialog", { name: "#4 Dylan - Plan in" }),
-      ).getByRole("button", { name: /#10 Simon.*Center Back/ }),
+      ).getByRole("button", { name: /Center Back.*#10 Simon/ }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Add to plan" }));
 

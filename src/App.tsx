@@ -3487,7 +3487,7 @@ function BenchSubstitutionPicker({
   return (
     <SidelineDialog
       title={`${playerLabel(team, playerId)} - Plan in`}
-      description="Choose the player they will replace."
+      description="Choose the position they will enter."
       className="compact-sheet bench-substitution-sheet"
       onClose={onClose}
       footer={
@@ -3557,18 +3557,17 @@ function BenchSubstitutionPicker({
             const selected = selectedOutPlayerId === outPlayerId;
             return (
               <button
-                className={selected ? "selected" : ""}
+                className={`bench-position-choice ${
+                  selected ? "selected" : ""
+                }`}
                 type="button"
                 key={outPlayerId}
                 aria-pressed={selected}
                 onClick={() => setSelectedOutPlayerId(outPlayerId)}
               >
-                <span className="replacement-player-summary">
-                  <GoalMarkedPlayerName
-                    label={playerLabel(team, outPlayerId)}
-                    goalCount={playerGoalCount(game, outPlayerId)}
-                  />
-                </span>
+                <strong className="replacement-position-primary">
+                  {position.label}
+                </strong>
                 <span className={preferenceFitClassName(preferenceIndex)}>
                   {selected && (
                     <Check
@@ -3579,8 +3578,11 @@ function BenchSubstitutionPicker({
                   )}
                   <span>{preferenceFitLabel(preferenceIndex)}</span>
                 </span>
-                <span className="replacement-player-position">
-                  {position.label}
+                <span className="replacement-player-secondary replacement-player-summary">
+                  <GoalMarkedPlayerName
+                    label={playerLabel(team, outPlayerId)}
+                    goalCount={playerGoalCount(game, outPlayerId)}
+                  />
                 </span>
                 <span className="replacement-player-times">
                   <span>
@@ -4144,6 +4146,7 @@ function PlayerActionMenu({
   align,
   menuTitle,
   menuDescription,
+  positionFirst = false,
   activeMenuId,
   onActiveMenuChange,
   onChange,
@@ -4155,6 +4158,7 @@ function PlayerActionMenu({
   align: "start" | "end";
   menuTitle: string;
   menuDescription?: string;
+  positionFirst?: boolean;
   activeMenuId: string | null;
   onActiveMenuChange: (menuId: string | null) => void;
   onChange: (value: string) => void;
@@ -4208,13 +4212,23 @@ function PlayerActionMenu({
                 size="large"
                 onSelect={() => onChange(option.id)}
               >
-                <span className="player-action-menu-row">
-                  <span className="replacement-player-summary">
-                    <GoalMarkedPlayerName
-                      label={option.displayLabel}
-                      goalCount={option.goalCount}
-                    />
-                  </span>
+                <span
+                  className={`player-action-menu-row ${
+                    positionFirst ? "position-first" : ""
+                  }`}
+                >
+                  {positionFirst && option.positionLabel ? (
+                    <strong className="replacement-position-primary">
+                      {option.positionLabel}
+                    </strong>
+                  ) : (
+                    <span className="replacement-player-summary">
+                      <GoalMarkedPlayerName
+                        label={option.displayLabel}
+                        goalCount={option.goalCount}
+                      />
+                    </span>
+                  )}
                   <span
                     className={preferenceFitClassName(option.preferenceIndex)}
                   >
@@ -4227,9 +4241,17 @@ function PlayerActionMenu({
                     )}
                     <span>{preferenceFitLabel(option.preferenceIndex)}</span>
                   </span>
-                  {option.positionLabel && (
+                  {!positionFirst && option.positionLabel && (
                     <span className="replacement-player-position">
                       {option.positionLabel}
+                    </span>
+                  )}
+                  {positionFirst && (
+                    <span className="replacement-player-secondary replacement-player-summary">
+                      <GoalMarkedPlayerName
+                        label={option.displayLabel}
+                        goalCount={option.goalCount}
+                      />
                     </span>
                   )}
                   {option.preferredRoles && (
@@ -4466,8 +4488,8 @@ function SubstitutionPlanner({
 
         <div className="swap-list">
           <div className="swap-column-headings" aria-hidden="true">
-            <span className="out-label">OUT</span>
             <span className="in-label">IN</span>
+            <span className="out-label">OUT</span>
           </div>
           {pairs.map((pair, index) => {
             const position = formation.positions.find(
@@ -4572,12 +4594,39 @@ function SubstitutionPlanner({
                 <span className="swap-number">{index + 1}</span>
                 <div className="swap-player-choice">
                   <PlayerActionMenu
+                    id={`in-${index}`}
+                    label={`Swap ${index + 1} incoming player`}
+                    value={pair.inPlayerId}
+                    options={incomingOptions}
+                    align="start"
+                    menuTitle="Who's going IN?"
+                    menuDescription={`At ${
+                      position?.label ?? "open position"
+                    } for ${playerName(team, pair.outPlayerId)}`}
+                    activeMenuId={activePlayerMenuId}
+                    onActiveMenuChange={setActivePlayerMenuId}
+                    onChange={(playerId) =>
+                      updateIncomingPlayer(index, playerId)
+                    }
+                  />
+                </div>
+                <span className="swap-transfer">
+                  <small>{position?.shortLabel}</small>
+                  <ArrowRightLeft size={22} aria-hidden="true" />
+                </span>
+                <div className="swap-player-choice">
+                  <PlayerActionMenu
                     id={`out-${index}`}
                     label={`Swap ${index + 1} outgoing player`}
                     value={pair.outPlayerId}
                     options={outgoingOptions}
-                    align="start"
+                    align="end"
                     menuTitle="Who's coming OUT?"
+                    menuDescription={`Choose the position for ${playerName(
+                      team,
+                      pair.inPlayerId,
+                    )}`}
+                    positionFirst
                     activeMenuId={activePlayerMenuId}
                     onActiveMenuChange={setActivePlayerMenuId}
                     onChange={(playerId) => {
@@ -4590,29 +4639,6 @@ function SubstitutionPlanner({
                         positionId,
                       });
                     }}
-                  />
-                </div>
-                <span className="swap-transfer">
-                  <ArrowRightLeft size={22} aria-hidden="true" />
-                  <small>{position?.shortLabel}</small>
-                </span>
-                <div className="swap-player-choice">
-                  <PlayerActionMenu
-                    id={`in-${index}`}
-                    label={`Swap ${index + 1} incoming player`}
-                    value={pair.inPlayerId}
-                    options={incomingOptions}
-                    align="end"
-                    menuTitle="Who's going IN?"
-                    menuDescription={`For ${playerName(
-                      team,
-                      pair.outPlayerId,
-                    )} at ${position?.label ?? "open position"}`}
-                    activeMenuId={activePlayerMenuId}
-                    onActiveMenuChange={setActivePlayerMenuId}
-                    onChange={(playerId) =>
-                      updateIncomingPlayer(index, playerId)
-                    }
                   />
                 </div>
               </div>
@@ -4630,8 +4656,8 @@ function SubstitutionPlanner({
         <div className="review-checklist">
           <h3>Confirm together</h3>
           <div className="review-column-headings" aria-hidden="true">
-            <span className="out-label">OUT</span>
             <span className="in-label">IN</span>
+            <span className="out-label">OUT</span>
           </div>
           {pairs.map((pair, index) => {
             const position = formation.positions.find(
@@ -4641,16 +4667,16 @@ function SubstitutionPlanner({
               <div className="review-row" key={index}>
                 <span className="review-number">{index + 1}</span>
                 <GoalMarkedPlayerName
-                  label={playerName(team, pair.outPlayerId)}
-                  goalCount={playerGoalCount(game, pair.outPlayerId)}
-                />
-                <span className="review-direction">
-                  <ArrowRightLeft size={17} aria-hidden="true" />
-                  <small>{position?.shortLabel}</small>
-                </span>
-                <GoalMarkedPlayerName
                   label={playerName(team, pair.inPlayerId)}
                   goalCount={playerGoalCount(game, pair.inPlayerId)}
+                />
+                <span className="review-direction">
+                  <small>{position?.shortLabel}</small>
+                  <ArrowRightLeft size={17} aria-hidden="true" />
+                </span>
+                <GoalMarkedPlayerName
+                  label={playerName(team, pair.outPlayerId)}
+                  goalCount={playerGoalCount(game, pair.outPlayerId)}
                 />
               </div>
             );
@@ -4684,8 +4710,8 @@ function ReadySwapList({
   return (
     <div className={`ready-swap-list ${onRemove ? "removable" : ""}`}>
       <div className="ready-swap-headings" aria-hidden="true">
-        <span className="out-label">OUT</span>
         <span className="in-label">IN</span>
+        <span className="out-label">OUT</span>
       </div>
       {pairs.map((pair, index) => {
         const position = formation.positions.find(
@@ -4741,24 +4767,24 @@ function ReadySwapList({
               }}
             >
               <span className="ready-swap-number">{index + 1}</span>
-              <span className="ready-player out">
-                <ReadyPlayerIdentity
-                  team={team}
-                  playerId={pair.outPlayerId}
-                  goalCount={playerGoalCount(game, pair.outPlayerId)}
-                  direction="out"
-                />
-              </span>
-              <span className="ready-direction">
-                <ArrowRightLeft size={24} aria-hidden="true" />
-                <small>{position?.shortLabel}</small>
-              </span>
               <span className="ready-player in">
                 <ReadyPlayerIdentity
                   team={team}
                   playerId={pair.inPlayerId}
                   goalCount={playerGoalCount(game, pair.inPlayerId)}
                   direction="in"
+                />
+              </span>
+              <span className="ready-direction">
+                <small>{position?.shortLabel}</small>
+                <ArrowRightLeft size={24} aria-hidden="true" />
+              </span>
+              <span className="ready-player out">
+                <ReadyPlayerIdentity
+                  team={team}
+                  playerId={pair.outPlayerId}
+                  goalCount={playerGoalCount(game, pair.outPlayerId)}
+                  direction="out"
                 />
               </span>
             </div>
