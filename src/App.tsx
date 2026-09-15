@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowRightLeft,
+  BellRing,
   Check,
   ChevronDown,
   ChevronRight,
@@ -36,6 +37,7 @@ import {
   ShieldCheck,
   Square,
   Sun,
+  SunMedium,
   Trash2,
   UsersRound,
   UserRoundX,
@@ -430,7 +432,10 @@ function SettingsMenu({
         </div>
         <div className="settings-options">
           <div className="settings-option">
-            <span>
+            <span className="settings-option-icon" aria-hidden="true">
+              <SunMedium size={22} strokeWidth={2.2} />
+            </span>
+            <span className="settings-option-copy">
               <strong id="keep-screen-awake-label">Keep screen awake</strong>
               <small id="keep-screen-awake-description">
                 Prevents auto-lock while Sideline is visible during an active
@@ -448,7 +453,10 @@ function SettingsMenu({
             />
           </div>
           <div className="settings-option">
-            <span>
+            <span className="settings-option-icon" aria-hidden="true">
+              <BellRing size={22} strokeWidth={2.2} />
+            </span>
+            <span className="settings-option-copy">
               <strong id="substitution-alerts-label">
                 Substitution alerts
               </strong>
@@ -470,7 +478,13 @@ function SettingsMenu({
             />
           </div>
           <div className="settings-option">
-            <span>
+            <span
+              className="settings-option-icon settings-option-icon-tardis"
+              aria-hidden="true"
+            >
+              <TardisIcon />
+            </span>
+            <span className="settings-option-copy">
               <strong id="demo-mode-label">Demo mode</strong>
               <small id="demo-mode-description">
                 Become a Time Lord—no blue box required. Enables fast-forward.
@@ -486,6 +500,41 @@ function SettingsMenu({
         </div>
       </ActionMenu.Overlay>
     </ActionMenu>
+  );
+}
+
+function TardisIcon() {
+  return (
+    <svg
+      className="tardis-icon"
+      viewBox="0 0 24 28"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path d="M9.5 3.5h5" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M11 1.5h2v2h-2zM6.5 6h11l1 2.5v17H5.5v-17l1-2.5Z"
+        fill="currentColor"
+      />
+      <path
+        d="M4.5 25.5h15M7 8.5h10"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7.5 10.5h4v4h-4zm5 0h4v4h-4z"
+        fill="var(--paper)"
+        stroke="var(--ink)"
+        strokeWidth="0.7"
+      />
+      <path
+        d="M8 16.5h3v7H8zm5 0h3v7h-3z"
+        stroke="var(--paper)"
+        strokeWidth="0.8"
+      />
+      <circle cx="10.3" cy="20" r=".55" fill="var(--warm)" />
+    </svg>
   );
 }
 

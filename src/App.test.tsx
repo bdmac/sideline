@@ -464,6 +464,24 @@ describe("Sideline app", () => {
     const alertSwitch = screen.getByRole("button", {
       name: "Substitution alerts",
     });
+    expect(
+      screen
+        .getByText("Keep screen awake")
+        .closest(".settings-option")
+        ?.querySelector(".lucide-sun-medium"),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByText("Substitution alerts")
+        .closest(".settings-option")
+        ?.querySelector(".lucide-bell-ring"),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByText("Demo mode")
+        .closest(".settings-option")
+        ?.querySelector(".tardis-icon"),
+    ).toBeInTheDocument();
     expect(wakeLockSwitch).toHaveAttribute("aria-pressed", "false");
     expect(alertSwitch).toHaveAttribute("aria-pressed", "false");
 

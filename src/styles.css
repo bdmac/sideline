@@ -335,9 +335,9 @@ h3 {
 
 .settings-option {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 1rem;
+  column-gap: 0.75rem;
   row-gap: 0.25rem;
   padding: 1rem;
   border-bottom: 1px solid var(--line);
@@ -347,10 +347,28 @@ h3 {
   border-bottom: 0;
 }
 
-.settings-option > span,
+.settings-option-copy,
 .settings-option strong,
 .settings-option small {
   display: block;
+}
+
+.settings-option-icon {
+  display: grid;
+  width: 28px;
+  height: 32px;
+  place-items: center;
+  align-self: start;
+  color: var(--turf-dark);
+}
+
+.settings-option-icon-tardis {
+  color: #245a91;
+}
+
+.tardis-icon {
+  width: 22px;
+  height: 27px;
 }
 
 .settings-option strong {
@@ -363,6 +381,10 @@ h3 {
   color: var(--ink-soft);
   font-size: 0.76rem;
   line-height: 1.4;
+}
+
+:root[data-theme="dark"] .settings-option-icon-tardis {
+  color: #75b7eb;
 }
 
 .demo-clock-form {
