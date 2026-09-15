@@ -14,6 +14,7 @@ import {
   createGame,
   getCurrentFieldSeconds,
   getFormation,
+  getSubstitutionReminderStatus,
   getSubstitutionTimeBandSize,
   INITIAL_STATE,
   queueSubstitutions,
@@ -797,13 +798,13 @@ describe("Sideline app", () => {
     expect(screen.queryByLabelText("Player")).not.toBeInTheDocument();
     expect(screen.getByText("Position")).toBeInTheDocument();
     expect(screen.getByText("Center Back")).toBeInTheDocument();
-    expect(screen.getByText("Playing total")).toBeInTheDocument();
-    expect(screen.getByText("Field stint")).toBeInTheDocument();
+    expect(screen.getByText("Played")).toBeInTheDocument();
+    expect(screen.getByText("Playing now")).toBeInTheDocument();
     const maddoxTarget = screen.getByRole("button", {
       name: "Maddox (Goalkeeper)",
     });
     expect(maddoxTarget).toHaveTextContent("#14 Maddox");
-    expect(maddoxTarget).toHaveTextContent("Stint0:00TotalNot played yet");
+    expect(maddoxTarget).toHaveTextContent("Playing0:00TotalNot played yet");
     expect(maddoxTarget).toHaveTextContent("Goalkeeper");
     expect(
       screen.queryByRole("button", { name: "Plan substitution" }),
@@ -1043,7 +1044,7 @@ describe("Sideline app", () => {
         planner.querySelectorAll(".swap-transfer small"),
         (item) => item.textContent,
       ),
-    ).toEqual(expect.arrayContaining(["Center Back", "Left Mid", "Striker"]));
+    ).toEqual(expect.arrayContaining(["Center Back", "Left Mid", "Right Mid"]));
     expect(screen.queryByText("Confirm together")).not.toBeInTheDocument();
     const outgoingPlayers =
       within(planner).getAllByLabelText(/outgoing player/);
@@ -1140,7 +1141,7 @@ describe("Sideline app", () => {
         summary.querySelectorAll(".ready-direction small"),
         (item) => item.textContent,
       ),
-    ).toEqual(expect.arrayContaining(["Center Back", "Left Mid", "Striker"]));
+    ).toEqual(expect.arrayContaining(["Center Back", "Left Mid", "Right Mid"]));
     expect(
       summary.querySelectorAll(
         '.ready-player-number[data-component="Label"][data-variant="danger"]',
@@ -1385,7 +1386,7 @@ describe("Sideline app", () => {
     fireEvent.click(outgoingTrigger);
 
     const options = screen.getAllByRole("menuitemradio");
-    expect(options[0]).toHaveTextContent(/Stint0:00TotalNot played yet/);
+    expect(options[0]).toHaveTextContent(/Playing0:00TotalNot played yet/);
     expect(options[0].querySelector(".replacement-fit")).toHaveTextContent(
       /preference|Outside preferences/,
     );
@@ -1537,6 +1538,8 @@ describe("Sideline app", () => {
             (item) => item.id === positionId,
           ),
           timeBandSeconds: getSubstitutionTimeBandSize(game),
+          rotationIntervalSeconds:
+            getSubstitutionReminderStatus(game).intervalSeconds,
         };
       })
       .sort(compareSubstitutionDestinations)
@@ -1709,16 +1712,16 @@ describe("Sideline app", () => {
         .getByRole("heading", { name: "#4 Dylan - Plan in" })
         .querySelector(".soccer-ball-icon"),
     ).not.toBeInTheDocument();
-    expect(firstPicker).toHaveTextContent("Bench stint0:00");
+    expect(firstPicker).toHaveTextContent("Sitting now0:00");
     expect(firstPicker).toHaveTextContent(
-      "Playing totalNot played yetPreferred rolesDefense · Midfield",
+      "PlayedNot played yetPreferred rolesDefense · Midfield",
     );
     expect(
       within(firstPicker).getByRole("button", {
         name: /Center Back.*#10 Simon/,
       }),
     ).toHaveTextContent(
-      "Center Back1st preference#10 SimonStint0:00TotalNot played yet",
+      "Center Back1st preference#10 SimonPlaying0:00TotalNot played yet",
     );
     const centerBackChoice = within(firstPicker).getByRole("button", {
       name: /Center Back.*#10 Simon/,
@@ -2132,7 +2135,7 @@ describe("Sideline app", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("prioritizes the below-pace warning over total bench time", () => {
+  it("prioritizes the below-pace warning over aggregate bench time", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;
     const game = createGame(
@@ -2162,10 +2165,10 @@ describe("Sideline app", () => {
       "All 2 sitting since start10:00",
     );
     expect(benchPlayer).toHaveTextContent("Below 50% pace");
-    expect(benchPlayer).not.toHaveTextContent("total bench");
+    expect(benchPlayer).not.toHaveTextContent("12 min bench");
   });
 
-  it("shows total bench time when no higher-priority status applies", () => {
+  it("shows aggregate bench time when no higher-priority status applies", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;
     const game = createGame(
@@ -2190,7 +2193,7 @@ describe("Sideline app", () => {
       .getByRole("button", { name: `Plan ${team.roster[5].name} in` })
       .closest(".player-time-row");
     expect(benchPlayer).toHaveTextContent("6 min played");
-    expect(benchPlayer).toHaveTextContent("12 min total bench");
+    expect(benchPlayer).toHaveTextContent("12 min bench");
     expect(benchPlayer).not.toHaveTextContent("Sitting");
     expect(benchPlayer).not.toHaveTextContent("Below 50% pace");
   });
@@ -2227,7 +2230,7 @@ describe("Sideline app", () => {
     );
     expect(dylanRow).toHaveTextContent("Not played yet");
     expect(dylanRow).not.toHaveTextContent("Sitting");
-    expect(dylanRow).not.toHaveTextContent("total bench");
+    expect(dylanRow).not.toHaveTextContent("bench");
     expect(screen.getByLabelText("Shared bench time")).toHaveTextContent(
       "All 4 sitting since start0:00",
     );
@@ -2251,6 +2254,7 @@ describe("Sideline app", () => {
     game.benchIds.forEach((id) => {
       game.totals[id].benchSeconds = 600;
     });
+    game.totals[incomingId].fieldSeconds = 300;
     game.clock.elapsedSeconds = 600;
     game = applySubstitutions(
       game,
@@ -2284,6 +2288,11 @@ describe("Sideline app", () => {
         }),
       ).getByText("0:37"),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: `Open actions for ${incomingName}`,
+      }),
+    ).toHaveTextContent("0:37 playing");
     expect(document.querySelectorAll(".pitch-time")).toHaveLength(
       team.sideSize,
     );
@@ -2312,8 +2321,8 @@ describe("Sideline app", () => {
     const playerActions = screen.getByRole("dialog", {
       name: fullGamePlayerLabel,
     });
-    expect(playerActions).toHaveTextContent("Playing total11 min");
-    expect(playerActions).toHaveTextContent("Field stint11 min");
+    expect(playerActions).toHaveTextContent("Played11 min");
+    expect(playerActions).toHaveTextContent("Playing now11 min");
     fireEvent.click(
       within(playerActions).getByRole("button", { name: "Close" }),
     );

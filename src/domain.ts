@@ -714,14 +714,25 @@ export type SubstitutionDestinationSortKey = {
   totalFieldSeconds: number;
   formationIndex: number;
   timeBandSeconds: number;
+  rotationIntervalSeconds: number;
 };
 
-const destinationStintScore = (
+const getRestPriority = (
   currentFieldSeconds: number,
+  timeBandSeconds: number,
+  rotationIntervalSeconds: number,
+) => {
+  if (currentFieldSeconds >= rotationIntervalSeconds) return 2;
+  if (currentFieldSeconds < timeBandSeconds) return 0;
+  return 1;
+};
+
+const destinationTotalScore = (
+  totalFieldSeconds: number,
   preferenceIndex: number,
   timeBandSeconds: number,
 ) =>
-  toSubstitutionTimeBand(currentFieldSeconds, timeBandSeconds) -
+  toSubstitutionTimeBand(totalFieldSeconds, timeBandSeconds) -
   (Number.isFinite(preferenceIndex) ? 0 : timeBandSeconds);
 
 export const compareSubstitutionDestinations = (
@@ -729,21 +740,31 @@ export const compareSubstitutionDestinations = (
   b: SubstitutionDestinationSortKey,
 ) =>
   Number(a.alreadyPlanned) - Number(b.alreadyPlanned) ||
-  destinationStintScore(
+  getRestPriority(
     b.currentFieldSeconds,
+    b.timeBandSeconds,
+    b.rotationIntervalSeconds,
+  ) -
+    getRestPriority(
+      a.currentFieldSeconds,
+      a.timeBandSeconds,
+      a.rotationIntervalSeconds,
+    ) ||
+  destinationTotalScore(
+    b.totalFieldSeconds,
     b.preferenceIndex,
     b.timeBandSeconds,
   ) -
-    destinationStintScore(
-      a.currentFieldSeconds,
+    destinationTotalScore(
+      a.totalFieldSeconds,
       a.preferenceIndex,
       a.timeBandSeconds,
     ) ||
-  toSubstitutionTimeBand(b.totalFieldSeconds, b.timeBandSeconds) -
-    toSubstitutionTimeBand(a.totalFieldSeconds, a.timeBandSeconds) ||
+  toSubstitutionTimeBand(b.currentFieldSeconds, b.timeBandSeconds) -
+    toSubstitutionTimeBand(a.currentFieldSeconds, a.timeBandSeconds) ||
   a.preferenceIndex - b.preferenceIndex ||
-  b.currentFieldSeconds - a.currentFieldSeconds ||
   b.totalFieldSeconds - a.totalFieldSeconds ||
+  b.currentFieldSeconds - a.currentFieldSeconds ||
   a.formationIndex - b.formationIndex;
 
 const REPEATED_LINE_PENALTY_SECONDS = 60;
@@ -970,6 +991,8 @@ export const suggestSubstitutions = (
   team: Team,
 ): SubstitutionPair[] => {
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
+  const rotationIntervalSeconds =
+    getSubstitutionReminderStatus(game).intervalSeconds;
   const {
     formation,
     goalkeeperPosition,
@@ -1012,16 +1035,20 @@ export const suggestSubstitutions = (
     .filter(([, playerId]) => !game.unavailableIds.includes(playerId))
     .filter(([positionId]) => positionId !== goalkeeperPosition?.id)
     .sort(([positionA, playerA], [positionB, playerB]) => {
-      const stintDifference =
-        toSubstitutionTimeBand(
-          getCurrentFieldSeconds(game, playerB),
+      const playerACurrentSeconds = getCurrentFieldSeconds(game, playerA);
+      const playerBCurrentSeconds = getCurrentFieldSeconds(game, playerB);
+      const restPriorityDifference =
+        getRestPriority(
+          playerBCurrentSeconds,
           timeBandSeconds,
+          rotationIntervalSeconds,
         ) -
-        toSubstitutionTimeBand(
-          getCurrentFieldSeconds(game, playerA),
+        getRestPriority(
+          playerACurrentSeconds,
           timeBandSeconds,
+          rotationIntervalSeconds,
         );
-      if (stintDifference) return stintDifference;
+      if (restPriorityDifference) return restPriorityDifference;
       const totalDifference =
         toSubstitutionTimeBand(
           game.totals[playerB]?.fieldSeconds ?? 0,
@@ -1046,10 +1073,11 @@ export const suggestSubstitutions = (
       );
       return (
         fitB - fitA ||
-        getCurrentFieldSeconds(game, playerB) -
-          getCurrentFieldSeconds(game, playerA) ||
+        toSubstitutionTimeBand(playerBCurrentSeconds, timeBandSeconds) -
+          toSubstitutionTimeBand(playerACurrentSeconds, timeBandSeconds) ||
         (game.totals[playerB]?.fieldSeconds ?? 0) -
           (game.totals[playerA]?.fieldSeconds ?? 0) ||
+        playerBCurrentSeconds - playerACurrentSeconds ||
         playerA.localeCompare(playerB)
       );
     });
@@ -1071,12 +1099,14 @@ export const suggestSubstitutions = (
     selections.reduce<
       | {
           entries: Array<[string, string]>;
-          stintScore: number;
+          restDueCount: number;
+          freshCount: number;
           totalScore: number;
+          currentScore: number;
           adjustmentScore: number;
           preference: number;
-          exactStintScore: number;
           exactTotalScore: number;
+          exactCurrentScore: number;
           key: string;
         }
       | undefined
@@ -1112,26 +1142,32 @@ export const suggestSubstitutions = (
       );
       const candidate = {
         entries,
-        stintScore: entries.reduce(
-          (total, [, playerId]) =>
-            total +
-            toSubstitutionTimeBand(
+        restDueCount: entries.filter(
+          ([, playerId]) =>
+            getRestPriority(
               getCurrentFieldSeconds(game, playerId),
               timeBandSeconds,
-            ),
-          0,
-        ),
-        totalScore: entries.reduce(
-          (total, [, playerId]) =>
-            total +
-            toSubstitutionTimeBand(
-              game.totals[playerId]?.fieldSeconds ?? 0,
+              rotationIntervalSeconds,
+            ) === 2,
+        ).length,
+        freshCount: entries.filter(
+          ([, playerId]) =>
+            getRestPriority(
+              getCurrentFieldSeconds(game, playerId),
               timeBandSeconds,
-            ),
-          0,
-        ),
-        adjustmentScore:
-          -linePenalty -
+              rotationIntervalSeconds,
+            ) === 0,
+        ).length,
+        totalScore:
+          entries.reduce(
+            (total, [, playerId]) =>
+              total +
+              toSubstitutionTimeBand(
+                game.totals[playerId]?.fieldSeconds ?? 0,
+                timeBandSeconds,
+              ),
+            0,
+          ) -
           selectedPositions.reduce((penalty, positionItem) => {
             const player = playerById.get(assignments[positionItem.id]);
             return (
@@ -1141,32 +1177,44 @@ export const suggestSubstitutions = (
                 : timeBandSeconds)
             );
           }, 0),
+        currentScore: entries.reduce(
+          (total, [, playerId]) =>
+            total +
+            toSubstitutionTimeBand(
+              getCurrentFieldSeconds(game, playerId),
+              timeBandSeconds,
+            ),
+          0,
+        ),
+        adjustmentScore: -linePenalty,
         preference: selectedPositions.reduce((total, positionItem) => {
           const player = playerById.get(assignments[positionItem.id]);
           return (
             total + (player ? preferenceScore(player, positionItem.role) : 0)
           );
         }, 0),
-        exactStintScore: entries.reduce(
-          (total, [, playerId]) =>
-            total + getCurrentFieldSeconds(game, playerId),
-          0,
-        ),
         exactTotalScore: entries.reduce(
           (total, [, playerId]) =>
             total + (game.totals[playerId]?.fieldSeconds ?? 0),
+          0,
+        ),
+        exactCurrentScore: entries.reduce(
+          (total, [, playerId]) =>
+            total + getCurrentFieldSeconds(game, playerId),
           0,
         ),
         key: entries.map(([positionId]) => positionId).join(","),
       };
       if (!best) return candidate;
       const rankingDifferences = [
-        candidate.stintScore - best.stintScore,
+        candidate.restDueCount - best.restDueCount,
+        best.freshCount - candidate.freshCount,
         candidate.totalScore - best.totalScore,
+        candidate.currentScore - best.currentScore,
         candidate.adjustmentScore - best.adjustmentScore,
         candidate.preference - best.preference,
-        candidate.exactStintScore - best.exactStintScore,
         candidate.exactTotalScore - best.exactTotalScore,
+        candidate.exactCurrentScore - best.exactCurrentScore,
         best.key.localeCompare(candidate.key),
       ];
       if (rankingDifferences.find((difference) => difference !== 0)! > 0) {

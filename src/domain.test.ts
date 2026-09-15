@@ -72,6 +72,7 @@ describe("substitution destination sorting", () => {
         totalFieldSeconds: 20 * 60,
         formationIndex: 0,
         timeBandSeconds: 3 * 60,
+        rotationIntervalSeconds: 15 * 60,
       },
       {
         id: "first-preference",
@@ -81,6 +82,7 @@ describe("substitution destination sorting", () => {
         totalFieldSeconds: 18 * 60,
         formationIndex: 1,
         timeBandSeconds: 3 * 60,
+        rotationIntervalSeconds: 15 * 60,
       },
       {
         id: "second-preference",
@@ -90,6 +92,7 @@ describe("substitution destination sorting", () => {
         totalFieldSeconds: 18 * 60,
         formationIndex: 2,
         timeBandSeconds: 3 * 60,
+        rotationIntervalSeconds: 15 * 60,
       },
       {
         id: "same-fit-more-total",
@@ -99,6 +102,7 @@ describe("substitution destination sorting", () => {
         totalFieldSeconds: 19 * 60,
         formationIndex: 3,
         timeBandSeconds: 3 * 60,
+        rotationIntervalSeconds: 15 * 60,
       },
       {
         id: "planned-longest",
@@ -108,6 +112,7 @@ describe("substitution destination sorting", () => {
         totalFieldSeconds: 40 * 60,
         formationIndex: 4,
         timeBandSeconds: 3 * 60,
+        rotationIntervalSeconds: 15 * 60,
       },
     ];
 
@@ -121,6 +126,62 @@ describe("substitution destination sorting", () => {
       "second-preference",
       "outside-long-stint",
       "planned-longest",
+    ]);
+  });
+
+  it("uses rest guardrails around aggregate playing-time fairness", () => {
+    const candidates = [
+      {
+        id: "fresh-most-played",
+        alreadyPlanned: false,
+        preferenceIndex: 0,
+        currentFieldSeconds: 2 * 60,
+        totalFieldSeconds: 36 * 60,
+        formationIndex: 0,
+        timeBandSeconds: 3 * 60,
+        rotationIntervalSeconds: 15 * 60,
+      },
+      {
+        id: "normal-most-played",
+        alreadyPlanned: false,
+        preferenceIndex: 0,
+        currentFieldSeconds: 6 * 60,
+        totalFieldSeconds: 30 * 60,
+        formationIndex: 1,
+        timeBandSeconds: 3 * 60,
+        rotationIntervalSeconds: 15 * 60,
+      },
+      {
+        id: "normal-longer-current",
+        alreadyPlanned: false,
+        preferenceIndex: 0,
+        currentFieldSeconds: 12 * 60,
+        totalFieldSeconds: 27 * 60,
+        formationIndex: 2,
+        timeBandSeconds: 3 * 60,
+        rotationIntervalSeconds: 15 * 60,
+      },
+      {
+        id: "rest-due-least-played",
+        alreadyPlanned: false,
+        preferenceIndex: 0,
+        currentFieldSeconds: 15 * 60,
+        totalFieldSeconds: 24 * 60,
+        formationIndex: 3,
+        timeBandSeconds: 3 * 60,
+        rotationIntervalSeconds: 15 * 60,
+      },
+    ];
+
+    expect(
+      candidates
+        .sort(compareSubstitutionDestinations)
+        .map((candidate) => candidate.id),
+    ).toEqual([
+      "rest-due-least-played",
+      "normal-most-played",
+      "normal-longer-current",
+      "fresh-most-played",
     ]);
   });
 });
@@ -1109,7 +1170,7 @@ describe("substitutions", () => {
     expect(pair.outPlayerId).toBe(strikerId);
   });
 
-  it("prioritizes a longer current stint before accumulated playing time", () => {
+  it("prioritizes a rest-due player before accumulated playing time", () => {
     const team = structuredClone(INITIAL_TEAMS.u8);
     team.roster.forEach((player) => {
       player.preferredRoles = player.preferredRoles.filter(
@@ -1177,6 +1238,80 @@ describe("substitutions", () => {
     const [pair] = suggestSubstitutions(game, 1, team);
 
     expect(pair.outPlayerId).toBe(longStintPlayer);
+  });
+
+  it("uses aggregate playing time in normal play and protects a fresh player", () => {
+    const createScenario = (substitutionAtSeconds: number) => {
+      const team = structuredClone(INITIAL_TEAMS.u12);
+      team.roster.forEach((player) => {
+        player.preferredRoles = player.preferredRoles.filter(
+          (role) => role !== "goalkeeper",
+        );
+      });
+      let game = createGame(
+        team,
+        "9-3-1-3-1",
+        team.roster.slice(0, 12).map((player) => player.id),
+        60,
+        1_000,
+      );
+      team.roster.find(
+        (player) => player.id === game.assignments.gk,
+      )!.preferredRoles = ["goalkeeper"];
+      const formation = getFormation(game.formationId);
+      const defenders = formation.positions.filter(
+        (position) => position.role === "defender",
+      );
+      const replacementId = game.benchIds[0];
+      game.clock.elapsedSeconds = substitutionAtSeconds;
+      game = applySubstitutions(
+        game,
+        [
+          {
+            positionId: defenders[0].id,
+            outPlayerId: game.assignments[defenders[0].id],
+            inPlayerId: replacementId,
+          },
+        ],
+        team.sideSize,
+        2_000,
+      );
+      game.clock.elapsedSeconds = 10 * 60;
+
+      const normalComparisonId = game.assignments[defenders[1].id];
+      game.totals[replacementId].fieldSeconds = 30 * 60;
+      game.totals[normalComparisonId].fieldSeconds = 27 * 60;
+      Object.values(game.assignments)
+        .filter(
+          (playerId) =>
+            playerId !== replacementId &&
+            playerId !== normalComparisonId &&
+            playerId !== game.assignments.gk,
+        )
+        .forEach((playerId) => {
+          game.totals[playerId].fieldSeconds = 0;
+        });
+      game.benchIds.forEach((playerId, index) => {
+        game.totals[playerId].fieldSeconds = index === 0 ? 0 : 40 * 60;
+      });
+      team.roster.find(
+        (player) => player.id === game.benchIds[0],
+      )!.preferredRoles = ["defender"];
+
+      return { game, team, replacementId, normalComparisonId };
+    };
+
+    const normalScenario = createScenario(4 * 60);
+    expect(
+      suggestSubstitutions(normalScenario.game, 1, normalScenario.team)[0]
+        .outPlayerId,
+    ).toBe(normalScenario.replacementId);
+
+    const freshScenario = createScenario(9 * 60);
+    expect(
+      suggestSubstitutions(freshScenario.game, 1, freshScenario.team)[0]
+        .outPlayerId,
+    ).toBe(freshScenario.normalComparisonId);
   });
 
   it("spreads near-equal substitutions across lines", () => {

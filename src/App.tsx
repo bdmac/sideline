@@ -1648,11 +1648,6 @@ function LiveGameScreen({
         currentFieldTimes[b.playerId] - currentFieldTimes[a.playerId] ||
         a.formationIndex - b.formationIndex,
     );
-  const showPitchPlayerTimes = fieldIds.some(
-    (id) =>
-      (displayed.totals[id]?.fieldSeconds ?? 0) !==
-      displayed.clock.elapsedSeconds,
-  );
   const showFieldPlayerTimes = fieldIds.some(
     (id) => currentFieldTimes[id] !== displayed.clock.elapsedSeconds,
   );
@@ -2314,8 +2309,7 @@ function LiveGameScreen({
             assignments={game.assignments}
             team={team}
             game={displayed}
-            totals={displayed.totals}
-            showPlayerTimes={showPitchPlayerTimes}
+            showPlayerTimes={showFieldPlayerTimes}
             onEditPlayer={(playerId) =>
               setFieldActions({
                 playerId,
@@ -2894,7 +2888,6 @@ function Pitch({
   assignments,
   team,
   game,
-  totals,
   showPlayerTimes,
   onEditPlayer,
   onAddGuestAtPosition,
@@ -2904,7 +2897,6 @@ function Pitch({
   assignments: Record<string, string>;
   team: Team;
   game: ActiveGame;
-  totals: ActiveGame["totals"];
   showPlayerTimes: boolean;
   onEditPlayer: (playerId: string) => void;
   onAddGuestAtPosition: (positionId: string) => void;
@@ -3006,8 +2998,8 @@ function Pitch({
       {formation.positions.map((position) => {
         const playerId = assignments[position.id];
         const player = team.roster.find((item) => item.id === playerId);
-        const playedSeconds = player
-          ? (totals[player.id]?.fieldSeconds ?? 0)
+        const currentPlayingSeconds = player
+          ? getCurrentFieldSeconds(game, player.id)
           : 0;
         const plannedPair = player
           ? game.queuedSubstitutions?.find(
@@ -3047,9 +3039,9 @@ function Pitch({
               showPlayerTimes && (
                 <small>
                   <span className="pitch-time">
-                    {formatPlayerDuration(playedSeconds)}
+                    {formatPlayerDuration(currentPlayingSeconds)}
                   </span>
-                  <span className="pitch-time-label"> played</span>
+                  <span className="pitch-time-label"> playing</span>
                 </small>
               )
             ) : (
@@ -3479,6 +3471,8 @@ function BenchSubstitutionPicker({
   if (!player) return null;
   const formation = getFormation(game.formationId);
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
+  const rotationIntervalSeconds =
+    getSubstitutionReminderStatus(game).intervalSeconds;
   const selectedPositionEntry = Object.entries(game.assignments).find(
     ([, outPlayerId]) => outPlayerId === selectedOutPlayerId,
   );
@@ -3506,6 +3500,7 @@ function BenchSubstitutionPicker({
         currentFieldSeconds: getCurrentFieldSeconds(game, outPlayerId),
         totalFieldSeconds: game.totals[outPlayerId]?.fieldSeconds ?? 0,
         timeBandSeconds,
+        rotationIntervalSeconds,
         plannedIncomingName: plannedPair
           ? playerName(team, plannedPair.inPlayerId)
           : undefined,
@@ -3552,11 +3547,11 @@ function BenchSubstitutionPicker({
       <PlayerContextPanel
         items={[
           {
-            label: "Bench stint",
+            label: "Sitting now",
             value: formatPlayerDuration(getCurrentBenchSeconds(game, playerId)),
           },
           {
-            label: "Playing total",
+            label: "Played",
             value: formatPlayerDuration(
               game.totals[playerId]?.fieldSeconds ?? 0,
               "Not played yet",
@@ -3615,7 +3610,7 @@ function BenchSubstitutionPicker({
                 </span>
                 <span className="replacement-player-times">
                   <span>
-                    <span>Stint</span>
+                    <span>Playing</span>
                     <strong>
                       {formatPlayerDuration(
                         getCurrentFieldSeconds(game, outPlayerId),
@@ -3747,14 +3742,14 @@ function FieldSubstitutionPicker({
             value: position.label,
           },
           {
-            label: "Playing total",
+            label: "Played",
             value: formatPlayerDuration(
               game.totals[playerId]?.fieldSeconds ?? 0,
               "Not played yet",
             ),
           },
           {
-            label: "Field stint",
+            label: "Playing now",
             value: formatPlayerDuration(getCurrentFieldSeconds(game, playerId)),
           },
           ...(selectedInPlayerId
@@ -3890,14 +3885,14 @@ function FieldPlayerActionsSheet({
             value: position?.label ?? "Open",
           },
           {
-            label: "Playing total",
+            label: "Played",
             value: formatPlayerDuration(
               game.totals[playerId]?.fieldSeconds ?? 0,
               "Not played yet",
             ),
           },
           {
-            label: "Field stint",
+            label: "Playing now",
             value: formatPlayerDuration(getCurrentFieldSeconds(game, playerId)),
           },
           ...(incomingName
@@ -4021,7 +4016,7 @@ function FieldPlayerTimeRow({
         ) : (
           hasEarlierFieldTime && (
             <span className="bench-total-status">
-              {formatPlayerDuration(aggregateFieldTime)} total played
+              {formatPlayerDuration(aggregateFieldTime)} played
             </span>
           )
         )}
@@ -4110,7 +4105,7 @@ function PlayerTimeRow({
         ) : (
           hasEarlierBenchTime && (
             <span className="bench-total-status">
-              {formatPlayerDuration(aggregateBenchTime)} total bench
+              {formatPlayerDuration(aggregateBenchTime)} bench
             </span>
           )
         )}
@@ -4472,6 +4467,8 @@ function SubstitutionPlanner({
     !duplicateIns &&
     pairErrors.length === 0;
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
+  const rotationIntervalSeconds =
+    getSubstitutionReminderStatus(game).intervalSeconds;
   const outgoingChoices = Object.entries(game.assignments);
   const incomingChoices = [...game.benchIds].sort((playerA, playerB) => {
     const playerAFieldSeconds = game.totals[playerA]?.fieldSeconds ?? 0;
@@ -4586,10 +4583,11 @@ function SubstitutionPlanner({
                   totalFieldSeconds: game.totals[playerId]?.fieldSeconds ?? 0,
                   formationIndex,
                   timeBandSeconds,
+                  rotationIntervalSeconds,
                   positionLabel: candidatePosition?.label ?? "Open position",
                   times: [
                     {
-                      label: "Stint",
+                      label: "Playing",
                       value: formatPlayerDuration(
                         getCurrentFieldSeconds(game, playerId),
                       ),
@@ -5565,14 +5563,14 @@ function PositionEditor({
             ),
           },
           {
-            label: "Playing total",
+            label: "Played",
             value: formatPlayerDuration(
               game.totals[playerId]?.fieldSeconds ?? 0,
               "Not played yet",
             ),
           },
           {
-            label: "Field stint",
+            label: "Playing now",
             value: formatPlayerDuration(getCurrentFieldSeconds(game, playerId)),
           },
           ...(currentPair
@@ -5626,7 +5624,7 @@ function PositionEditor({
               {occupant ? (
                 <span className="replacement-player-times replacement-player-times-wide">
                   <span>
-                    <span>Stint</span>
+                    <span>Playing</span>
                     <strong>
                       {formatPlayerDuration(
                         getCurrentFieldSeconds(game, occupant),
