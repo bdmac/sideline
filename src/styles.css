@@ -517,11 +517,35 @@ h3 {
 }
 
 .resume-pulse {
+  position: relative;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   background: var(--turf);
   box-shadow: 0 0 0 5px rgba(11, 107, 99, 0.14);
+}
+
+.resume-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: rgba(11, 107, 99, 0.2);
+  animation: live-game-pulse 1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes live-game-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.72);
+  }
+
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.75);
+  }
 }
 
 .resume-action {
@@ -4506,6 +4530,12 @@ select:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .resume-pulse::after {
+    animation: none;
+    opacity: 0.35;
+    transform: none;
+  }
+
   *,
   *::before,
   *::after {
