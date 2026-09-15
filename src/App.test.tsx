@@ -2309,6 +2309,7 @@ describe("Sideline app", () => {
     expect(firstPicker).toHaveTextContent(
       "PlayedNot played yetPreferred rolesDefense · Midfield",
     );
+    expect(firstPicker).toHaveTextContent("GoalsNo goals… yet!");
     expect(
       within(firstPicker).getByRole("button", {
         name: /Center Back.*#10 Simon/,
@@ -2548,7 +2549,7 @@ describe("Sideline app", () => {
       within(scorerActions).getByText("Goals", { selector: "dt" }),
     ).toBeInTheDocument();
     expect(
-      within(scorerActions).getByText("1", { selector: "dd" }),
+      within(scorerActions).getByLabelText("Simon scored 1 goal"),
     ).toBeInTheDocument();
     fireEvent.click(
       within(scorerActions).getByRole("button", { name: "Close" }),

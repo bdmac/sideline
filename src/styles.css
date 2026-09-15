@@ -3574,6 +3574,11 @@ select:hover {
   color: var(--warm-dark);
 }
 
+.player-goals-empty {
+  color: var(--ink-soft);
+  font-weight: 750;
+}
+
 .position-change-preview {
   display: inline-flex;
   align-items: center;

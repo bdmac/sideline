@@ -4156,7 +4156,12 @@ function BenchSubstitutionPicker({
           },
           {
             label: "Goals",
-            value: playerGoalCount(game, playerId),
+            value: (
+              <PlayerGoalSummary
+                label={player.name}
+                goalCount={playerGoalCount(game, playerId)}
+              />
+            ),
           },
           ...(selectedOutPlayerId
             ? [
@@ -4369,7 +4374,12 @@ function FieldSubstitutionPicker({
           },
           {
             label: "Goals",
-            value: playerGoalCount(game, playerId),
+            value: (
+              <PlayerGoalSummary
+                label={playerName(team, playerId)}
+                goalCount={playerGoalCount(game, playerId)}
+              />
+            ),
           },
           ...(selectedInPlayerId
             ? [
@@ -4517,7 +4527,12 @@ function FieldPlayerActionsSheet({
           },
           {
             label: "Goals",
-            value: playerGoalCount(game, playerId),
+            value: (
+              <PlayerGoalSummary
+                label={label}
+                goalCount={playerGoalCount(game, playerId)}
+              />
+            ),
           },
           ...(incomingName
             ? [
@@ -5920,32 +5935,64 @@ function GoalMarkedPlayerName({
   emphasized?: boolean;
   compact?: boolean;
 }) {
+  return (
+    <span className="player-name-with-goals">
+      {emphasized ? <strong>{label}</strong> : <span>{label}</span>}
+      {goalCount > 0 && (
+        <PlayerGoalMarkers
+          label={label}
+          goalCount={goalCount}
+          compact={compact}
+        />
+      )}
+    </span>
+  );
+}
+
+function PlayerGoalSummary({
+  label,
+  goalCount,
+}: {
+  label: string;
+  goalCount: number;
+}) {
+  return goalCount > 0 ? (
+    <PlayerGoalMarkers label={label} goalCount={goalCount} />
+  ) : (
+    <span className="player-goals-empty">No goals… yet!</span>
+  );
+}
+
+function PlayerGoalMarkers({
+  label,
+  goalCount,
+  compact = false,
+}: {
+  label: string;
+  goalCount: number;
+  compact?: boolean;
+}) {
   const hatTrick = goalCount >= 3;
   const visibleMarkerCount = compact && hatTrick ? 1 : goalCount === 3 ? 3 : 1;
   const showGoalCount = goalCount > 3 || (compact && hatTrick);
 
   return (
-    <span className="player-name-with-goals">
-      {emphasized ? <strong>{label}</strong> : <span>{label}</span>}
-      {goalCount > 0 && (
-        <span
-          className="player-goal-total"
-          aria-label={`${label} scored ${goalCount} ${
-            goalCount === 1 ? "goal" : "goals"
-          }`}
-        >
-          {hatTrick
-            ? Array.from({ length: visibleMarkerCount }, (_, index) => (
-                <HatTrickBallIcon key={index} />
-              ))
-            : Array.from({ length: goalCount }, (_, index) => (
-                <SoccerBallIcon key={index} />
-              ))}
-          {showGoalCount && (
-            <span className="goal-count-overflow" aria-hidden="true">
-              ×{goalCount}
-            </span>
-          )}
+    <span
+      className="player-goal-total"
+      aria-label={`${label} scored ${goalCount} ${
+        goalCount === 1 ? "goal" : "goals"
+      }`}
+    >
+      {hatTrick
+        ? Array.from({ length: visibleMarkerCount }, (_, index) => (
+            <HatTrickBallIcon key={index} />
+          ))
+        : Array.from({ length: goalCount }, (_, index) => (
+            <SoccerBallIcon key={index} />
+          ))}
+      {showGoalCount && (
+        <span className="goal-count-overflow" aria-hidden="true">
+          ×{goalCount}
         </span>
       )}
     </span>
@@ -6323,7 +6370,12 @@ function PositionEditor({
           },
           {
             label: "Goals",
-            value: playerGoalCount(game, playerId),
+            value: (
+              <PlayerGoalSummary
+                label={playerName(team, playerId)}
+                goalCount={playerGoalCount(game, playerId)}
+              />
+            ),
           },
           ...(currentPair
             ? [
