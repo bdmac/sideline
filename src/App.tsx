@@ -473,7 +473,7 @@ function SettingsMenu({
             <span>
               <strong id="demo-mode-label">Demo mode</strong>
               <small id="demo-mode-description">
-                Become a sideline Time Lord—no blue box required.
+                Become a Time Lord—no blue box required. Enables fast-forward.
               </small>
             </span>
             <ToggleSwitch
