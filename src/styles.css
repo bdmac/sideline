@@ -1990,10 +1990,10 @@ select:hover {
 .pitch-player:not(.empty) {
   padding: 0.38rem 0.42rem;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   grid-template-areas:
-    "position time"
-    "name name";
+    "position plan time"
+    "name name name";
   align-items: center;
   gap: 0.15rem 0.3rem;
 }
@@ -2311,6 +2311,8 @@ select:hover {
 }
 
 .pitch-plan-icon {
+  grid-area: plan;
+  justify-self: center;
   flex: none;
   color: var(--warm-dark);
   stroke-width: 2.5;

@@ -1757,6 +1757,9 @@ describe("Sideline app", () => {
       }),
     ).toBeInTheDocument();
     expect(document.querySelectorAll(".pitch-plan-icon")).toHaveLength(3);
+    document.querySelectorAll(".pitch-plan-icon").forEach((icon) => {
+      expect(icon.parentElement).toHaveClass("pitch-player");
+    });
 
     fireEvent.click(
       within(summary).getByRole("button", { name: "Send 'em in" }),

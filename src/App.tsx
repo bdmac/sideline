@@ -3633,16 +3633,16 @@ function Pitch({
             {player ? (
               <span className="pitch-position-meta">
                 <span className="position-label">{position.shortLabel}</span>
-                {plannedIncomingName && (
-                  <ArrowRightLeft
-                    className="pitch-plan-icon"
-                    size={13}
-                    aria-hidden="true"
-                  />
-                )}
               </span>
             ) : (
               <span className="position-label">{position.shortLabel}</span>
+            )}
+            {plannedIncomingName && (
+              <ArrowRightLeft
+                className="pitch-plan-icon"
+                size={13}
+                aria-hidden="true"
+              />
             )}
             {player ? (
               <span className="pitch-player-name">
