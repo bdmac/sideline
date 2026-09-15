@@ -6028,15 +6028,15 @@ function HatTrickBallIcon() {
   return (
     <svg
       className="soccer-ball-icon hat-trick-icon"
-      viewBox="0 0 24 28"
+      viewBox="0 0 24 34"
       aria-hidden="true"
     >
-      <g transform="translate(1.333 7.333) scale(0.889)">
+      <g transform="translate(1.333 13.333) scale(0.889)">
         <SoccerBallPanels />
       </g>
-      <path d="M7.5 1.4h9L17.8 10H6.2l1.3-8.6Z" fill="currentColor" />
-      <path d="M4.5 10h15" fill="none" strokeWidth="2.2" />
-      <path d="M6.7 7.5h10.6" fill="none" stroke="var(--paper)" />
+      <path d="M7.2 1.5h9.6l.8 14H6.4l.8-14Z" fill="currentColor" />
+      <path d="M4 15.5h16" fill="none" strokeWidth="2.4" />
+      <path d="M6.6 12.2h10.8" fill="none" stroke="var(--paper)" />
     </svg>
   );
 }
