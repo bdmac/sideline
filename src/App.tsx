@@ -2467,7 +2467,10 @@ function LiveGameScreen({
         }}
         aria-hidden={!compactHeaderInteractive}
       >
-        <strong className="compact-match-team">{team.name}</strong>
+        <div className="compact-match-team">
+          <TeamCrest teamId={team.id} mini />
+          <strong title={team.name}>{team.name}</strong>
+        </div>
         <span className="compact-match-score" aria-label="Score">
           <button
             className="compact-score-button"
@@ -2486,45 +2489,49 @@ function LiveGameScreen({
             {score.opponent}
           </span>
         </span>
-        <span
-          className={`compact-match-period ${
-            periodBoundaryReached ? "added-time" : ""
-          }`}
-          aria-label={`${period.label} ${period.current}`}
-        >
-          {periodShortLabel}
-        </span>
-        <span
-          className={`compact-match-clock ${
-            periodBoundaryReached ? "added-time" : ""
-          }`}
-        >
-          <strong>{formatDuration(period.matchClockSeconds)}</strong>
-          {periodBoundaryReached && (
-            <small>+{formatDuration(period.addedTimeSeconds)}</small>
-          )}
-        </span>
-        <div className="compact-match-actions" aria-label="Match controls">
-          <IconButton
-            className={`compact-clock-button ${
-              game.clock.running ? "" : "turf-clock-action"
-            }`}
-            variant="default"
-            size="large"
-            icon={game.clock.running ? Pause : Play}
-            aria-label={clockActionLabel}
-            tabIndex={compactHeaderInteractive ? 0 : -1}
-            onClick={() => safeChange(changeClockState)}
-          />
-          <IconButton
-            className="compact-end-game-button"
-            variant="danger"
-            size="large"
-            icon={Flag}
-            aria-label="End game"
-            tabIndex={compactHeaderInteractive ? 0 : -1}
-            onClick={() => setEndConfirm(true)}
-          />
+        <div className="compact-match-management">
+          <div className="compact-match-timing">
+            <span
+              className={`compact-match-period ${
+                periodBoundaryReached ? "added-time" : ""
+              }`}
+              aria-label={`${period.label} ${period.current}`}
+            >
+              {periodShortLabel}
+            </span>
+            <span
+              className={`compact-match-clock ${
+                periodBoundaryReached ? "added-time" : ""
+              }`}
+            >
+              <strong>{formatDuration(period.matchClockSeconds)}</strong>
+              {periodBoundaryReached && (
+                <small>+{formatDuration(period.addedTimeSeconds)}</small>
+              )}
+            </span>
+          </div>
+          <div className="compact-match-actions" aria-label="Match controls">
+            <IconButton
+              className={`compact-clock-button ${
+                game.clock.running ? "" : "turf-clock-action"
+              }`}
+              variant="default"
+              size="large"
+              icon={game.clock.running ? Pause : Play}
+              aria-label={clockActionLabel}
+              tabIndex={compactHeaderInteractive ? 0 : -1}
+              onClick={() => safeChange(changeClockState)}
+            />
+            <IconButton
+              className="compact-end-game-button"
+              variant="danger"
+              size="large"
+              icon={Flag}
+              aria-label="End game"
+              tabIndex={compactHeaderInteractive ? 0 : -1}
+              onClick={() => setEndConfirm(true)}
+            />
+          </div>
         </div>
       </div>
 

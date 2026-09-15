@@ -2619,6 +2619,25 @@ describe("Sideline app", () => {
     const compactHeader = container.querySelector(".compact-match-header");
 
     expect(
+      Array.from(compactHeader?.children ?? [], (child) => child.className),
+    ).toEqual([
+      "compact-match-team",
+      "compact-match-score",
+      "compact-match-management",
+    ]);
+    expect(
+      compactHeader?.querySelector(".compact-match-team .team-crest.mini"),
+    ).toHaveClass("golden-dragons");
+    expect(
+      compactHeader?.querySelector(".compact-match-team .team-crest"),
+    ).toHaveAttribute("aria-hidden", "true");
+    expect(
+      compactHeader?.querySelector(".compact-match-team strong"),
+    ).toHaveTextContent("Golden Dragons");
+    expect(
+      compactHeader?.querySelector(".compact-match-management")?.children,
+    ).toHaveLength(2);
+    expect(
       within(screen.getByLabelText("Match status")).getByText("10:00 left"),
     ).toBeInTheDocument();
     expect(compactHeader).toHaveAttribute("aria-hidden", "true");
@@ -3617,6 +3636,9 @@ describe("Sideline app", () => {
     ).toHaveClass("added-time");
     expect(
       compactHeader?.querySelector(".compact-match-score")?.nextElementSibling,
+    ).toHaveClass("compact-match-management");
+    expect(
+      compactHeader?.querySelector(".compact-match-timing")?.firstElementChild,
     ).toHaveClass("compact-match-period");
     expect(
       compactHeader?.querySelector(".compact-clock-glyph"),
