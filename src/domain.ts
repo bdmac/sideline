@@ -966,6 +966,44 @@ export const reassignIncomingSubstitution = (
   );
 };
 
+export const reassignOutgoingSubstitution = (
+  game: ActiveGame,
+  pairs: SubstitutionPair[],
+  pairIndex: number,
+  outPlayerId: string,
+): SubstitutionPair[] => {
+  const currentPair = pairs[pairIndex];
+  if (!currentPair || currentPair.outPlayerId === outPlayerId) return pairs;
+
+  const positionId = Object.entries(game.assignments).find(
+    ([, assignedPlayerId]) => assignedPlayerId === outPlayerId,
+  )?.[0];
+  if (!positionId) return pairs;
+
+  const existingPairIndex = pairs.findIndex(
+    (pair, index) => index !== pairIndex && pair.outPlayerId === outPlayerId,
+  );
+  if (existingPairIndex === -1) {
+    return pairs.map((pair, index) =>
+      index === pairIndex ? { ...pair, outPlayerId, positionId } : pair,
+    );
+  }
+
+  return pairs.map((pair, index) => {
+    if (index === pairIndex) {
+      return { ...pair, outPlayerId, positionId };
+    }
+    if (index === existingPairIndex) {
+      return {
+        ...pair,
+        outPlayerId: currentPair.outPlayerId,
+        positionId: currentPair.positionId,
+      };
+    }
+    return pair;
+  });
+};
+
 export const getRecommendedSubstitutionCount = (
   game: ActiveGame,
   team: Team,

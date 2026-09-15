@@ -1040,21 +1040,32 @@ describe("Sideline app", () => {
     const incomingPlayers =
       within(planner).getAllByLabelText(/incoming player/);
     const firstOutgoingName = outgoingPlayers[0].textContent?.trim() ?? "";
+    const secondOutgoingName = outgoingPlayers[1].textContent?.trim() ?? "";
+    const firstIncomingName = incomingPlayers[0].textContent?.trim() ?? "";
     fireEvent.click(outgoingPlayers[1]);
     expect(screen.getByText("Who's coming OUT?")).toBeInTheDocument();
     expect(screen.getByText(/^Choose the position for /)).toBeInTheDocument();
     const repeatedOutgoing = screen
       .getAllByRole("menuitemradio")
       .find((item) => item.textContent?.includes(firstOutgoingName));
-    expect(repeatedOutgoing).toBeUndefined();
+    expect(repeatedOutgoing).toBeDefined();
+    expect(repeatedOutgoing).toHaveTextContent(
+      `Going out for ${firstIncomingName}`,
+    );
+    expect(
+      repeatedOutgoing?.querySelector(
+        ".player-action-menu-status.outgoing-status",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen
         .getAllByRole("menuitemradio")
         .every((item) => item.getAttribute("aria-disabled") !== "true"),
     ).toBe(true);
-    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(repeatedOutgoing!);
+    expect(outgoingPlayers[1]).toHaveTextContent(firstOutgoingName);
+    expect(outgoingPlayers[0]).toHaveTextContent(secondOutgoingName);
 
-    const firstIncomingName = incomingPlayers[0].textContent?.trim() ?? "";
     fireEvent.click(incomingPlayers[1]);
     expect(screen.getByText("Who's going IN?")).toBeInTheDocument();
     expect(screen.getByText(/^At .+ for .+$/)).toBeInTheDocument();
@@ -1070,7 +1081,9 @@ describe("Sideline app", () => {
     expect(
       repeatedIncoming?.querySelector(".replacement-fit"),
     ).toHaveTextContent(/preference|Outside preferences/);
-    expect(repeatedIncoming).toHaveTextContent("Going in for Simon");
+    expect(repeatedIncoming).toHaveTextContent(
+      `Going in for ${secondOutgoingName}`,
+    );
     expect(
       repeatedIncoming?.querySelector(
         ".player-action-menu-status.incoming-status",
@@ -1438,11 +1451,16 @@ describe("Sideline app", () => {
     const visibleOutgoingIds = outgoingMenuItems.map((item) =>
       item.getAttribute("data-player-id"),
     );
-    expect(visibleOutgoingIds).toEqual(
-      expectedOutgoingOptions.filter(
+    const plannedOutgoingIds = expectedOutgoingOptions.filter((playerId) =>
+      unavailableOutgoingNames.includes(playerName(playerId)),
+    );
+    expect(visibleOutgoingIds).toEqual([
+      ...expectedOutgoingOptions.filter(
         (playerId) => !unavailableOutgoingNames.includes(playerName(playerId)),
       ),
-    );
+      ...plannedOutgoingIds,
+    ]);
+    expect(outgoingMenuItems.at(-1)).toHaveTextContent(/^.+Going out for /);
     fireEvent.keyDown(document, { key: "Escape" });
 
     const expectedIncomingOptions = [...game.benchIds].sort(

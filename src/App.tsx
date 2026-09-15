@@ -76,6 +76,7 @@ import {
   queueBenchSubstitution,
   queueSubstitutions,
   reassignIncomingSubstitution,
+  reassignOutgoingSubstitution,
   recordGoal,
   removeQueuedSubstitution,
   removeQueuedSubstitutionForOutgoing,
@@ -4129,6 +4130,7 @@ type PlayerActionMenuOption = {
     value: string;
   }>;
   statusText?: string;
+  statusDirection?: "incoming" | "outgoing";
 };
 
 function movePlannedOptionsLast(options: PlayerActionMenuOption[]) {
@@ -4276,7 +4278,13 @@ function PlayerActionMenu({
                     ))}
                   </span>
                   {option.statusText && (
-                    <span className="player-action-menu-status incoming-status">
+                    <span
+                      className={`player-action-menu-status ${
+                        option.statusDirection === "outgoing"
+                          ? "outgoing-status"
+                          : "incoming-status"
+                      }`}
+                    >
                       <ArrowRightLeft size={13} aria-hidden="true" />
                       {option.statusText}
                     </span>
@@ -4392,18 +4400,16 @@ function SubstitutionPlanner({
       return [...current, ...additionalPairs];
     });
   };
-  const updatePair = (index: number, patch: Partial<SubstitutionPair>) => {
-    setHasCoachSelections(true);
-    setPairs((current) =>
-      current.map((pair, pairIndex) =>
-        pairIndex === index ? { ...pair, ...patch } : pair,
-      ),
-    );
-  };
   const updateIncomingPlayer = (index: number, inPlayerId: string) => {
     setHasCoachSelections(true);
     setPairs((current) =>
       reassignIncomingSubstitution(game, current, index, inPlayerId, team),
+    );
+  };
+  const updateOutgoingPlayer = (index: number, outPlayerId: string) => {
+    setHasCoachSelections(true);
+    setPairs((current) =>
+      reassignOutgoingSubstitution(game, current, index, outPlayerId),
     );
   };
   const duplicateOuts =
@@ -4495,13 +4501,12 @@ function SubstitutionPlanner({
             const position = formation.positions.find(
               (item) => item.id === pair.positionId,
             );
-            const outgoingOptions = outgoingChoices.flatMap(
-              ([positionId, playerId]) => {
+            const outgoingOptions = movePlannedOptionsLast(
+              outgoingChoices.map(([positionId, playerId]) => {
                 const usedInSwap = pairs.findIndex(
                   (otherPair, pairIndex) =>
                     pairIndex !== index && otherPair.outPlayerId === playerId,
                 );
-                if (usedInSwap >= 0) return [];
                 const candidatePosition = formation.positions.find(
                   (item) => item.id === positionId,
                 );
@@ -4514,35 +4519,41 @@ function SubstitutionPlanner({
                         candidatePosition.role,
                       )
                     : -1;
-                return [
-                  {
-                    id: playerId,
-                    label: playerName(team, playerId),
-                    displayLabel: playerLabel(team, playerId),
-                    goalCount: playerGoalCount(game, playerId),
-                    preferenceIndex:
-                      preferenceIndex === -1
-                        ? Number.POSITIVE_INFINITY
-                        : preferenceIndex,
-                    positionLabel: candidatePosition?.label ?? "Open position",
-                    times: [
-                      {
-                        label: "Stint",
-                        value: formatPlayerDuration(
-                          getCurrentFieldSeconds(game, playerId),
-                        ),
-                      },
-                      {
-                        label: "Total",
-                        value: formatPlayerDuration(
-                          game.totals[playerId]?.fieldSeconds ?? 0,
-                          "Not played yet",
-                        ),
-                      },
-                    ],
-                  },
-                ];
-              },
+                return {
+                  id: playerId,
+                  label: playerName(team, playerId),
+                  displayLabel: playerLabel(team, playerId),
+                  goalCount: playerGoalCount(game, playerId),
+                  preferenceIndex:
+                    preferenceIndex === -1
+                      ? Number.POSITIVE_INFINITY
+                      : preferenceIndex,
+                  positionLabel: candidatePosition?.label ?? "Open position",
+                  times: [
+                    {
+                      label: "Stint",
+                      value: formatPlayerDuration(
+                        getCurrentFieldSeconds(game, playerId),
+                      ),
+                    },
+                    {
+                      label: "Total",
+                      value: formatPlayerDuration(
+                        game.totals[playerId]?.fieldSeconds ?? 0,
+                        "Not played yet",
+                      ),
+                    },
+                  ],
+                  statusText:
+                    usedInSwap >= 0
+                      ? `Going out for ${playerName(
+                          team,
+                          pairs[usedInSwap].inPlayerId,
+                        )}`
+                      : undefined,
+                  statusDirection: "outgoing" as const,
+                };
+              }),
             );
             const incomingOptions = movePlannedOptionsLast(
               incomingChoices.map((playerId) => {
@@ -4629,16 +4640,9 @@ function SubstitutionPlanner({
                     positionFirst
                     activeMenuId={activePlayerMenuId}
                     onActiveMenuChange={setActivePlayerMenuId}
-                    onChange={(playerId) => {
-                      const positionId =
-                        Object.entries(game.assignments).find(
-                          ([, id]) => id === playerId,
-                        )?.[0] ?? pair.positionId;
-                      updatePair(index, {
-                        outPlayerId: playerId,
-                        positionId,
-                      });
-                    }}
+                    onChange={(playerId) =>
+                      updateOutgoingPlayer(index, playerId)
+                    }
                   />
                 </div>
               </div>

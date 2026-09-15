@@ -24,6 +24,7 @@ import {
   queueBenchSubstitution,
   queueSubstitutions,
   reassignIncomingSubstitution,
+  reassignOutgoingSubstitution,
   recordGoal,
   removeQueuedSubstitution,
   removeQueuedSubstitutionForOutgoing,
@@ -1084,6 +1085,37 @@ describe("substitutions", () => {
     expect(updated[0].inPlayerId).not.toBe(displaced);
     expect(updated[2]).toEqual(pairs[2]);
     expect(new Set(updated.map((pair) => pair.inPlayerId)).size).toBe(3);
+  });
+
+  it("swaps occupied outgoing destinations without creating duplicates", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const pairs = suggestSubstitutions(game, 3, team);
+    const updated = reassignOutgoingSubstitution(
+      game,
+      pairs,
+      1,
+      pairs[0].outPlayerId,
+    );
+
+    expect(updated[1]).toMatchObject({
+      outPlayerId: pairs[0].outPlayerId,
+      positionId: pairs[0].positionId,
+      inPlayerId: pairs[1].inPlayerId,
+    });
+    expect(updated[0]).toMatchObject({
+      outPlayerId: pairs[1].outPlayerId,
+      positionId: pairs[1].positionId,
+      inPlayerId: pairs[0].inPlayerId,
+    });
+    expect(updated[2]).toEqual(pairs[2]);
+    expect(new Set(updated.map((pair) => pair.outPlayerId)).size).toBe(3);
   });
 
   it("selects a late arrival by played time rather than their short bench stint", () => {
