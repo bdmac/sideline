@@ -10,8 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import {
   applySubstitutions,
+  compareSubstitutionDestinations,
   createGame,
+  getCurrentFieldSeconds,
   getFormation,
+  getSubstitutionTimeBandSize,
   INITIAL_STATE,
   queueSubstitutions,
   recordGoal,
@@ -1040,7 +1043,7 @@ describe("Sideline app", () => {
         planner.querySelectorAll(".swap-transfer small"),
         (item) => item.textContent,
       ),
-    ).toEqual(expect.arrayContaining(["Keeper", "Center Back", "Left Mid"]));
+    ).toEqual(expect.arrayContaining(["Center Back", "Left Mid", "Striker"]));
     expect(screen.queryByText("Confirm together")).not.toBeInTheDocument();
     const outgoingPlayers =
       within(planner).getAllByLabelText(/outgoing player/);
@@ -1137,7 +1140,7 @@ describe("Sideline app", () => {
         summary.querySelectorAll(".ready-direction small"),
         (item) => item.textContent,
       ),
-    ).toEqual(expect.arrayContaining(["Keeper", "Center Back", "Left Mid"]));
+    ).toEqual(expect.arrayContaining(["Center Back", "Left Mid", "Striker"]));
     expect(
       summary.querySelectorAll(
         '.ready-player-number[data-component="Label"][data-variant="danger"]',
@@ -1502,15 +1505,42 @@ describe("Sideline app", () => {
       ]),
     );
 
-    const expectedOutgoingOptions = Object.values(game.assignments).sort(
-      (playerA, playerB) =>
-        game.totals[playerB].fieldSeconds - game.totals[playerA].fieldSeconds ||
-        playerName(playerA).localeCompare(playerName(playerB)),
-    );
+    const selectedIncomingName = within(planner)
+      .getAllByLabelText(/incoming player/)[0]
+      .textContent?.trim();
+    const selectedIncoming = team.roster.find(
+      (player) => player.name === selectedIncomingName,
+    )!;
+    const formation = getFormation(game.formationId);
     const unavailableOutgoingNames = within(planner)
       .getAllByLabelText(/outgoing player/)
       .slice(1)
       .map((button) => button.textContent?.trim());
+    const expectedOutgoingOptions = Object.entries(game.assignments)
+      .map(([positionId, playerId]) => {
+        const position = formation.positions.find(
+          (item) => item.id === positionId,
+        )!;
+        const preferenceIndex = selectedIncoming.preferredRoles.indexOf(
+          position.role,
+        );
+        return {
+          playerId,
+          alreadyPlanned: unavailableOutgoingNames.includes(
+            playerName(playerId),
+          ),
+          preferenceIndex:
+            preferenceIndex < 0 ? Number.POSITIVE_INFINITY : preferenceIndex,
+          currentFieldSeconds: getCurrentFieldSeconds(game, playerId),
+          totalFieldSeconds: game.totals[playerId].fieldSeconds,
+          formationIndex: formation.positions.findIndex(
+            (item) => item.id === positionId,
+          ),
+          timeBandSeconds: getSubstitutionTimeBandSize(game),
+        };
+      })
+      .sort(compareSubstitutionDestinations)
+      .map(({ playerId }) => playerId);
     fireEvent.click(within(planner).getAllByLabelText(/outgoing player/)[0]);
     const outgoingMenuItems = screen.getAllByRole("menuitemradio");
     expect(
@@ -1521,15 +1551,7 @@ describe("Sideline app", () => {
     const visibleOutgoingIds = outgoingMenuItems.map((item) =>
       item.getAttribute("data-player-id"),
     );
-    const plannedOutgoingIds = expectedOutgoingOptions.filter((playerId) =>
-      unavailableOutgoingNames.includes(playerName(playerId)),
-    );
-    expect(visibleOutgoingIds).toEqual([
-      ...expectedOutgoingOptions.filter(
-        (playerId) => !unavailableOutgoingNames.includes(playerName(playerId)),
-      ),
-      ...plannedOutgoingIds,
-    ]);
+    expect(visibleOutgoingIds).toEqual(expectedOutgoingOptions);
     expect(outgoingMenuItems.at(-1)).toHaveTextContent(/^.+Going out for /);
     fireEvent.keyDown(document, { key: "Escape" });
 
@@ -2310,6 +2332,18 @@ describe("Sideline app", () => {
         .getByRole("button", { name: `Plan ${incomingName} out` })
         .closest(".player-time-row"),
     ).toHaveTextContent("Playing0:37");
+    const fieldRows = Array.from(
+      document.querySelectorAll(".field-player-list .player-time-row"),
+    );
+    expect(fieldRows.at(-1)).toHaveTextContent(incomingName);
+
+    fireEvent.click(screen.getByRole("tab", { name: /Bench/ }));
+    const benchRows = Array.from(
+      document.querySelectorAll(
+        ".roster-tab-panel > .bench-list > .player-time-row",
+      ),
+    );
+    expect(benchRows.at(-1)).toHaveTextContent(outgoingName);
   });
 
   it("shows game-summary goal markers beside player names off the pitch", () => {

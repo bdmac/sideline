@@ -46,7 +46,7 @@ describe("persistence migrations", () => {
       activeGame,
     });
 
-    expect(migrated.version).toBe(14);
+    expect(migrated.version).toBe(15);
     expect(migrated.teams.u8.name).toBe("Golden Dragons");
     expect(migrated.teams.u8.roster.map((player) => player.name)).toEqual([
       "Simon",
@@ -82,7 +82,7 @@ describe("persistence migrations", () => {
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(14);
+    expect(migrated.version).toBe(15);
     expect(migrated.teams.u12.name).toBe("Fireballers");
     expect(migrated.teams.u12.roster.map((player) => player.name)).toEqual([
       "Jackson",
@@ -207,7 +207,7 @@ describe("persistence migrations", () => {
       activeGame: game,
     });
 
-    expect(migrated.version).toBe(14);
+    expect(migrated.version).toBe(15);
     expect(migrated.activeGame?.unavailableIds).toEqual(
       team.roster.slice(7).map((player) => player.id),
     );
@@ -232,7 +232,7 @@ describe("persistence migrations", () => {
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(14);
+    expect(migrated.version).toBe(15);
     expect(
       migrated.teams.u8.roster.find((player) => player.name === "Simon")
         ?.number,
@@ -257,7 +257,7 @@ describe("persistence migrations", () => {
       activeGame: null,
     });
 
-    expect(migrated.version).toBe(14);
+    expect(migrated.version).toBe(15);
     expect(
       migrated.teams.u8.roster.every(
         (player) => player.preferredRoles.length >= 2,
@@ -298,7 +298,7 @@ describe("persistence migrations", () => {
       ]),
     );
 
-    expect(migrated.version).toBe(14);
+    expect(migrated.version).toBe(15);
     expect(preferences.Maddox).toEqual(["goalkeeper", "midfielder", "forward"]);
     expect(preferences.Henry).toEqual(["goalkeeper", "midfielder", "forward"]);
     expect(preferences.Evan).toEqual(["goalkeeper", "midfielder"]);
@@ -315,7 +315,7 @@ describe("persistence migrations", () => {
       migrated.teams.u12.roster
         .filter((player) => player.preferredRoles.includes("goalkeeper"))
         .map((player) => player.name),
-    ).toEqual(["Jackson", "Matt", "Rayek"]);
+    ).toEqual(["Jackson", "William", "Matt", "Rayek"]);
     expect(
       migrated.teams.u12.roster.find((player) => player.name === "Jackson")
         ?.preferredRoles,
@@ -324,6 +324,10 @@ describe("persistence migrations", () => {
       migrated.teams.u12.roster.find((player) => player.name === "Matt")
         ?.preferredRoles,
     ).toEqual(["forward", "midfielder", "goalkeeper"]);
+    expect(
+      migrated.teams.u12.roster.find((player) => player.name === "William")
+        ?.preferredRoles,
+    ).toEqual(["midfielder", "forward", "goalkeeper", "defender"]);
     expect(
       migrated.teams.u12.roster.find((player) => player.name === "Rayek")
         ?.preferredRoles,
@@ -354,7 +358,7 @@ describe("persistence migrations", () => {
       activeGame: game,
     });
 
-    expect(migrated.version).toBe(14);
+    expect(migrated.version).toBe(15);
     expect(migrated.activeGame?.period).toEqual({
       current: 1,
       startedAtSeconds: 0,
@@ -394,6 +398,34 @@ describe("persistence migrations", () => {
     expect(migrated.activeGame?.periodEnds).toEqual([]);
   });
 
+  it("migrates William's role order without resetting other players", () => {
+    const teams = structuredClone(INITIAL_STATE.teams);
+    const william = teams.u12.roster.find(
+      (player) => player.name === "William",
+    )!;
+    const jackson = teams.u12.roster.find(
+      (player) => player.name === "Jackson",
+    )!;
+    william.preferredRoles = ["forward", "midfielder"];
+    jackson.preferredRoles = ["defender", "goalkeeper"];
+
+    const migrated = migrateStoredState({
+      version: 14,
+      teams,
+      activeGame: null,
+    });
+
+    expect(migrated.version).toBe(15);
+    expect(
+      migrated.teams.u12.roster.find((player) => player.name === "William")
+        ?.preferredRoles,
+    ).toEqual(["midfielder", "forward", "goalkeeper", "defender"]);
+    expect(
+      migrated.teams.u12.roster.find((player) => player.name === "Jackson")
+        ?.preferredRoles,
+    ).toEqual(["defender", "goalkeeper"]);
+  });
+
   it("migrates version 13 period starts into timeline boundaries", () => {
     const team = INITIAL_STATE.teams.u8;
     const game = createGame(
@@ -417,7 +449,7 @@ describe("persistence migrations", () => {
       activeGame: game,
     });
 
-    expect(migrated.version).toBe(14);
+    expect(migrated.version).toBe(15);
     expect(migrated.activeGame?.periodEnds).toEqual([
       { period: 1, atSeconds: 10 * 60 + 8 },
     ]);

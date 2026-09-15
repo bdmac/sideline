@@ -29,6 +29,24 @@ const applyCurrentRosterPreferences = (
   return nextTeams;
 };
 
+const applyWilliamPreferences = (
+  teams: AppState["teams"],
+): AppState["teams"] => {
+  const nextTeams = structuredClone(teams);
+  const currentWilliam = INITIAL_STATE.teams.u12.roster.find(
+    (player) => player.id === "u12-p6",
+  );
+  nextTeams.u12.roster = nextTeams.u12.roster.map((player) =>
+    player.id === currentWilliam?.id
+      ? {
+          ...player,
+          preferredRoles: [...currentWilliam.preferredRoles],
+        }
+      : player,
+  );
+  return nextTeams;
+};
+
 const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
   const team = INITIAL_STATE.teams[game.teamId];
   const periodCount = game.periodCount ?? (game.teamId === "u8" ? 4 : 2);
@@ -106,7 +124,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     parsed.version === 10
   ) {
     return {
-      version: 14,
+      version: 15,
       teams: structuredClone(INITIAL_STATE.teams),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -116,7 +134,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 11) {
     return {
-      version: 14,
+      version: 15,
       teams: applyCurrentRosterPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -126,8 +144,8 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 12) {
     return {
-      version: 14,
-      teams: parsed.teams as AppState["teams"],
+      version: 15,
+      teams: applyWilliamPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
         : null,
@@ -136,8 +154,8 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 13) {
     return {
-      version: 14,
-      teams: parsed.teams as AppState["teams"],
+      version: 15,
+      teams: applyWilliamPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
         : null,
@@ -145,6 +163,17 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   }
 
   if (parsed.version === 14) {
+    return {
+      ...(parsed as AppState),
+      version: 15,
+      teams: applyWilliamPreferences(parsed.teams as AppState["teams"]),
+      activeGame: parsed.activeGame
+        ? normalizeActiveGame(parsed.activeGame)
+        : null,
+    };
+  }
+
+  if (parsed.version === 15) {
     return {
       ...(parsed as AppState),
       activeGame: parsed.activeGame

@@ -12,11 +12,13 @@ import {
   FORMATIONS,
   getCurrentBenchSeconds,
   getCurrentFieldSeconds,
+  getFormation,
   getFormationsForTeam,
   getPeriodStatus,
   getRecommendedSubstitutionCount,
   getScore,
   getSubstitutionReminderStatus,
+  getSubstitutionTimeBandSize,
   INITIAL_TEAMS,
   markAvailable,
   markUnavailable,
@@ -40,6 +42,26 @@ import {
 } from "./domain";
 
 describe("substitution destination sorting", () => {
+  it("scales fairness bands from the game rotation cadence", () => {
+    const u8Game = createGame(
+      INITIAL_TEAMS.u8,
+      INITIAL_TEAMS.u8.defaultFormationId,
+      INITIAL_TEAMS.u8.roster.map((player) => player.id),
+      INITIAL_TEAMS.u8.defaultDurationMinutes,
+      1_000,
+    );
+    const u12Game = createGame(
+      INITIAL_TEAMS.u12,
+      INITIAL_TEAMS.u12.defaultFormationId,
+      INITIAL_TEAMS.u12.roster.map((player) => player.id),
+      INITIAL_TEAMS.u12.defaultDurationMinutes,
+      1_000,
+    );
+
+    expect(getSubstitutionTimeBandSize(u8Game)).toBe(2 * 60);
+    expect(getSubstitutionTimeBandSize(u12Game)).toBe(3 * 60);
+  });
+
   it("uses displayed timing bands before role fit and exact timing", () => {
     const candidates = [
       {
@@ -49,6 +71,7 @@ describe("substitution destination sorting", () => {
         currentFieldSeconds: 10 * 60,
         totalFieldSeconds: 20 * 60,
         formationIndex: 0,
+        timeBandSeconds: 3 * 60,
       },
       {
         id: "first-preference",
@@ -57,6 +80,7 @@ describe("substitution destination sorting", () => {
         currentFieldSeconds: 9 * 60 + 10,
         totalFieldSeconds: 18 * 60,
         formationIndex: 1,
+        timeBandSeconds: 3 * 60,
       },
       {
         id: "second-preference",
@@ -65,6 +89,7 @@ describe("substitution destination sorting", () => {
         currentFieldSeconds: 9 * 60 + 20,
         totalFieldSeconds: 18 * 60,
         formationIndex: 2,
+        timeBandSeconds: 3 * 60,
       },
       {
         id: "same-fit-more-total",
@@ -73,6 +98,7 @@ describe("substitution destination sorting", () => {
         currentFieldSeconds: 9 * 60 + 20,
         totalFieldSeconds: 19 * 60,
         formationIndex: 3,
+        timeBandSeconds: 3 * 60,
       },
       {
         id: "planned-longest",
@@ -81,6 +107,7 @@ describe("substitution destination sorting", () => {
         currentFieldSeconds: 30 * 60,
         totalFieldSeconds: 40 * 60,
         formationIndex: 4,
+        timeBandSeconds: 3 * 60,
       },
     ];
 
@@ -89,10 +116,10 @@ describe("substitution destination sorting", () => {
         .sort(compareSubstitutionDestinations)
         .map((candidate) => candidate.id),
     ).toEqual([
-      "outside-long-stint",
-      "same-fit-more-total",
       "first-preference",
+      "same-fit-more-total",
       "second-preference",
+      "outside-long-stint",
       "planned-longest",
     ]);
   });
@@ -189,7 +216,7 @@ describe("team rosters", () => {
       INITIAL_TEAMS.u12.roster
         .filter((player) => player.preferredRoles.includes("goalkeeper"))
         .map((player) => player.name),
-    ).toEqual(["Jackson", "Matt", "Rayek"]);
+    ).toEqual(["Jackson", "William", "Matt", "Rayek"]);
     expect(u8Numbers).toMatchObject({
       Simon: 10,
       Ollie: 23,
@@ -1036,6 +1063,52 @@ describe("substitutions", () => {
     expect(pair.inPlayerId).toBe(leastPlayed);
   });
 
+  it("uses outside-preference destinations only as a fallback", () => {
+    const team = structuredClone(INITIAL_TEAMS.u12);
+    const game = createGame(
+      team,
+      "9-3-1-3-1",
+      team.roster.map((player) => player.id),
+      60,
+      1_000,
+    );
+    const william = team.roster.find((player) => player.name === "William")!;
+    william.preferredRoles = ["midfielder", "forward"];
+    const goalkeeperId = game.assignments.gk;
+    const strikerId = game.assignments.f;
+    game.benchIds = [
+      william.id,
+      ...game.benchIds.filter((playerId) => playerId !== william.id),
+    ];
+    const williamPosition = Object.entries(game.assignments).find(
+      ([, playerId]) => playerId === william.id,
+    )?.[0];
+    if (williamPosition) {
+      game.assignments[williamPosition] = game.benchIds[1];
+      game.benchIds = game.benchIds.filter(
+        (playerId) => playerId !== game.assignments[williamPosition],
+      );
+    }
+    game.benchIds
+      .filter((playerId) => playerId !== william.id)
+      .forEach((playerId) => {
+        const player = team.roster.find((item) => item.id === playerId)!;
+        game.totals[playerId].fieldSeconds = player.preferredRoles.includes(
+          "goalkeeper",
+        )
+          ? 10 * 60
+          : 60;
+      });
+    game.totals[goalkeeperId].fieldSeconds = 5 * 60;
+    game.totals[strikerId].fieldSeconds = 3 * 60;
+
+    const [pair] = suggestSubstitutions(game, 1, team);
+
+    expect(pair.inPlayerId).toBe(william.id);
+    expect(pair.positionId).toBe("f");
+    expect(pair.outPlayerId).toBe(strikerId);
+  });
+
   it("spreads near-equal substitutions across lines", () => {
     const team = structuredClone(INITIAL_TEAMS.u12);
     team.roster.forEach((player) => {
@@ -1066,11 +1139,11 @@ describe("substitutions", () => {
           .role,
     );
 
-    expect(roles.filter((role) => role === "defender")).toHaveLength(2);
-    expect(roles.filter((role) => role === "midfielder")).toHaveLength(1);
+    expect(roles.filter((role) => role === "defender")).toHaveLength(1);
+    expect(roles.filter((role) => role === "midfielder")).toHaveLength(2);
   });
 
-  it("still favors a whole line when its fairness gap is substantial", () => {
+  it("still favors more of an overdue line when its fairness gap is substantial", () => {
     const team = structuredClone(INITIAL_TEAMS.u12);
     team.roster.forEach((player) => {
       player.preferredRoles = player.preferredRoles.filter(
@@ -1100,7 +1173,8 @@ describe("substitutions", () => {
           .role,
     );
 
-    expect(roles).toEqual(["defender", "defender", "defender"]);
+    expect(roles.filter((role) => role === "defender")).toHaveLength(2);
+    expect(roles.filter((role) => role === "midfielder")).toHaveLength(1);
   });
 
   it("recommends a fresh player only for the row displaced by an incoming conflict", () => {
@@ -1241,7 +1315,14 @@ describe("substitutions", () => {
       reserveGoalkeeper,
     );
 
-    game.totals[goalkeeperId].fieldSeconds = 600;
+    game.totals[goalkeeperId].fieldSeconds =
+      getSubstitutionTimeBandSize(game) - 1;
+    expect(getRecommendedSubstitutionCount(game, team)).toBe(1);
+    expect(suggestSubstitutions(game, 1, team)[0].inPlayerId).not.toBe(
+      reserveGoalkeeper,
+    );
+
+    game.totals[goalkeeperId].fieldSeconds = getSubstitutionTimeBandSize(game);
     game.totals[reserveGoalkeeper].fieldSeconds = 0;
 
     expect(getRecommendedSubstitutionCount(game, team)).toBe(2);
@@ -1249,6 +1330,47 @@ describe("substitutions", () => {
       positionId: "gk",
       outPlayerId: goalkeeperId,
       inPlayerId: reserveGoalkeeper,
+    });
+  });
+
+  it("benches an on-field goalkeeper option before an overdue keeper rotation", () => {
+    const team = structuredClone(INITIAL_TEAMS.u8);
+    team.roster.forEach((player) => {
+      player.preferredRoles = player.preferredRoles.filter(
+        (role) => role !== "goalkeeper",
+      );
+    });
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const goalkeeperId = game.assignments.gk;
+    const reservePositionId = Object.keys(game.assignments).find(
+      (positionId) => positionId !== "gk",
+    )!;
+    const reserveGoalkeeperId = game.assignments[reservePositionId];
+    team.roster.find((player) => player.id === goalkeeperId)!.preferredRoles = [
+      "goalkeeper",
+    ];
+    team.roster.find(
+      (player) => player.id === reserveGoalkeeperId,
+    )!.preferredRoles = ["goalkeeper", "defender"];
+    game.clock.elapsedSeconds =
+      getSubstitutionReminderStatus(game).intervalSeconds;
+
+    const reservePreparation = suggestSubstitutions(game, 1, team)[0];
+    expect(reservePreparation.outPlayerId).toBe(reserveGoalkeeperId);
+    expect(reservePreparation.positionId).toBe(reservePositionId);
+
+    game = applySubstitutions(game, [reservePreparation], team.sideSize, 2_000);
+
+    expect(suggestSubstitutions(game, 1, team)[0]).toEqual({
+      positionId: "gk",
+      outPlayerId: goalkeeperId,
+      inPlayerId: reserveGoalkeeperId,
     });
   });
 
@@ -1276,6 +1398,52 @@ describe("substitutions", () => {
     expect(
       incomingIds.filter((playerId) => benchGoalkeepers.includes(playerId)),
     ).toHaveLength(1);
+  });
+
+  it("allows a rotated goalkeeper to return in an outfield role", () => {
+    const team = structuredClone(INITIAL_TEAMS.u8);
+    team.roster.forEach((player) => {
+      player.preferredRoles = player.preferredRoles.filter(
+        (role) => role !== "goalkeeper",
+      );
+    });
+    team.roster[0].preferredRoles = ["goalkeeper", "defender"];
+    team.roster[5].preferredRoles = ["goalkeeper", "defender"];
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    const originalGoalkeeper = game.assignments.gk;
+    const reserveGoalkeeper = game.benchIds[0];
+    team.roster.find(
+      (player) => player.id === reserveGoalkeeper,
+    )!.preferredRoles = ["goalkeeper", "defender"];
+    game.totals[originalGoalkeeper].fieldSeconds =
+      getSubstitutionTimeBandSize(game);
+    game.totals[reserveGoalkeeper].fieldSeconds = 0;
+
+    const goalkeeperRotation = suggestSubstitutions(game, 2, team).find(
+      (pair) => pair.positionId === "gk",
+    )!;
+    game = applySubstitutions(game, [goalkeeperRotation], team.sideSize, 2_000);
+    game.benchIds
+      .filter((playerId) => playerId !== originalGoalkeeper)
+      .forEach((playerId) => {
+        game.totals[playerId].fieldSeconds =
+          game.totals[originalGoalkeeper].fieldSeconds +
+          getSubstitutionTimeBandSize(game);
+      });
+
+    const [outfieldReturn] = suggestSubstitutions(game, 1, team);
+    const returnRole = getFormation(game.formationId).positions.find(
+      (position) => position.id === outfieldReturn.positionId,
+    )!.role;
+
+    expect(outfieldReturn.inPlayerId).toBe(originalGoalkeeper);
+    expect(returnRole).toBe("defender");
   });
 
   it("tracks the current bench stint separately from aggregate bench time", () => {

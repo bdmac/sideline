@@ -70,6 +70,7 @@ import {
   getRecommendedSubstitutionCount,
   getScore,
   getSubstitutionReminderStatus,
+  getSubstitutionTimeBandSize,
   markAvailable,
   markUnavailable,
   materializeGame,
@@ -1627,6 +1628,26 @@ function LiveGameScreen({
   const currentFieldTimes = Object.fromEntries(
     fieldIds.map((id) => [id, getCurrentFieldSeconds(displayed, id)]),
   );
+  const sortedFieldPositions = formation.positions
+    .map((position, formationIndex) => ({
+      position,
+      formationIndex,
+      playerId: game.assignments[position.id],
+    }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        position: (typeof formation.positions)[number];
+        formationIndex: number;
+        playerId: string;
+      } => Boolean(entry.playerId),
+    )
+    .sort(
+      (a, b) =>
+        currentFieldTimes[b.playerId] - currentFieldTimes[a.playerId] ||
+        a.formationIndex - b.formationIndex,
+    );
   const showPitchPlayerTimes = fieldIds.some(
     (id) =>
       (displayed.totals[id]?.fieldSeconds ?? 0) !==
@@ -1638,6 +1659,13 @@ function LiveGameScreen({
   const benchTimes = Object.fromEntries(
     game.benchIds.map((id) => [id, getCurrentBenchSeconds(displayed, id)]),
   );
+  const sortedBenchIds = game.benchIds
+    .map((id, benchIndex) => ({ id, benchIndex }))
+    .sort(
+      (a, b) =>
+        benchTimes[b.id] - benchTimes[a.id] || a.benchIndex - b.benchIndex,
+    )
+    .map(({ id }) => id);
   const benchSinceStartCount = game.benchIds.filter(
     (id) => benchTimes[id] === displayed.clock.elapsedSeconds,
   ).length;
@@ -2390,9 +2418,7 @@ function LiveGameScreen({
             {rosterView === "field" ? (
               fieldIds.length ? (
                 <div className="bench-list field-player-list">
-                  {formation.positions.map((position) => {
-                    const id = game.assignments[position.id];
-                    if (!id) return null;
+                  {sortedFieldPositions.map(({ position, playerId: id }) => {
                     const queuedPair = queuedPairs.find(
                       (pair) => pair.outPlayerId === id,
                     );
@@ -2448,7 +2474,7 @@ function LiveGameScreen({
                   </div>
                 )}
                 <div className="bench-list">
-                  {game.benchIds.map((id) => {
+                  {sortedBenchIds.map((id) => {
                     const queuedPair = queuedPairs.find(
                       (pair) => pair.inPlayerId === id,
                     );
@@ -3452,6 +3478,7 @@ function BenchSubstitutionPicker({
   const player = team.roster.find((item) => item.id === playerId);
   if (!player) return null;
   const formation = getFormation(game.formationId);
+  const timeBandSeconds = getSubstitutionTimeBandSize(game);
   const selectedPositionEntry = Object.entries(game.assignments).find(
     ([, outPlayerId]) => outPlayerId === selectedOutPlayerId,
   );
@@ -3478,6 +3505,7 @@ function BenchSubstitutionPicker({
           preferenceIndex === -1 ? Number.POSITIVE_INFINITY : preferenceIndex,
         currentFieldSeconds: getCurrentFieldSeconds(game, outPlayerId),
         totalFieldSeconds: game.totals[outPlayerId]?.fieldSeconds ?? 0,
+        timeBandSeconds,
         plannedIncomingName: plannedPair
           ? playerName(team, plannedPair.inPlayerId)
           : undefined,
@@ -4443,15 +4471,23 @@ function SubstitutionPlanner({
     !duplicateOuts &&
     !duplicateIns &&
     pairErrors.length === 0;
+  const timeBandSeconds = getSubstitutionTimeBandSize(game);
   const outgoingChoices = Object.entries(game.assignments);
-  const incomingChoices = [...game.benchIds].sort(
-    (playerA, playerB) =>
-      (game.totals[playerA]?.fieldSeconds ?? 0) -
-        (game.totals[playerB]?.fieldSeconds ?? 0) ||
-      getCurrentBenchSeconds(game, playerB) -
-        getCurrentBenchSeconds(game, playerA) ||
-      playerName(team, playerA).localeCompare(playerName(team, playerB)),
-  );
+  const incomingChoices = [...game.benchIds].sort((playerA, playerB) => {
+    const playerAFieldSeconds = game.totals[playerA]?.fieldSeconds ?? 0;
+    const playerBFieldSeconds = game.totals[playerB]?.fieldSeconds ?? 0;
+    const playerABenchSeconds = getCurrentBenchSeconds(game, playerA);
+    const playerBBenchSeconds = getCurrentBenchSeconds(game, playerB);
+    const toBand = (seconds: number) =>
+      Math.floor(Math.max(0, seconds) / timeBandSeconds) * timeBandSeconds;
+    return (
+      toBand(playerAFieldSeconds) - toBand(playerBFieldSeconds) ||
+      toBand(playerBBenchSeconds) - toBand(playerABenchSeconds) ||
+      playerAFieldSeconds - playerBFieldSeconds ||
+      playerBBenchSeconds - playerABenchSeconds ||
+      playerName(team, playerA).localeCompare(playerName(team, playerB))
+    );
+  });
 
   return (
     <SidelineDialog
@@ -4549,6 +4585,7 @@ function SubstitutionPlanner({
                   currentFieldSeconds: getCurrentFieldSeconds(game, playerId),
                   totalFieldSeconds: game.totals[playerId]?.fieldSeconds ?? 0,
                   formationIndex,
+                  timeBandSeconds,
                   positionLabel: candidatePosition?.label ?? "Open position",
                   times: [
                     {

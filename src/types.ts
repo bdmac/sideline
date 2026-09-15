@@ -127,7 +127,7 @@ export type ActiveGame = {
 };
 
 export type AppState = {
-  version: 14;
+  version: 15;
   teams: Record<TeamId, Team>;
   activeGame: ActiveGame | null;
 };
