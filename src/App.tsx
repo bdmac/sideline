@@ -5929,15 +5929,32 @@ function GoalMarkedPlayerName({
   );
 }
 
+function SoccerBallPanels() {
+  return (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path
+        d="m12 6.8 3.1 2.3-1.2 3.6h-3.8L8.9 9.1 12 6.8Z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path
+        d="m12 3 1.6 2.1h-3.2L12 3Zm7.8 6.2-2.5 1-.9-2.9 3.4 1.9Zm-3 9.3-2.3-1.7 2.4-1.8-.1 3.5Zm-9.6 0 .1-3.5 2.3 1.8-2.4 1.7ZM4.2 9.2l3.4-1.9-.9 2.9-2.5-1Z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path
+        d="m10.4 5.1-1.5 4m4.7-4 1.5 4m2.2 1.1-3.4 2.5m.6 4.1-.6-4.1m-4.3 4.1.5-4.1m-3.4-2.5 3.4 2.5"
+        fill="none"
+      />
+    </>
+  );
+}
+
 function SoccerBallIcon() {
   return (
     <svg className="soccer-ball-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" />
-      <path d="m12 7 3 2.2-1.1 3.5h-3.8L9 9.2 12 7Z" fill="currentColor" />
-      <path
-        d="M9 9.2 5.4 9.1m4.7 3.6-2.3 3m6.1-3 2.3 3M15 9.2l3.6-.1M7.8 15.7 7 19m9.2-3.3.8 3"
-        fill="none"
-      />
+      <SoccerBallPanels />
     </svg>
   );
 }
@@ -5949,12 +5966,9 @@ function HatTrickBallIcon() {
       viewBox="0 0 24 28"
       aria-hidden="true"
     >
-      <circle cx="12" cy="18" r="8" />
-      <path d="m12 13.5 2.7 2-1 3.1h-3.4l-1-3.1 2.7-2Z" fill="currentColor" />
-      <path
-        d="m9.3 15.5-3.2-.1m4.2 3.2-2.1 2.7m5.5-2.7 2.1 2.7m-1.1-5.8 3.2-.1m-9.7 5.9-.7 2.9m8.3-2.9.7 2.9"
-        fill="none"
-      />
+      <g transform="translate(1.333 7.333) scale(0.889)">
+        <SoccerBallPanels />
+      </g>
       <path d="M7.5 2.5h9L17.8 10H6.2l1.3-7.5Z" fill="currentColor" />
       <path d="M4.5 10h15" fill="none" strokeWidth="2.2" />
       <path d="M6.7 7.5h10.6" fill="none" stroke="var(--paper)" />
