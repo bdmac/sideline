@@ -421,7 +421,8 @@ h3 {
   font-weight: 800;
 }
 
-.match-fast-forward-button {
+.match-fast-forward-button,
+.demo-match-header-action {
   min-width: 44px;
   min-height: 44px;
 }
@@ -4275,6 +4276,7 @@ select:hover {
     align-items: center;
     justify-self: end;
     gap: 0.25rem;
+    margin-left: 0.4rem;
   }
 
   .compact-clock-button,

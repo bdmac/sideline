@@ -504,6 +504,14 @@ describe("Sideline app", () => {
     expect(
       screen.queryByRole("button", { name: "Fast-forward game clock" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause" })).toHaveAttribute(
+      "data-component",
+      "Button",
+    );
+    expect(screen.getByRole("button", { name: "End game" })).toHaveAttribute(
+      "data-component",
+      "Button",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     const demoModeSwitch = await screen.findByRole("button", {
@@ -522,6 +530,14 @@ describe("Sideline app", () => {
     expect(
       screen.getByRole("button", { name: "Fast-forward game clock" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause" })).toHaveAttribute(
+      "data-component",
+      "IconButton",
+    );
+    expect(screen.getByRole("button", { name: "End game" })).toHaveAttribute(
+      "data-component",
+      "IconButton",
+    );
   });
 
   it("jumps by demo minute offsets and continues normal timing", () => {
@@ -3523,13 +3539,16 @@ describe("Sideline app", () => {
       within(compactHeader as HTMLElement).getByText("10:04"),
     ).toBeInTheDocument();
     expect(
-      within(compactHeader as HTMLElement).getByText("+0:04 added"),
+      within(compactHeader as HTMLElement).getByText("+0:04"),
     ).toBeInTheDocument();
     expect(
       within(compactHeader as HTMLElement)
-        .getByText("+0:04 added")
+        .getByText("+0:04")
         .closest(".compact-match-clock"),
     ).toHaveClass("added-time");
+    expect(
+      compactHeader?.querySelector(".compact-match-score")?.nextElementSibling,
+    ).toHaveClass("compact-match-period");
 
     fireEvent.click(
       within(addedTimeBanner).getByRole("button", {

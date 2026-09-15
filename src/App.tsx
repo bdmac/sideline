@@ -2284,21 +2284,34 @@ function LiveGameScreen({
             </span>
           </div>
           <div className="match-header-actions" aria-label="Match controls">
-            <Button
-              className={`match-clock-button ${
-                game.clock.running ? "" : "turf-clock-action"
-              }`}
-              variant="default"
-              size="medium"
-              leadingVisual={game.clock.running ? Pause : Play}
-              aria-label={clockActionLabel}
-              onClick={() => safeChange(changeClockState)}
-            >
-              {clockActionLabel}
-            </Button>
+            {demoClockEnabled ? (
+              <IconButton
+                className={`match-clock-button demo-match-header-action ${
+                  game.clock.running ? "" : "turf-clock-action"
+                }`}
+                variant="default"
+                size="large"
+                icon={game.clock.running ? Pause : Play}
+                aria-label={clockActionLabel}
+                onClick={() => safeChange(changeClockState)}
+              />
+            ) : (
+              <Button
+                className={`match-clock-button ${
+                  game.clock.running ? "" : "turf-clock-action"
+                }`}
+                variant="default"
+                size="medium"
+                leadingVisual={game.clock.running ? Pause : Play}
+                aria-label={clockActionLabel}
+                onClick={() => safeChange(changeClockState)}
+              >
+                {clockActionLabel}
+              </Button>
+            )}
             {demoClockEnabled && (
               <IconButton
-                className="match-fast-forward-button"
+                className="match-fast-forward-button demo-match-header-action"
                 variant="default"
                 size="large"
                 icon={FastForward}
@@ -2306,16 +2319,27 @@ function LiveGameScreen({
                 onClick={() => setDemoClockOpen(true)}
               />
             )}
-            <Button
-              variant="danger"
-              size="medium"
-              leadingVisual={Flag}
-              aria-label="End game"
-              onClick={() => setEndConfirm(true)}
-            >
-              <span className="match-end-copy-long">End game</span>
-              <span className="match-end-copy-short">End</span>
-            </Button>
+            {demoClockEnabled ? (
+              <IconButton
+                className="demo-match-header-action"
+                variant="danger"
+                size="large"
+                icon={Flag}
+                aria-label="End game"
+                onClick={() => setEndConfirm(true)}
+              />
+            ) : (
+              <Button
+                variant="danger"
+                size="medium"
+                leadingVisual={Flag}
+                aria-label="End game"
+                onClick={() => setEndConfirm(true)}
+              >
+                <span className="match-end-copy-long">End game</span>
+                <span className="match-end-copy-short">End</span>
+              </Button>
+            )}
           </div>
         </header>
 
@@ -2434,7 +2458,7 @@ function LiveGameScreen({
           <span>
             <strong>{formatDuration(period.matchClockSeconds)}</strong>
             {periodBoundaryReached && (
-              <small>+{formatDuration(period.addedTimeSeconds)} added</small>
+              <small>+{formatDuration(period.addedTimeSeconds)}</small>
             )}
           </span>
         </span>
