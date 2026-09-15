@@ -36,11 +36,7 @@ const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
   const legacyCompletedPeriod = game.periodBreak?.completedPeriod;
   const currentPeriod = Math.min(
     periodCount,
-    Math.max(
-      1,
-      legacyCompletedPeriod ??
-        Math.floor(game.clock.elapsedSeconds / periodLength) + 1,
-    ),
+    Math.max(1, legacyCompletedPeriod ?? 1),
   );
   const period = game.period ?? {
     current: currentPeriod,

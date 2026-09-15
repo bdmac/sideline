@@ -2003,6 +2003,37 @@ describe("Sideline app", () => {
     ).toHaveAccessibleName("Start H1");
   });
 
+  it("keeps an unadvanced recovered game in its first quarter", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    delete (game as Partial<typeof game>).period;
+    delete (game as Partial<typeof game>).periodEnds;
+    game.clock = {
+      elapsedSeconds: 25 * 60,
+      running: false,
+      lastStartedAt: null,
+    };
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    render(<App />);
+
+    expect(screen.getByText("Quarter 1 time reached")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "End Quarter 1" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Quarter 3 time reached"),
+    ).not.toBeInTheDocument();
+  });
+
   it("prioritizes the below-pace warning over total bench time", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;

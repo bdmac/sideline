@@ -364,6 +364,36 @@ describe("persistence migrations", () => {
     ]);
   });
 
+  it("does not infer skipped periods from elapsed time during recovery", () => {
+    const team = INITIAL_STATE.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    delete (game as Partial<typeof game>).period;
+    delete (game as Partial<typeof game>).periodEnds;
+    game.clock = {
+      elapsedSeconds: 25 * 60,
+      running: true,
+      lastStartedAt: 1_000,
+    };
+
+    const migrated = migrateStoredState({
+      version: 14,
+      teams: structuredClone(INITIAL_STATE.teams),
+      activeGame: game,
+    });
+
+    expect(migrated.activeGame?.period).toEqual({
+      current: 1,
+      startedAtSeconds: 0,
+    });
+    expect(migrated.activeGame?.periodEnds).toEqual([]);
+  });
+
   it("migrates version 13 period starts into timeline boundaries", () => {
     const team = INITIAL_STATE.teams.u8;
     const game = createGame(
