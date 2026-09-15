@@ -1682,6 +1682,120 @@ select:hover {
     0 5px 0 var(--pitch-shadow);
 }
 
+.pitch-player.swap-confirmed {
+  animation: pitch-swap-confirmed 720ms ease-out;
+}
+
+.pitch-swap-confirmation-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 6;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: var(--turf-dark);
+  border: 2px solid var(--paper);
+  border-radius: 50%;
+  box-shadow: 0 3px 0 rgba(9, 26, 29, 0.28);
+  pointer-events: none;
+  animation: pitch-swap-confirmation-mark 1.1s ease-out both;
+}
+
+.pitch-swap-confirmation-mark svg {
+  stroke-width: 3;
+}
+
+.pitch-drag-confirmation {
+  position: absolute;
+  top: 1.55rem;
+  left: 50%;
+  z-index: 7;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  max-width: calc(100% - 3rem);
+  padding: 0.48rem 0.68rem;
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow: 0 4px 0 rgba(9, 26, 29, 0.22);
+  font-size: 0.76rem;
+  font-weight: 850;
+  line-height: 1.15;
+  text-align: center;
+  pointer-events: none;
+  animation: pitch-drag-confirmation 1.3s ease both;
+}
+
+.pitch-drag-confirmation svg {
+  flex: none;
+  color: var(--warm);
+  stroke-width: 3;
+}
+
+@keyframes pitch-swap-confirmed {
+  0% {
+    border-color: var(--warm);
+    background: var(--warm-pale);
+    box-shadow:
+      0 0 0 5px rgba(220, 102, 48, 0.32),
+      0 5px 0 var(--pitch-shadow);
+  }
+
+  42% {
+    border-color: var(--turf);
+    background: var(--turf-pale);
+    box-shadow:
+      0 0 0 4px rgba(21, 122, 103, 0.25),
+      0 5px 0 var(--pitch-shadow);
+  }
+
+  100% {
+    border-color: var(--pitch-card-border);
+    background: var(--paper);
+    box-shadow: 0 5px 0 var(--pitch-shadow);
+  }
+}
+
+@keyframes pitch-swap-confirmation-mark {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.72);
+  }
+
+  16%,
+  68% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+}
+
+@keyframes pitch-drag-confirmation {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -0.45rem);
+  }
+
+  14%,
+  76% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -0.2rem);
+  }
+}
+
 .pitch-player strong,
 .pitch-player small {
   display: block;

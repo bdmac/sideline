@@ -995,25 +995,114 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
+  it("smoothly returns a player after a canceled pitch drag", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+
+    const ollie = screen.getByRole("button", {
+      name: "Open actions for Ollie",
+    });
+    const animate = vi.fn(() => ({
+      cancel: vi.fn(),
+      onfinish: null,
+    }));
+    Object.defineProperty(ollie, "animate", {
+      configurable: true,
+      value: animate,
+    });
+    const haru = screen.getByRole("button", {
+      name: "Open actions for Haru",
+    });
+    vi.spyOn(haru, "getBoundingClientRect").mockReturnValue({
+      left: 640,
+      top: 380,
+      right: 760,
+      bottom: 460,
+      width: 120,
+      height: 80,
+      x: 640,
+      y: 380,
+      toJSON: () => ({}),
+    });
+
+    fireEvent(
+      ollie,
+      new MouseEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        clientX: 300,
+        clientY: 420,
+      }),
+    );
+    fireEvent(
+      ollie,
+      new MouseEvent("pointermove", {
+        bubbles: true,
+        clientX: 700,
+        clientY: 420,
+      }),
+    );
+    expect(haru).toHaveClass("drop-target");
+    fireEvent(
+      ollie,
+      new MouseEvent("pointermove", {
+        bubbles: true,
+        clientX: 790,
+        clientY: 320,
+      }),
+    );
+    expect(haru).not.toHaveClass("drop-target");
+    fireEvent(
+      ollie,
+      new MouseEvent("pointerup", {
+        bubbles: true,
+        clientX: 820,
+        clientY: 340,
+      }),
+    );
+
+    expect(ollie).not.toHaveClass("dragging");
+    expect(animate).toHaveBeenCalledOnce();
+    expect(animate).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          transform: expect.stringContaining("490px"),
+        }),
+        expect.objectContaining({
+          transform: "translate(-50%, -50%)",
+          opacity: "1",
+        }),
+      ],
+      {
+        duration: 260,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+      },
+    );
+    expect(screen.queryByText("Ollie ↔ Haru")).not.toBeInTheDocument();
+  });
+
   it("drags an on-field player onto another position", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
 
-    const pitch = container.querySelector(".pitch")!;
-    vi.spyOn(pitch, "getBoundingClientRect").mockReturnValue({
-      left: 0,
-      top: 0,
-      right: 1_000,
-      bottom: 1_000,
-      width: 1_000,
-      height: 1_000,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    });
     const ollie = screen.getByRole("button", {
       name: "Open actions for Ollie",
+    });
+    const haru = screen.getByRole("button", {
+      name: "Open actions for Haru",
+    });
+    vi.spyOn(haru, "getBoundingClientRect").mockReturnValue({
+      left: 640,
+      top: 380,
+      right: 760,
+      bottom: 460,
+      width: 120,
+      height: 80,
+      x: 640,
+      y: 380,
+      toJSON: () => ({}),
     });
 
     fireEvent(
@@ -1046,6 +1135,15 @@ describe("Sideline app", () => {
     expect(
       screen.getByText("Left Midfielder ↔ Right Midfielder"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Ollie and Haru swapped",
+    );
+    expect(
+      container.querySelectorAll(".pitch-player.swap-confirmed"),
+    ).toHaveLength(2);
+    expect(
+      container.querySelectorAll(".pitch-swap-confirmation-mark"),
+    ).toHaveLength(2);
   });
 
   it("readies substitutions without changing the lineup, then sends them in", () => {

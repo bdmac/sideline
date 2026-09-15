@@ -2931,7 +2931,46 @@ function Pitch({
     dragging: boolean;
   } | null>(null);
   const [dragState, setDragState] = useState(dragRef.current);
+  const [swapFeedback, setSwapFeedback] = useState<{
+    positionIds: string[];
+    playerIds: string[];
+    message: string;
+  } | null>(null);
   const suppressClickRef = useRef(false);
+  const returnAnimationRef = useRef<Animation | null>(null);
+  const feedbackTimerRef = useRef<number | null>(null);
+
+  const findDropTargetPositionId = (
+    clientX: number,
+    clientY: number,
+    sourcePositionId: string,
+  ) =>
+    Array.from(
+      pitchRef.current?.querySelectorAll<HTMLElement>(
+        ".pitch-player[data-position-id]",
+      ) ?? [],
+    ).find((element) => {
+      if (element.dataset.positionId === sourcePositionId) return false;
+      const bounds = element.getBoundingClientRect();
+      return (
+        bounds.width > 0 &&
+        bounds.height > 0 &&
+        clientX >= bounds.left &&
+        clientX <= bounds.right &&
+        clientY >= bounds.top &&
+        clientY <= bounds.bottom
+      );
+    })?.dataset.positionId ?? null;
+
+  useEffect(
+    () => () => {
+      returnAnimationRef.current?.cancel();
+      if (feedbackTimerRef.current !== null) {
+        window.clearTimeout(feedbackTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const updateDrag = (
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -2945,28 +2984,11 @@ function Pitch({
     const dragging = drag.dragging || Math.hypot(deltaX, deltaY) > 8;
     if (!dragging) return;
 
-    const bounds = pitchRef.current?.getBoundingClientRect();
-    let targetPositionId: string | null = null;
-    if (
-      bounds &&
-      event.clientX >= bounds.left &&
-      event.clientX <= bounds.right &&
-      event.clientY >= bounds.top &&
-      event.clientY <= bounds.bottom
-    ) {
-      const x = ((event.clientX - bounds.left) / bounds.width) * 100;
-      const y = ((event.clientY - bounds.top) / bounds.height) * 100;
-      const target = formation.positions.reduce(
-        (closest, position) => {
-          const distance = Math.hypot(position.x - x, position.y - y);
-          return distance < closest.distance
-            ? { id: position.id, distance }
-            : closest;
-        },
-        { id: sourcePositionId, distance: Number.POSITIVE_INFINITY },
-      );
-      targetPositionId = target.id === sourcePositionId ? null : target.id;
-    }
+    const targetPositionId = findDropTargetPositionId(
+      event.clientX,
+      event.clientY,
+      sourcePositionId,
+    );
 
     const nextDrag = {
       ...drag,
@@ -2980,7 +3002,10 @@ function Pitch({
     event.preventDefault();
   };
 
-  const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const finishDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    canceled = false,
+  ) => {
     const drag = dragRef.current;
     if (drag?.dragging) {
       event.preventDefault();
@@ -2988,8 +3013,72 @@ function Pitch({
       window.setTimeout(() => {
         suppressClickRef.current = false;
       }, 0);
-      if (drag.targetPositionId) {
-        onMovePlayer(drag.playerId, drag.targetPositionId);
+      const targetPositionId = canceled
+        ? null
+        : findDropTargetPositionId(
+            event.clientX,
+            event.clientY,
+            drag.sourcePositionId,
+          );
+      if (targetPositionId) {
+        const targetPlayerId = assignments[targetPositionId];
+        const sourcePlayerName = playerName(team, drag.playerId);
+        const targetPosition = formation.positions.find(
+          (position) => position.id === targetPositionId,
+        );
+        const message = targetPlayerId
+          ? `${sourcePlayerName} and ${playerName(team, targetPlayerId)} swapped`
+          : `${sourcePlayerName} moved to ${targetPosition?.label ?? "new position"}`;
+
+        if (feedbackTimerRef.current !== null) {
+          window.clearTimeout(feedbackTimerRef.current);
+        }
+        setSwapFeedback({
+          positionIds: [drag.sourcePositionId, targetPositionId],
+          playerIds: [
+            drag.playerId,
+            ...(targetPlayerId ? [targetPlayerId] : []),
+          ],
+          message,
+        });
+        feedbackTimerRef.current = window.setTimeout(() => {
+          setSwapFeedback(null);
+          feedbackTimerRef.current = null;
+        }, 1_300);
+        onMovePlayer(drag.playerId, targetPositionId);
+      } else {
+        const playerElement = event.currentTarget;
+        const currentStyle = window.getComputedStyle(playerElement);
+        const reduceMotion =
+          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
+          false;
+        returnAnimationRef.current?.cancel();
+        if (typeof playerElement.animate === "function") {
+          const animation = playerElement.animate(
+            [
+              {
+                transform: currentStyle.transform,
+                boxShadow: currentStyle.boxShadow,
+                opacity: currentStyle.opacity,
+              },
+              {
+                transform: "translate(-50%, -50%)",
+                boxShadow: "0 5px 0 var(--pitch-shadow)",
+                opacity: "1",
+              },
+            ],
+            {
+              duration: reduceMotion ? 1 : 260,
+              easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+            },
+          );
+          returnAnimationRef.current = animation;
+          animation.onfinish = () => {
+            if (returnAnimationRef.current === animation) {
+              returnAnimationRef.current = null;
+            }
+          };
+        }
       }
     }
     dragRef.current = null;
@@ -3012,6 +3101,16 @@ function Pitch({
       <span className="pitch-direction defend" aria-hidden="true">
         Defend
       </span>
+      {swapFeedback && (
+        <div
+          className="pitch-drag-confirmation"
+          role="status"
+          aria-live="polite"
+        >
+          <Check size={16} aria-hidden="true" />
+          <span>{swapFeedback.message}</span>
+        </div>
+      )}
       {formation.positions.map((position) => {
         const playerId = assignments[position.id];
         const player = team.roster.find((item) => item.id === playerId);
@@ -3075,6 +3174,9 @@ function Pitch({
               }
             : {}),
         };
+        const swapConfirmed =
+          swapFeedback?.playerIds.includes(playerId) ||
+          swapFeedback?.positionIds.includes(position.id);
 
         return player ? (
           <button
@@ -3085,7 +3187,7 @@ function Pitch({
                 : ""
             } ${
               dragState?.targetPositionId === position.id ? "drop-target" : ""
-            }`}
+            } ${swapConfirmed ? "swap-confirmed" : ""}`}
             key={position.id}
             style={style}
             data-position-id={position.id}
@@ -3101,6 +3203,8 @@ function Pitch({
             }
             onPointerDown={(event) => {
               if (event.button !== 0) return;
+              returnAnimationRef.current?.cancel();
+              returnAnimationRef.current = null;
               event.currentTarget.setPointerCapture?.(event.pointerId);
               const nextDrag = {
                 playerId: player.id,
@@ -3117,7 +3221,7 @@ function Pitch({
             }}
             onPointerMove={(event) => updateDrag(event, player.id, position.id)}
             onPointerUp={finishDrag}
-            onPointerCancel={finishDrag}
+            onPointerCancel={(event) => finishDrag(event, true)}
             onClick={(event) => {
               if (suppressClickRef.current) {
                 event.preventDefault();
@@ -3128,11 +3232,20 @@ function Pitch({
             }}
           >
             {content}
+            {swapConfirmed && (
+              <span className="pitch-swap-confirmation-mark" aria-hidden="true">
+                <Check size={18} />
+              </span>
+            )}
           </button>
         ) : (
           <button
             type="button"
-            className="pitch-player empty"
+            className={`pitch-player empty ${
+              swapFeedback?.positionIds.includes(position.id)
+                ? "swap-confirmed"
+                : ""
+            }`}
             key={position.id}
             style={style}
             data-position-id={position.id}
