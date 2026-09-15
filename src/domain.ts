@@ -1012,7 +1012,17 @@ export const suggestSubstitutions = (
     .filter(([, playerId]) => !game.unavailableIds.includes(playerId))
     .filter(([positionId]) => positionId !== goalkeeperPosition?.id)
     .sort(([positionA, playerA], [positionB, playerB]) => {
-      const timeDifference =
+      const stintDifference =
+        toSubstitutionTimeBand(
+          getCurrentFieldSeconds(game, playerB),
+          timeBandSeconds,
+        ) -
+        toSubstitutionTimeBand(
+          getCurrentFieldSeconds(game, playerA),
+          timeBandSeconds,
+        );
+      if (stintDifference) return stintDifference;
+      const totalDifference =
         toSubstitutionTimeBand(
           game.totals[playerB]?.fieldSeconds ?? 0,
           timeBandSeconds,
@@ -1021,7 +1031,7 @@ export const suggestSubstitutions = (
           game.totals[playerA]?.fieldSeconds ?? 0,
           timeBandSeconds,
         );
-      if (timeDifference) return timeDifference;
+      if (totalDifference) return totalDifference;
       const fitA = Math.max(
         ...incomingPlayers.map((player) =>
           preferenceScore(player, roleByPosition.get(positionA)!),
@@ -1036,6 +1046,8 @@ export const suggestSubstitutions = (
       );
       return (
         fitB - fitA ||
+        getCurrentFieldSeconds(game, playerB) -
+          getCurrentFieldSeconds(game, playerA) ||
         (game.totals[playerB]?.fieldSeconds ?? 0) -
           (game.totals[playerA]?.fieldSeconds ?? 0) ||
         playerA.localeCompare(playerB)
@@ -1059,9 +1071,12 @@ export const suggestSubstitutions = (
     selections.reduce<
       | {
           entries: Array<[string, string]>;
-          score: number;
+          stintScore: number;
+          totalScore: number;
+          adjustmentScore: number;
           preference: number;
-          exactScore: number;
+          exactStintScore: number;
+          exactTotalScore: number;
           key: string;
         }
       | undefined
@@ -1097,17 +1112,26 @@ export const suggestSubstitutions = (
       );
       const candidate = {
         entries,
-        score:
-          entries.reduce(
-            (total, [, playerId]) =>
-              total +
-              toSubstitutionTimeBand(
-                game.totals[playerId]?.fieldSeconds ?? 0,
-                timeBandSeconds,
-              ),
-            0,
-          ) -
-          linePenalty -
+        stintScore: entries.reduce(
+          (total, [, playerId]) =>
+            total +
+            toSubstitutionTimeBand(
+              getCurrentFieldSeconds(game, playerId),
+              timeBandSeconds,
+            ),
+          0,
+        ),
+        totalScore: entries.reduce(
+          (total, [, playerId]) =>
+            total +
+            toSubstitutionTimeBand(
+              game.totals[playerId]?.fieldSeconds ?? 0,
+              timeBandSeconds,
+            ),
+          0,
+        ),
+        adjustmentScore:
+          -linePenalty -
           selectedPositions.reduce((penalty, positionItem) => {
             const player = playerById.get(assignments[positionItem.id]);
             return (
@@ -1123,23 +1147,29 @@ export const suggestSubstitutions = (
             total + (player ? preferenceScore(player, positionItem.role) : 0)
           );
         }, 0),
-        exactScore: entries.reduce(
+        exactStintScore: entries.reduce(
+          (total, [, playerId]) =>
+            total + getCurrentFieldSeconds(game, playerId),
+          0,
+        ),
+        exactTotalScore: entries.reduce(
           (total, [, playerId]) =>
             total + (game.totals[playerId]?.fieldSeconds ?? 0),
           0,
         ),
         key: entries.map(([positionId]) => positionId).join(","),
       };
-      if (
-        !best ||
-        candidate.score > best.score ||
-        (candidate.score === best.score &&
-          (candidate.preference > best.preference ||
-            (candidate.preference === best.preference &&
-              (candidate.exactScore > best.exactScore ||
-                (candidate.exactScore === best.exactScore &&
-                  candidate.key < best.key)))))
-      ) {
+      if (!best) return candidate;
+      const rankingDifferences = [
+        candidate.stintScore - best.stintScore,
+        candidate.totalScore - best.totalScore,
+        candidate.adjustmentScore - best.adjustmentScore,
+        candidate.preference - best.preference,
+        candidate.exactStintScore - best.exactStintScore,
+        candidate.exactTotalScore - best.exactTotalScore,
+        best.key.localeCompare(candidate.key),
+      ];
+      if (rankingDifferences.find((difference) => difference !== 0)! > 0) {
         return candidate;
       }
       return best;

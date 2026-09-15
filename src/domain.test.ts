@@ -1109,6 +1109,76 @@ describe("substitutions", () => {
     expect(pair.outPlayerId).toBe(strikerId);
   });
 
+  it("prioritizes a longer current stint before accumulated playing time", () => {
+    const team = structuredClone(INITIAL_TEAMS.u8);
+    team.roster.forEach((player) => {
+      player.preferredRoles = player.preferredRoles.filter(
+        (role) => role !== "goalkeeper",
+      );
+    });
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.slice(0, 7).map((player) => player.id),
+      40,
+      1_000,
+    );
+    team.roster.find(
+      (player) => player.id === game.assignments.gk,
+    )!.preferredRoles = ["goalkeeper"];
+    const formation = getFormation(game.formationId);
+    const defender = formation.positions.find(
+      (position) => position.role === "defender",
+    )!;
+    const forward = formation.positions.find(
+      (position) => position.role === "forward",
+    )!;
+    const midfielders = formation.positions.filter(
+      (position) => position.role === "midfielder",
+    );
+    const initialBench = [...game.benchIds];
+    game.clock.elapsedSeconds = 500;
+    game = applySubstitutions(
+      game,
+      [
+        {
+          positionId: defender.id,
+          outPlayerId: game.assignments[defender.id],
+          inPlayerId: initialBench[0],
+        },
+        {
+          positionId: forward.id,
+          outPlayerId: game.assignments[forward.id],
+          inPlayerId: initialBench[1],
+        },
+      ],
+      team.sideSize,
+      2_000,
+    );
+    game.clock.elapsedSeconds = 600;
+
+    const longStintPlayer = game.assignments[midfielders[0].id];
+    const otherLongStintPlayer = game.assignments[midfielders[1].id];
+    const recentlyEnteredPlayers = [
+      game.assignments[defender.id],
+      game.assignments[forward.id],
+    ];
+    game.totals[longStintPlayer].fieldSeconds = 900;
+    game.totals[otherLongStintPlayer].fieldSeconds = 300;
+    recentlyEnteredPlayers.forEach((playerId) => {
+      game.totals[playerId].fieldSeconds = 1_200;
+    });
+    game.totals[game.benchIds[0]].fieldSeconds = 0;
+    game.totals[game.benchIds[1]].fieldSeconds = 1_200;
+    team.roster.find(
+      (player) => player.id === game.benchIds[0],
+    )!.preferredRoles = ["midfielder"];
+
+    const [pair] = suggestSubstitutions(game, 1, team);
+
+    expect(pair.outPlayerId).toBe(longStintPlayer);
+  });
+
   it("spreads near-equal substitutions across lines", () => {
     const team = structuredClone(INITIAL_TEAMS.u12);
     team.roster.forEach((player) => {
@@ -1173,8 +1243,8 @@ describe("substitutions", () => {
           .role,
     );
 
-    expect(roles.filter((role) => role === "defender")).toHaveLength(2);
-    expect(roles.filter((role) => role === "midfielder")).toHaveLength(1);
+    expect(roles.filter((role) => role === "defender")).toHaveLength(3);
+    expect(roles.filter((role) => role === "midfielder")).toHaveLength(0);
   });
 
   it("recommends a fresh player only for the row displaced by an incoming conflict", () => {
