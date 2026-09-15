@@ -2065,7 +2065,8 @@ select:hover {
   display: inline-flex;
   align-items: center;
   gap: 0.38rem;
-  max-width: calc(100% - 3rem);
+  width: max-content;
+  max-width: calc(100% - 1rem);
   padding: 0.48rem 0.68rem;
   color: var(--paper);
   background: var(--ink);
