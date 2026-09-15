@@ -4132,6 +4132,14 @@ select:hover {
     justify-items: end;
   }
 
+  .clock-secondary.added-time {
+    min-width: 6rem;
+  }
+
+  .clock-secondary.added-time > span:first-child strong {
+    white-space: nowrap;
+  }
+
   .scoreboard-score small,
   .clock-secondary > span:first-child small {
     height: 1.45rem;
