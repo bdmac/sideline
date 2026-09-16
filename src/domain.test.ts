@@ -18,6 +18,7 @@ import {
   getFormation,
   getFormationsForTeam,
   getMatchClockSeconds,
+  getMaxSubstitutionCount,
   getPeriodStatus,
   getRecommendedSubstitutionCount,
   getScore,
@@ -1281,6 +1282,176 @@ describe("substitutions", () => {
       ).map((pair) => pair.inPlayerId),
     ).toEqual(expect.arrayContaining(game.benchIds.slice(0, 4)));
   });
+
+  it("allows a full opening rotation before the starting keeper's stint is due", () => {
+    const team = INITIAL_TEAMS.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    game.assignments = assignStartingPlayersByPreference(
+      getFormation(game.formationId),
+      game.presentIds,
+      team.roster,
+    );
+    game.benchIds = game.presentIds.filter(
+      (id) => !Object.values(game.assignments).includes(id),
+    );
+    expect(game.benchIds).toHaveLength(5);
+    expect(getMaxSubstitutionCount(game, team)).toBe(4);
+    expect(getRecommendedSubstitutionCount(game, team)).toBe(4);
+    const pairs = suggestSubstitutions(game, 5, team);
+    expect(pairs).toHaveLength(5);
+    expect(pairs.some((pair) => pair.positionId === "gk")).toBe(true);
+    expect(
+      suggestSubstitutions(game, 4, team).every(
+        (pair) => pair.positionId !== "gk",
+      ),
+    ).toBe(true);
+    expect(validateSubstitutionPairs(game, pairs)).toEqual([]);
+    expect(
+      validateGame(
+        applySubstitutions(game, pairs, team.sideSize, 2_000),
+        team.sideSize,
+      ),
+    ).toEqual([]);
+
+    game.clock.elapsedSeconds =
+      getSubstitutionReminderStatus(game).intervalSeconds;
+    const fullRotation = suggestSubstitutions(game, 5, team);
+    expect(fullRotation).toHaveLength(5);
+    expect(fullRotation.some((pair) => pair.positionId === "gk")).toBe(true);
+    expect(validateSubstitutionPairs(game, fullRotation)).toEqual([]);
+    const rotated = applySubstitutions(
+      game,
+      fullRotation,
+      team.sideSize,
+      2_000,
+    );
+    expect(validateGame(rotated, team.sideSize)).toEqual([]);
+    expect(undoLastEvent(rotated, team.sideSize).assignments).toEqual(
+      game.assignments,
+    );
+  });
+
+  it("fills the second plan after a complete five-player rotation", () => {
+    const team = INITIAL_TEAMS.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const interval = getSubstitutionReminderStatus(game).intervalSeconds;
+    const firstRotation = suggestSubstitutions(game, 5, team);
+    expect(firstRotation).toHaveLength(5);
+    game.clock.elapsedSeconds = interval;
+    game = applySubstitutions(game, firstRotation, team.sideSize, 2_000);
+    const freshGoalkeeperId = game.assignments.gk;
+    game.clock.elapsedSeconds += 120;
+    const count = getRecommendedSubstitutionCount(game, team);
+    expect(count).toBeGreaterThan(0);
+    expect(count).toBeLessThanOrEqual(4);
+    const secondPlan = suggestSubstitutions(game, count, team);
+    expect(secondPlan).toHaveLength(count);
+    expect(
+      secondPlan.some((pair) => pair.outPlayerId === freshGoalkeeperId),
+    ).toBe(false);
+    expect(validateSubstitutionPairs(game, secondPlan)).toEqual([]);
+    expect(suggestSubstitutions(game, 5, team)).toHaveLength(4);
+
+    const beforeOverride = structuredClone(game);
+    const fullPlan = suggestSubstitutions(game, 5, team, {
+      allowEarlyKeeperChange: true,
+    });
+    expect(fullPlan).toHaveLength(5);
+    expect(fullPlan.find((pair) => pair.positionId === "gk")).toMatchObject({
+      inPlayerId: team.roster.find((player) => player.name === "Maddox")!.id,
+      outPlayerId: team.roster.find((player) => player.name === "Henry")!.id,
+    });
+    expect(validateSubstitutionPairs(game, fullPlan)).toEqual([]);
+    expect(
+      validateGame(
+        applySubstitutions(game, fullPlan, team.sideSize, 3_000),
+        team.sideSize,
+      ),
+    ).toEqual([]);
+    expect(game).toEqual(beforeOverride);
+    expect(
+      suggestSubstitutions(game, 4, team, { allowEarlyKeeperChange: true }),
+    ).toEqual(suggestSubstitutions(game, 4, team));
+
+    game.clock.elapsedSeconds = 2 * interval;
+    const secondRotation = suggestSubstitutions(game, 5, team);
+    expect(secondRotation).toHaveLength(5);
+    expect(
+      validateGame(
+        applySubstitutions(game, secondRotation, team.sideSize, 3_000),
+        team.sideSize,
+      ),
+    ).toEqual([]);
+  });
+
+  it.each(FORMATIONS)(
+    "fills every offered count for $id across rotation cycles",
+    (formation) => {
+      const team = INITIAL_TEAMS[formation.sideSize === 5 ? "u8" : "u12"];
+      let game = createGame(
+        team,
+        formation.id,
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+      );
+      game.assignments = assignStartingPlayersByPreference(
+        formation,
+        game.presentIds,
+        team.roster,
+      );
+      game.benchIds = game.presentIds.filter(
+        (id) => !Object.values(game.assignments).includes(id),
+      );
+      const interval = getSubstitutionReminderStatus(game).intervalSeconds;
+      for (let cycle = 0; cycle < 3; cycle += 1) {
+        for (const elapsed of [
+          cycle * interval,
+          cycle * interval + 120,
+          (cycle + 1) * interval,
+        ]) {
+          game.clock.elapsedSeconds = elapsed;
+          const maximum = getMaxSubstitutionCount(game, team);
+          const recommended = getRecommendedSubstitutionCount(game, team);
+          expect(recommended).toBeGreaterThan(0);
+          expect(recommended).toBeLessThanOrEqual(maximum);
+          for (let count = 1; count <= maximum; count += 1) {
+            const pairs = suggestSubstitutions(game, count, team);
+            expect(pairs).toHaveLength(count);
+            expect(validateSubstitutionPairs(game, pairs)).toEqual([]);
+            expect(
+              validateGame(
+                applySubstitutions(game, pairs, team.sideSize, 2_000),
+                team.sideSize,
+              ),
+            ).toEqual([]);
+          }
+        }
+        game = applySubstitutions(
+          game,
+          suggestSubstitutions(
+            game,
+            getRecommendedSubstitutionCount(game, team),
+            team,
+          ),
+          team.sideSize,
+          2_000,
+        );
+      }
+    },
+  );
 
   it("keeps the full default when the newly benched players form one cohort", () => {
     const team = structuredClone(INITIAL_TEAMS.u8);

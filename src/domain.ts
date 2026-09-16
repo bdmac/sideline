@@ -664,7 +664,7 @@ export const getSubstitutionPlanningSnapshot = (
 const toSubstitutionTimeBand = (seconds: number, bandSize: number) =>
   Math.floor(Math.max(0, seconds) / bandSize) * bandSize;
 
-const getCurrentPositionStintSeconds = (
+export const getCurrentPositionStintSeconds = (
   game: ActiveGame,
   positionId: string,
 ) => {
@@ -991,6 +991,7 @@ const getIncomingCandidateOrder = (
   game: ActiveGame,
   team: Team,
   goalkeeperTimingGame = game,
+  forceGoalkeeperChange = false,
 ) => {
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
   const formation = getFormation(game.formationId);
@@ -1048,7 +1049,9 @@ const getIncomingCandidateOrder = (
     ) >= getSubstitutionReminderStatus(game).intervalSeconds;
   const needsGoalkeeperChange =
     Boolean(goalkeeperPosition && goalkeeperId) &&
-    (!isGoalkeeper(goalkeeperId!) || goalkeeperStintIsDue);
+    (!isGoalkeeper(goalkeeperId!) ||
+      goalkeeperStintIsDue ||
+      forceGoalkeeperChange);
   const shouldRotateGoalkeeper =
     Boolean(goalkeeperCandidate) && needsGoalkeeperChange;
   const rotationIntervalSeconds =
@@ -1142,12 +1145,47 @@ const getIncomingCandidateOrder = (
   };
 };
 
+const getSubstitutionCapacity = (
+  game: ActiveGame,
+  goalkeeperPositionId: string | undefined,
+  rotatesGoalkeeper: boolean,
+) =>
+  Math.min(
+    game.benchIds.filter((id) => !game.unavailableIds.includes(id)).length,
+    Object.entries(game.assignments).filter(
+      ([positionId, playerId]) =>
+        !game.unavailableIds.includes(playerId) &&
+        (positionId !== goalkeeperPositionId || rotatesGoalkeeper),
+    ).length,
+  );
+
+export const getMaxSubstitutionCount = (game: ActiveGame, team: Team) => {
+  const { goalkeeperPosition, shouldRotateGoalkeeper } =
+    getIncomingCandidateOrder(
+      getSubstitutionPlanningSnapshot(game),
+      team,
+      game,
+    );
+  return getSubstitutionCapacity(
+    game,
+    goalkeeperPosition?.id,
+    shouldRotateGoalkeeper,
+  );
+};
+
 export const suggestSubstitutions = (
   game: ActiveGame,
   count: number,
   team: Team,
+  options: { allowEarlyKeeperChange?: boolean } = {},
 ): SubstitutionPair[] => {
   const goalkeeperTimingGame = game;
+  const fullTeamRotation =
+    (options.allowEarlyKeeperChange ||
+      !getSubstitutionReminderStatus(game).hasExecutedSubstitution) &&
+    count >= Object.keys(game.assignments).length &&
+    game.benchIds.filter((id) => !game.unavailableIds.includes(id)).length >=
+      Object.keys(game.assignments).length;
   game = getSubstitutionPlanningSnapshot(game);
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
   const rotationIntervalSeconds =
@@ -1160,10 +1198,19 @@ export const suggestSubstitutions = (
     shouldRotateGoalkeeper,
     goalkeeperHandoff,
     incomingIds: orderedIncomingIds,
-  } = getIncomingCandidateOrder(game, team, goalkeeperTimingGame);
+  } = getIncomingCandidateOrder(
+    game,
+    team,
+    goalkeeperTimingGame,
+    fullTeamRotation,
+  );
   const substitutionCount = Math.min(
     Math.max(0, count),
-    Object.keys(game.assignments).length,
+    getSubstitutionCapacity(
+      game,
+      goalkeeperPosition?.id,
+      shouldRotateGoalkeeper,
+    ),
     orderedIncomingIds.length,
   );
   const incomingIds = orderedIncomingIds.slice(0, substitutionCount);
@@ -1536,14 +1583,11 @@ export const getRecommendedSubstitutionCount = (
   game: ActiveGame,
   team: Team,
 ) => {
+  const maxCount = getMaxSubstitutionCount(game, team);
+  if (maxCount === 0) return 0;
   const goalkeeperTimingGame = game;
   game = getSubstitutionPlanningSnapshot(game);
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
-  const maxCount = Math.min(
-    game.benchIds.length,
-    Object.keys(game.assignments).length,
-  );
-  if (maxCount === 0) return 0;
   const formation = getFormation(game.formationId);
   const goalkeeperPosition = formation.positions.find(
     (positionItem) => positionItem.role === "goalkeeper",

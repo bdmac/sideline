@@ -11,6 +11,7 @@ import App from "./App";
 import { COACH_ID_STORAGE_KEY } from "./coaches";
 import {
   applySubstitutions,
+  assignStartingPlayersByPreference,
   compareSubstitutionDestinations,
   createGame,
   getCurrentFieldSeconds,
@@ -22,6 +23,8 @@ import {
   recordGoal,
   setClockRunning,
   suggestSubstitutions,
+  validateGame,
+  validateSubstitutionPairs,
 } from "./domain";
 import { DEVICE_PREFERENCES_STORAGE_KEY } from "./devicePreferences";
 import { STORAGE_KEY } from "./storage";
@@ -2221,6 +2224,435 @@ describe("Sideline app", () => {
     );
   });
 
+  it.each([120, 300])(
+    "explains second-plan limits %i seconds after the first rotation",
+    (elapsedSeconds) => {
+      const state = structuredClone(INITIAL_STATE);
+      const team = state.teams.u8;
+      let game = createGame(
+        team,
+        "5-1-2-1",
+        team.roster.map((player) => player.id),
+        40,
+        1_000,
+      );
+      game.assignments = assignStartingPlayersByPreference(
+        getFormation(game.formationId),
+        game.presentIds,
+        team.roster,
+      );
+      game.benchIds = game.presentIds.filter(
+        (id) => !Object.values(game.assignments).includes(id),
+      );
+      const firstPlan = suggestSubstitutions(game, 5, team);
+      game.clock.elapsedSeconds = 300;
+      game = applySubstitutions(game, firstPlan, team.sideSize, 2_000);
+      game.clock.elapsedSeconds += elapsedSeconds;
+      state.activeGame = game;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      fireEvent.click(screen.getAllByRole("button", { name: "Plan subs" })[0]);
+      const planner = screen.getByRole("dialog", {
+        name: "Plan substitutions",
+      });
+      const maximum = elapsedSeconds === 120 ? 4 : 5;
+      expect(planner.querySelectorAll(".stepper button")).toHaveLength(5);
+      const five = within(planner).getByRole("button", { name: "5" });
+      expect(five).toBeEnabled();
+      if (maximum === 4) {
+        expect(
+          within(planner).getByRole("button", { name: "4" }),
+        ).toHaveAttribute("aria-pressed", "true");
+        expect(
+          planner.querySelector(".sub-count-explanation"),
+        ).not.toBeInTheDocument();
+      } else {
+        expect(within(planner).queryByRole("status")).not.toBeInTheDocument();
+        expect(
+          within(planner).getByRole("group", { name: "Players to swap" }),
+        ).not.toHaveAttribute("aria-describedby");
+      }
+      expect(
+        within(planner).queryByText("Choose at least one substitution"),
+      ).not.toBeInTheDocument();
+      expect(
+        within(planner).getByRole("button", { name: /Ready \d swaps?/ }),
+      ).toBeEnabled();
+      for (let count = maximum; count >= 1; count -= 1) {
+        fireEvent.click(
+          within(planner).getByRole("button", { name: String(count) }),
+        );
+        expect(planner.querySelectorAll(".swap-row")).toHaveLength(count);
+        expect(
+          within(planner).getByRole("button", {
+            name: `Ready ${count} swap${count === 1 ? "" : "s"}`,
+          }),
+        ).toBeEnabled();
+        if (maximum === 4) {
+          expect(
+            planner.querySelector(".sub-count-explanation"),
+          ).not.toBeInTheDocument();
+        }
+      }
+      if (maximum === 4) {
+        fireEvent.click(five);
+        expect(five).toBeEnabled();
+        expect(five).toHaveAttribute("aria-pressed", "true");
+        expect(
+          within(planner).getByRole("group", { name: "Players to swap" }),
+        ).toHaveAccessibleDescription(
+          /Early keeper change.*has not completed their recommended turn in goal/,
+        );
+        expect(planner.querySelectorAll(".swap-row")).toHaveLength(5);
+        const warning = within(planner).getByRole("status", {
+          name: "Early keeper change",
+        });
+        expect(warning).toHaveAttribute("data-component", "Banner");
+        expect(warning).toHaveAttribute("data-variant", "warning");
+        expect(warning).toHaveAttribute("data-layout", "compact");
+        expect(
+          within(warning).getByRole("heading", {
+            name: "Early keeper change",
+            level: 3,
+          }),
+        ).toBeVisible();
+        expect(
+          warning.querySelector('[data-component="Banner.Icon"] svg'),
+        ).toBeInTheDocument();
+        expect(within(warning).queryByRole("button")).not.toBeInTheDocument();
+        expect(
+          within(planner).getByLabelText("Swap 1 incoming player"),
+        ).toHaveFocus();
+        expect(
+          within(planner).getByLabelText("Swap 1 incoming player"),
+        ).toHaveTextContent("Maddox");
+        fireEvent.click(within(planner).getByRole("button", { name: "2" }));
+        expect(planner.querySelectorAll(".swap-row")).toHaveLength(2);
+        expect(
+          planner.querySelector('[data-component="Banner"]'),
+        ).not.toBeInTheDocument();
+        expect(
+          planner.querySelector(".sub-count-explanation"),
+        ).not.toBeInTheDocument();
+        fireEvent.click(five);
+        expect(
+          within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+        ).toBeEnabled();
+        fireEvent.click(
+          within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+        );
+        const stored: AppState = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+        expect(
+          stored.activeGame?.queuedSubstitutions?.find(
+            (pair) => pair.positionId === "gk",
+          ),
+        ).toMatchObject({
+          outPlayerId: game.assignments.gk,
+        });
+      }
+    },
+  );
+
+  it.each(["automatic", "edited", "ready"])(
+    "recalculates untouched plans and preserves coach pairings (%s)",
+    (mode) => {
+      const ready = mode === "ready";
+      const state = structuredClone(INITIAL_STATE);
+      const team = state.teams.u8;
+      let game = createGame(
+        team,
+        "5-1-2-1",
+        team.roster.map((player) => player.id),
+        40,
+        1_000,
+      );
+      game.clock.elapsedSeconds = 300;
+      game = applySubstitutions(
+        game,
+        suggestSubstitutions(game, 5, team),
+        team.sideSize,
+        2_000,
+      );
+      game.clock.elapsedSeconds += 120;
+      let originalPairs = suggestSubstitutions(game, 4, team);
+      if (ready) game = queueSubstitutions(game, originalPairs);
+      state.activeGame = game;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      if (ready) {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Review substitutions" }),
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Edit plan" }));
+      } else {
+        fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+        fireEvent.click(screen.getByRole("button", { name: "4" }));
+      }
+      const planner = screen.getByRole("dialog", {
+        name: "Plan substitutions",
+      });
+      if (mode === "edited") {
+        const [first, second] = originalPairs;
+        fireEvent.click(
+          planner.querySelector('[data-player-menu-id="out-0"]')!,
+        );
+        fireEvent.click(
+          screen
+            .getAllByRole("menuitemradio")
+            .find(
+              (item) =>
+                item.getAttribute("data-player-id") === second.outPlayerId,
+            )!,
+        );
+        originalPairs = originalPairs.map((pair, index) =>
+          index === 0
+            ? {
+                ...pair,
+                positionId: second.positionId,
+                outPlayerId: second.outPlayerId,
+              }
+            : index === 1
+              ? {
+                  ...pair,
+                  positionId: first.positionId,
+                  outPlayerId: first.outPlayerId,
+                }
+              : pair,
+        );
+      }
+      const beforeRows = Array.from(
+        planner.querySelectorAll(".swap-row"),
+        (row) => row.textContent,
+      );
+      const remainingPlayerId = game.benchIds.find(
+        (id) => !originalPairs.some((pair) => pair.inPlayerId === id),
+      )!;
+      const expectedPairs =
+        mode === "automatic"
+          ? suggestSubstitutions(game, 5, team, {
+              allowEarlyKeeperChange: true,
+            })
+          : [
+              ...originalPairs,
+              {
+                positionId: "gk",
+                outPlayerId: game.assignments.gk,
+                inPlayerId: remainingPlayerId,
+              },
+            ];
+      const incomingKeeper = team.roster.find(
+        (player) =>
+          player.id ===
+          expectedPairs.find((pair) => pair.positionId === "gk")!.inPlayerId,
+      )!;
+      const savedBefore = localStorage.getItem(STORAGE_KEY);
+      fireEvent.click(within(planner).getByRole("button", { name: "5" }));
+      expect(localStorage.getItem(STORAGE_KEY)).toBe(savedBefore);
+      const afterRows = Array.from(
+        planner.querySelectorAll(".swap-row"),
+        (row) => row.textContent,
+      ).slice(0, 4);
+      if (mode === "automatic") {
+        expect(afterRows).not.toEqual(beforeRows);
+        expect(incomingKeeper.name).toBe("Maddox");
+        expect(incomingKeeper.preferredRoles).toContain("goalkeeper");
+      } else {
+        expect(afterRows).toEqual(beforeRows);
+      }
+      const keeperIndex = expectedPairs.findIndex(
+        (pair) => pair.positionId === "gk",
+      );
+      const keeperIncoming = planner.querySelector(
+        `[data-player-menu-id="in-${keeperIndex}"]`,
+      )!;
+      expect(keeperIncoming).toHaveTextContent(incomingKeeper.name);
+      expect(
+        planner.querySelector(`[data-player-menu-id="out-${keeperIndex}"]`),
+      ).toHaveTextContent(
+        team.roster.find((player) => player.id === game.assignments.gk)!.name,
+      );
+      expect(keeperIncoming).toHaveFocus();
+      expect(
+        within(planner).getByRole("button", { name: "5" }),
+      ).toHaveAttribute("aria-pressed", "true");
+      expect(within(planner).getByRole("status")).toHaveTextContent(
+        "Early keeper change",
+      );
+      expect(within(planner).getByRole("status")).not.toHaveTextContent("IN /");
+      expect(within(planner).getByRole("status")).not.toHaveTextContent(
+        "You can change",
+      );
+      if (!incomingKeeper.preferredRoles.includes("goalkeeper")) {
+        expect(within(planner).getByRole("status")).toHaveTextContent(
+          `${incomingKeeper.name} does not typically play goalkeeper.`,
+        );
+      } else {
+        expect(within(planner).getByRole("status")).not.toHaveTextContent(
+          "does not typically play goalkeeper",
+        );
+      }
+      fireEvent.click(keeperIncoming);
+      expect(screen.getAllByRole("menuitemradio")).toHaveLength(5);
+      fireEvent.keyDown(document, { key: "Escape" });
+      fireEvent.click(
+        within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+      );
+      const stored: AppState = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+      expect(stored.activeGame!.queuedSubstitutions).toEqual(expectedPairs);
+      expect(
+        validateGame(
+          applySubstitutions(
+            game,
+            stored.activeGame!.queuedSubstitutions!,
+            team.sideSize,
+            3_000,
+          ),
+          team.sideSize,
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it("does not automatically assign a non-keeper when no eligible keeper is benched", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    const game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    team.roster.forEach((player) => {
+      player.preferredRoles =
+        player.id === game.assignments.gk
+          ? ["goalkeeper"]
+          : player.preferredRoles.filter((role) => role !== "goalkeeper");
+    });
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    fireEvent.click(within(planner).getByRole("button", { name: "5" }));
+    expect(within(planner).getByRole("alert")).toHaveTextContent(
+      "A full-team swap needs a replacement keeper from the bench.",
+    );
+    expect(planner.querySelectorAll(".swap-row")).toHaveLength(4);
+    expect(within(planner).getByRole("button", { name: "4" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      within(planner).getByRole("button", { name: "Ready 4 swaps" }),
+    ).toBeEnabled();
+  });
+
+  it("opens a populated second plan after an immediately prepared five-player first swap", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const firstPlan = suggestSubstitutions(game, 5, team);
+    expect(firstPlan).toHaveLength(5);
+    game.clock.elapsedSeconds = 300;
+    game = applySubstitutions(game, firstPlan, team.sideSize, 2_000);
+    game.clock.elapsedSeconds += 120;
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    expect(
+      within(planner).queryByText("Choose at least one substitution"),
+    ).not.toBeInTheDocument();
+    expect(planner.querySelectorAll(".swap-row")).toHaveLength(4);
+    expect(within(planner).getByRole("button", { name: "5" })).toBeEnabled();
+    expect(
+      within(planner).getByRole("button", { name: "Ready 4 swaps" }),
+    ).toBeEnabled();
+  });
+
+  it("preserves an explicit keeper override when shrinking and expanding a ready full-team plan", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    let game = createGame(
+      team,
+      "5-1-2-1",
+      team.roster.map((player) => player.id),
+      40,
+      1_000,
+    );
+    const pairs = Object.entries(game.assignments).map(
+      ([positionId, outPlayerId], index) => ({
+        positionId,
+        outPlayerId,
+        inPlayerId: game.benchIds[index],
+      }),
+    );
+    game = queueSubstitutions(game, pairs);
+    state.activeGame = game;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review substitutions" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit plan" }));
+    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    for (const count of [4, 5]) {
+      fireEvent.click(
+        within(planner).getByRole("button", { name: String(count) }),
+      );
+      expect(planner.querySelectorAll(".swap-row")).toHaveLength(count);
+      expect(
+        within(planner).getByRole("button", { name: `Ready ${count} swaps` }),
+      ).toBeEnabled();
+    }
+    fireEvent.click(
+      within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+    );
+    const stored: AppState = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.activeGame?.queuedSubstitutions).toEqual(pairs);
+  });
+
+  it("allows a full opening rotation directly from Golden Dragons setup", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    const five = within(planner).getByRole("button", { name: "5" });
+    expect(five).toBeEnabled();
+    fireEvent.click(five);
+    expect(planner.querySelectorAll(".swap-row")).toHaveLength(5);
+    expect(
+      within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+    ).toBeEnabled();
+    fireEvent.click(
+      within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+    );
+    const stored: AppState = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    const game = stored.activeGame!;
+    expect(game.clock.elapsedSeconds).toBe(0);
+    expect(game.queuedSubstitutions).toHaveLength(5);
+    expect(validateSubstitutionPairs(game, game.queuedSubstitutions!)).toEqual(
+      [],
+    );
+    const keeperPair = game.queuedSubstitutions!.find(
+      (pair) => pair.positionId === "gk",
+    )!;
+    expect(
+      stored.teams.u8.roster.find(
+        (player) => player.id === keeperPair.inPlayerId,
+      )?.preferredRoles,
+    ).toContain("goalkeeper");
+  });
+
   it("allows the coach to reduce the default full-bench rotation", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -3408,6 +3840,32 @@ describe("Sideline app", () => {
     expect(review).toHaveTextContent(
       team.roster.find((player) => player.id === incomingPlayerId)?.name ?? "",
     );
+    fireEvent.click(within(review).getByRole("button", { name: "Edit plan" }));
+    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    expect(within(planner).getByRole("button", { name: "5" })).toBeDisabled();
+    expect(
+      within(planner).getByRole("group", { name: "Players to swap" }),
+    ).toHaveAccessibleDescription(/moving to goal and must stay on the field/);
+    expect(
+      within(planner).queryByRole("button", { name: /Swap all \d anyways/ }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(within(planner).getByRole("button", { name: "4" }));
+    expect(planner.querySelectorAll(".swap-row")).toHaveLength(4);
+    fireEvent.click(
+      within(planner).getByRole("button", { name: "Ready 4 swaps" }),
+    );
+    const stored: AppState = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    const updatedGame = stored.activeGame!;
+    const updatedPairs = updatedGame.queuedSubstitutions!;
+    expect(validateSubstitutionPairs(updatedGame, updatedPairs)).toEqual([]);
+    const changed = applySubstitutions(
+      updatedGame,
+      updatedPairs,
+      team.sideSize,
+      2_000,
+    );
+    expect(changed.assignments.gk).toBe(handoffPlayerId);
+    expect(validateGame(changed, team.sideSize)).toEqual([]);
   });
 
   it("shows goal markers on the scorer's pitch card", () => {

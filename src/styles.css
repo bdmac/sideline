@@ -2933,6 +2933,25 @@ select:hover {
   font-weight: 800;
 }
 
+.sub-count-explanation {
+  margin: 0 0 1rem;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.keeper-change-warning[data-component="Banner"][data-variant="warning"] {
+  --banner-bgColor: var(--warm-pale);
+  --banner-borderColor: var(--warm);
+  --banner-icon-fgColor: var(--warm-dark);
+  margin-bottom: 1rem;
+  color: var(--warm-dark);
+}
+
+.keeper-change-warning [data-component="Banner.Title"] {
+  font-weight: 800;
+}
+
 .stepper {
   display: flex;
   border: 1px solid var(--control-border);

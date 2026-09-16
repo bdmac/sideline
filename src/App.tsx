@@ -1,6 +1,7 @@
 import {
   ActionList,
   ActionMenu,
+  Banner,
   Button,
   Dialog,
   IconButton,
@@ -51,6 +52,7 @@ import {
   type ReactElement,
   type ReactNode,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -81,9 +83,11 @@ import {
   formatDuration,
   getCurrentBenchSeconds,
   getCurrentFieldSeconds,
+  getCurrentPositionStintSeconds,
   getFormation,
   getFormationsForTeam,
   getMatchClockSeconds,
+  getMaxSubstitutionCount,
   getPeriodStatus,
   getRecommendedSubstitutionCount,
   getScore,
@@ -5071,10 +5075,7 @@ function SubstitutionPlanner({
   onClose: () => void;
   onConfirm: (pairs: SubstitutionPair[]) => void;
 }) {
-  const maxCount = Math.min(
-    game.benchIds.length,
-    Object.keys(game.assignments).length,
-  );
+  const countLimitId = useId();
   const recommendedCount = getRecommendedSubstitutionCount(game, team);
   const initialCount = initialPairs?.length ?? recommendedCount;
   const [count, setCount] = useState(initialCount);
@@ -5086,6 +5087,18 @@ function SubstitutionPlanner({
   const [hasCoachSelections, setHasCoachSelections] = useState(
     Boolean(initialPairs?.length),
   );
+  const [overrideError, setOverrideError] = useState("");
+  const plannerContentRef = useRef<HTMLDivElement>(null);
+  const overrideFocusIndex = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (overrideFocusIndex.current === null) return;
+    plannerContentRef.current
+      ?.querySelector<HTMLButtonElement>(
+        `[data-player-menu-id="in-${overrideFocusIndex.current}"]`,
+      )
+      ?.focus();
+    overrideFocusIndex.current = null;
+  }, [pairs]);
   const [activePlayerMenuId, setActivePlayerMenuId] = useState<string | null>(
     null,
   );
@@ -5126,33 +5139,166 @@ function SubstitutionPlanner({
   };
   const formation = getFormation(game.formationId);
   const planningGame = getSubstitutionPlanningSnapshot(game);
+  const getRemainingGame = (current: SubstitutionPair[]) => {
+    const reservedFieldIds = new Set(
+      current.flatMap((pair) => [
+        pair.outPlayerId,
+        ...(pair.keeperHandoff ? [pair.keeperHandoff.playerId] : []),
+      ]),
+    );
+    const selectedInIds = new Set(current.map((pair) => pair.inPlayerId));
+    return {
+      ...game,
+      assignments: Object.fromEntries(
+        Object.entries(game.assignments).filter(
+          ([, playerId]) => !reservedFieldIds.has(playerId),
+        ),
+      ),
+      benchIds: game.benchIds.filter(
+        (playerId) => !selectedInIds.has(playerId),
+      ),
+    };
+  };
+  const availableCount = hasCoachSelections
+    ? pairs.length + getMaxSubstitutionCount(getRemainingGame(pairs), team)
+    : getMaxSubstitutionCount(game, team);
+  const maxCount = Math.min(
+    game.benchIds.length,
+    Object.keys(game.assignments).length,
+  );
+  const countIsLimited = availableCount < maxCount;
+  const handoff = pairs.find((pair) => pair.keeperHandoff)?.keeperHandoff;
+  const goalkeeperPosition = formation.positions.find(
+    (position) => position.role === "goalkeeper",
+  );
+  const canOverrideKeeper =
+    countIsLimited &&
+    !handoff &&
+    goalkeeperPosition &&
+    (hasCoachSelections ? getRemainingGame(pairs) : game).assignments[
+      goalkeeperPosition.id
+    ] &&
+    maxCount === Object.keys(game.assignments).length;
+  const keeperPair = pairs.find(
+    (pair) => pair.positionId === goalkeeperPosition?.id && !pair.keeperHandoff,
+  );
+  const incomingKeeper = keeperPair
+    ? team.roster.find((player) => player.id === keeperPair.inPlayerId)
+    : undefined;
+  const earlyKeeperChange =
+    keeperPair &&
+    getCurrentPositionStintSeconds(game, keeperPair.positionId) <
+      getSubstitutionReminderStatus(game).intervalSeconds;
+  const atypicalKeeper = Boolean(
+    incomingKeeper && !incomingKeeper.preferredRoles.includes("goalkeeper"),
+  );
+  const keeperPreferenceWarning =
+    atypicalKeeper && incomingKeeper
+      ? `${incomingKeeper.name} does not typically play goalkeeper.`
+      : null;
+  const showKeeperNotice = Boolean(
+    keeperPair && (earlyKeeperChange || atypicalKeeper),
+  );
+  const showCountLimit = Boolean(
+    handoff && countIsLimited && !canOverrideKeeper,
+  );
+  const keeperNoticeId = `${countLimitId}-keeper`;
 
-  const changeCount = (nextCount: number) => {
-    setCount(nextCount);
-    if (!hasCoachSelections) {
-      setPairs(suggestSubstitutions(game, nextCount, team));
+  const overrideKeeper = () => {
+    if (!goalkeeperPosition || !canOverrideKeeper) {
+      setOverrideError(
+        "The keeper plan has changed. Review the current swaps before overriding.",
+      );
       return;
     }
+    const remaining = getRemainingGame(pairs);
+    const outfieldGame = {
+      ...remaining,
+      assignments: Object.fromEntries(
+        Object.entries(remaining.assignments).filter(
+          ([positionId]) => positionId !== goalkeeperPosition.id,
+        ),
+      ),
+    };
+    const outfieldPairs = [
+      ...pairs,
+      ...suggestSubstitutions(outfieldGame, maxCount - pairs.length - 1, team),
+    ];
+    const remainingIncoming = getRemainingGame(outfieldPairs).benchIds.filter(
+      (id) => !game.unavailableIds.includes(id),
+    );
+    if (
+      remainingIncoming.length !== 1 ||
+      outfieldPairs.length !== maxCount - 1
+    ) {
+      setOverrideError(
+        "The available players have changed. Review the current swaps before overriding.",
+      );
+      return;
+    }
+    const nextPairs = [
+      ...outfieldPairs,
+      {
+        positionId: goalkeeperPosition.id,
+        outPlayerId: game.assignments[goalkeeperPosition.id],
+        inPlayerId: remainingIncoming[0],
+      },
+    ];
+    const errors = validateSubstitutionPairs(game, nextPairs);
+    if (errors.length) {
+      setOverrideError(errors.join(". "));
+      return;
+    }
+    setOverrideError("");
+    setActivePlayerMenuId(null);
+    setHasCoachSelections(true);
+    overrideFocusIndex.current = nextPairs.length - 1;
+    setPairs(nextPairs);
+    setCount(nextPairs.length);
+  };
+
+  const changeCount = (nextCount: number) => {
+    setOverrideError("");
+    if (!hasCoachSelections) {
+      const allowEarlyKeeperChange = Boolean(
+        nextCount > availableCount && canOverrideKeeper,
+      );
+      const nextPairs = suggestSubstitutions(game, nextCount, team, {
+        allowEarlyKeeperChange,
+      });
+      if (nextPairs.length !== nextCount) {
+        setOverrideError(
+          `A full-team swap needs a replacement keeper from the bench. Choose the keeper pairing manually to swap all ${nextCount}.`,
+        );
+        return;
+      }
+      const errors = validateSubstitutionPairs(game, nextPairs);
+      if (errors.length) {
+        setOverrideError(errors.join(". "));
+        return;
+      }
+      if (allowEarlyKeeperChange) {
+        overrideFocusIndex.current = nextPairs.findIndex(
+          (pair) => pair.positionId === goalkeeperPosition?.id,
+        );
+      }
+      setActivePlayerMenuId(null);
+      setPairs(nextPairs);
+      setCount(nextCount);
+      return;
+    }
+    if (nextCount > availableCount && canOverrideKeeper) {
+      overrideKeeper();
+      return;
+    }
+    setCount(nextCount);
     setPairs((current) => {
       if (nextCount <= current.length) {
         return current.slice(0, nextCount);
       }
 
-      const selectedOutIds = new Set(current.map((pair) => pair.outPlayerId));
-      const selectedInIds = new Set(current.map((pair) => pair.inPlayerId));
-      const remainingGame = {
-        ...game,
-        assignments: Object.fromEntries(
-          Object.entries(game.assignments).filter(
-            ([, playerId]) => !selectedOutIds.has(playerId),
-          ),
-        ),
-        benchIds: game.benchIds.filter(
-          (playerId) => !selectedInIds.has(playerId),
-        ),
-      };
       const additionalPairs = suggestSubstitutions(
-        remainingGame,
+        getRemainingGame(current),
         nextCount - current.length,
         team,
       );
@@ -5241,19 +5387,33 @@ function SubstitutionPlanner({
       }
     >
       <div
+        ref={plannerContentRef}
         className="substitution-planner-content"
         onPointerDownCapture={dismissMenuOnSelectorPointerDown}
         onClickCapture={consumeDismissalClick}
       >
         <div className="sub-count">
           <span>Players to swap</span>
-          <div className="stepper">
+          <div
+            className="stepper"
+            role="group"
+            aria-label="Players to swap"
+            aria-describedby={
+              showCountLimit
+                ? countLimitId
+                : showKeeperNotice
+                  ? keeperNoticeId
+                  : undefined
+            }
+          >
             {Array.from({ length: maxCount }, (_, index) => index + 1).map(
               (value) => (
                 <button
                   type="button"
                   key={value}
                   className={count === value ? "active" : ""}
+                  aria-pressed={count === value}
+                  disabled={value > availableCount && !canOverrideKeeper}
                   onClick={() => changeCount(value)}
                 >
                   {value}
@@ -5262,6 +5422,43 @@ function SubstitutionPlanner({
             )}
           </div>
         </div>
+        {showCountLimit && handoff && (
+          <p id={countLimitId} className="sub-count-explanation">
+            {playerName(team, handoff.playerId)} is moving to goal and must stay
+            on the field. This plan can include up to {availableCount} swaps.
+          </p>
+        )}
+        {overrideError && (
+          <p className="error-message" role="alert">
+            {overrideError}
+          </p>
+        )}
+        {showKeeperNotice &&
+          keeperPair &&
+          (earlyKeeperChange ? (
+            <Banner
+              id={keeperNoticeId}
+              className="keeper-change-warning"
+              variant="warning"
+              layout="compact"
+              role="status"
+            >
+              <Banner.Title as="h3">Early keeper change</Banner.Title>
+              <Banner.Description>
+                {playerName(team, keeperPair.outPlayerId)} has not completed
+                their recommended turn in goal.
+                {keeperPreferenceWarning ? ` ${keeperPreferenceWarning}` : ""}
+              </Banner.Description>
+            </Banner>
+          ) : (
+            <p
+              id={keeperNoticeId}
+              className="sub-count-explanation"
+              role="status"
+            >
+              {keeperPreferenceWarning}
+            </p>
+          ))}
 
         <div className="swap-list">
           <div className="swap-column-headings" aria-hidden="true">
