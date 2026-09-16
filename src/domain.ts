@@ -223,6 +223,7 @@ const sampleNames = {
     "Henry",
     "Haru",
     "Evan",
+    "Collier",
   ],
   u12: [
     "Jackson",
@@ -244,7 +245,7 @@ const sampleNames = {
 };
 
 const rosterNumbers: Record<TeamId, number[]> = {
-  u8: [10, 7, 14, 23, 9, 4, 12, 49, 2],
+  u8: [10, 7, 14, 23, 9, 4, 12, 49, 2, 56],
   u12: [82, 15, 17, 8, 19, 78, 6, 11, 18, 90, 13, 21, 22, 5, 30],
 };
 
@@ -259,6 +260,7 @@ const rosterPreferences: Record<TeamId, PositionRole[][]> = {
     ["goalkeeper", "midfielder", "forward"],
     ["midfielder", "forward"],
     ["goalkeeper", "midfielder"],
+    ["defender", "midfielder", "forward"],
   ],
   u12: [
     ["goalkeeper", "defender", "midfielder"],
@@ -312,10 +314,14 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 18,
+  version: 19,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
+
+export const comparePlayersByNameThenNumber = (a: Player, b: Player) =>
+  a.name.localeCompare(b.name) ||
+  (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER);
 
 export const getFormationsForTeam = (team: Team) =>
   FORMATIONS.filter((formation) => formation.sideSize === team.sideSize).sort(

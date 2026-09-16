@@ -72,6 +72,7 @@ import {
   assignPlayersByPreference,
   assignStartingPlayersByPreference,
   cancelQueuedSubstitutions,
+  comparePlayersByNameThenNumber,
   compareSubstitutionDestinations,
   createGame,
   endCurrentPeriod,
@@ -1635,8 +1636,12 @@ function SetupScreen({
     onStart(game);
   };
 
-  const teamPlayers = activePlayers.filter((player) => !player.guest);
-  const activeGuestPlayers = activePlayers.filter((player) => player.guest);
+  const teamPlayers = activePlayers
+    .filter((player) => !player.guest)
+    .sort(comparePlayersByNameThenNumber);
+  const activeGuestPlayers = activePlayers
+    .filter((player) => player.guest)
+    .sort(comparePlayersByNameThenNumber);
   const renderAttendanceButton = (player: Player) => {
     const present = presentIds.includes(player.id);
     return (

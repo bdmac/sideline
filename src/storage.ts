@@ -132,7 +132,7 @@ const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
   };
 };
 
-export const migrateStoredState = (parsed: StoredState): AppState => {
+const migratePriorState = (parsed: StoredState): AppState => {
   if (!parsed.teams?.u8 || !parsed.teams?.u12) {
     return structuredClone(INITIAL_STATE);
   }
@@ -150,7 +150,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     parsed.version === 10
   ) {
     return {
-      version: 18,
+      version: 19,
       teams: structuredClone(INITIAL_STATE.teams),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -160,7 +160,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 11) {
     return {
-      version: 18,
+      version: 19,
       teams: applyU8DefaultFormation(
         applyCurrentRosterPreferences(parsed.teams as AppState["teams"]),
       ),
@@ -172,7 +172,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 12) {
     return {
-      version: 18,
+      version: 19,
       teams: applyU8DefaultFormation(
         applyJackPreferences(
           applyWilliamPreferences(parsed.teams as AppState["teams"]),
@@ -186,7 +186,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 13) {
     return {
-      version: 18,
+      version: 19,
       teams: applyU8DefaultFormation(
         applyJackPreferences(
           applyWilliamPreferences(parsed.teams as AppState["teams"]),
@@ -201,7 +201,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   if (parsed.version === 14) {
     return {
       ...(parsed as AppState),
-      version: 18,
+      version: 19,
       teams: applyU8DefaultFormation(
         applyJackPreferences(
           applyWilliamPreferences(parsed.teams as AppState["teams"]),
@@ -216,7 +216,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   if (parsed.version === 15) {
     return {
       ...(parsed as AppState),
-      version: 18,
+      version: 19,
       teams: applyU8DefaultFormation(
         applyJackPreferences(parsed.teams as AppState["teams"]),
       ),
@@ -229,7 +229,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   if (parsed.version === 16) {
     return {
       ...(parsed as AppState),
-      version: 18,
+      version: 19,
       teams: applyJackPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -240,7 +240,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   if (parsed.version === 17) {
     return {
       ...(parsed as AppState),
-      version: 18,
+      version: 19,
       teams: applyJackPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -248,9 +248,10 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     };
   }
 
-  if (parsed.version === 18) {
+  if (parsed.version === 18 || parsed.version === 19) {
     return {
       ...(parsed as AppState),
+      version: 19,
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
         : null,
@@ -258,6 +259,36 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
   }
 
   return structuredClone(INITIAL_STATE);
+};
+
+export const migrateStoredState = (parsed: StoredState): AppState => {
+  const state = migratePriorState(parsed);
+  const existingCollier = state.teams.u8.roster.find(
+    (player) => player.id === "u8-p10",
+  );
+  if (existingCollier && existingCollier.preferredRoles.length > 0) {
+    return state;
+  }
+  const collier = INITIAL_STATE.teams.u8.roster.find(
+    (player) => player.id === "u8-p10",
+  );
+  if (!collier) throw new Error("Collier is missing from the fixed U8 roster.");
+  return {
+    ...state,
+    teams: {
+      ...state.teams,
+      u8: {
+        ...state.teams.u8,
+        roster: existingCollier
+          ? state.teams.u8.roster.map((player) =>
+              player.id === collier.id
+                ? { ...player, preferredRoles: [...collier.preferredRoles] }
+                : player,
+            )
+          : [...state.teams.u8.roster, structuredClone(collier)],
+      },
+    },
+  };
 };
 
 export const loadState = (): AppState => {

@@ -7,6 +7,7 @@ import {
   assignPlayerToPosition,
   assignPlayersByPreference,
   assignStartingPlayersByPreference,
+  comparePlayersByNameThenNumber,
   compareSubstitutionDestinations,
   createGame,
   endCurrentPeriod,
@@ -350,6 +351,26 @@ describe("formations", () => {
 });
 
 describe("team rosters", () => {
+  it("sorts by name, then numeric jersey number, with unnumbered players last", () => {
+    const players: Player[] = [
+      { ...INITIAL_TEAMS.u8.roster[0], id: "z", name: "Zoe", number: 1 },
+      {
+        ...INITIAL_TEAMS.u8.roster[0],
+        id: "a",
+        name: "Amy",
+        number: undefined,
+      },
+      { ...INITIAL_TEAMS.u8.roster[0], id: "b", name: "Amy", number: 10 },
+      { ...INITIAL_TEAMS.u8.roster[0], id: "c", name: "Amy", number: 2 },
+      { ...INITIAL_TEAMS.u8.roster[0], id: "d", name: "Amy", number: 2 },
+    ];
+    expect(
+      [...players].sort(comparePlayersByNameThenNumber).map((p) => p.id),
+    ).toEqual(["c", "d", "b", "a", "z"]);
+    expect(players.map((p) => p.id)).toEqual(["z", "a", "b", "c", "d"]);
+    expect(comparePlayersByNameThenNumber(players[1], players[1])).toBe(0);
+  });
+
   it("assigns unique jersey numbers including confirmed team metadata", () => {
     const players = [...INITIAL_TEAMS.u8.roster, ...INITIAL_TEAMS.u12.roster];
     const numbers = players.map((player) => player.number);
@@ -367,6 +388,15 @@ describe("team rosters", () => {
     expect(players.every((player) => player.preferredRoles.length >= 2)).toBe(
       true,
     );
+    expect(
+      INITIAL_TEAMS.u8.roster.find((player) => player.name === "Collier"),
+    ).toEqual({
+      id: "u8-p10",
+      name: "Collier",
+      number: 56,
+      preferredRoles: ["defender", "midfielder", "forward"],
+      active: true,
+    });
     expect(players.every((player) => player.preferredRoles.length <= 4)).toBe(
       true,
     );
@@ -1254,6 +1284,7 @@ describe("substitutions", () => {
 
   it("keeps the full default when the newly benched players form one cohort", () => {
     const team = structuredClone(INITIAL_TEAMS.u8);
+    team.roster = team.roster.slice(0, 9);
     team.roster.forEach((player) => {
       player.preferredRoles = player.preferredRoles.filter(
         (role) => role !== "goalkeeper",
@@ -1937,6 +1968,7 @@ describe("substitutions", () => {
 
   it("allows a third goalkeeper to play outfield while preserving a reserve", () => {
     const team = structuredClone(INITIAL_TEAMS.u8);
+    team.roster = team.roster.slice(0, 9);
     const game = createGame(
       team,
       "5-1-2-1",

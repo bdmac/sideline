@@ -971,6 +971,113 @@ describe("Sideline app", () => {
     expect(screen.getByText("Half 1")).toBeInTheDocument();
   });
 
+  it.each([
+    {
+      teamId: "u8" as const,
+      name: "Golden Dragons",
+      expected: [
+        "Collier",
+        "Dylan",
+        "Evan",
+        "Haru",
+        "Henry",
+        "Maddox",
+        "Malik",
+        "Noah",
+        "Ollie",
+        "Simon",
+      ],
+    },
+    {
+      teamId: "u12" as const,
+      name: "Fireballers",
+      expected: [
+        "Aaron",
+        "Andrew",
+        "Eli",
+        "Elliott",
+        "Jack",
+        "Jackson",
+        "John",
+        "Kai",
+        "Lazar",
+        "Matt",
+        "Nikola",
+        "Obasi",
+        "Rayek",
+        "Ryan",
+        "William",
+      ],
+    },
+  ])(
+    "sorts $name attendance A–Z without changing roster order",
+    ({ teamId, name, expected }) => {
+      render(<App />);
+      fireEvent.click(screen.getByText(name));
+      const names = () =>
+        Array.from(
+          document.querySelectorAll(
+            ".attendance-grid .attendance-player-heading strong",
+          ),
+          (element) => element.textContent,
+        );
+      expect(names()).toEqual(expected);
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: `${expected[0]} Present`,
+        }),
+      );
+      expect(names()).toEqual(expected);
+      fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+      fireEvent.click(screen.getByRole("button", { name: "Attendance" }));
+      expect(names()).toEqual(expected);
+      expect(
+        screen.getByRole("button", {
+          name: `${expected[0]} Absent`,
+        }),
+      ).toBeInTheDocument();
+      startGame();
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+      expect(stored.teams[teamId].roster).toEqual(
+        INITIAL_STATE.teams[teamId].roster,
+      );
+    },
+  );
+
+  it("sorts guest attendance by name and jersey number within its section", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    for (const [name, number] of [
+      ["Zoe", "1"],
+      ["Amy", "10"],
+      ["Amy", "2"],
+      ["Amy", ""],
+    ]) {
+      fireEvent.click(screen.getByRole("button", { name: "Add guest player" }));
+      const dialog = screen.getByRole("dialog", { name: "Add guest player" });
+      fireEvent.change(within(dialog).getByLabelText("Player name"), {
+        target: { value: name },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/Jersey number/), {
+        target: { value: number },
+      });
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Add guest" }),
+      );
+    }
+    expect(
+      Array.from(
+        document.querySelectorAll(
+          ".guest-attendance-list .attendance-player-heading",
+        ),
+        (element) => element.textContent,
+      ),
+    ).toEqual(["Amy#2", "Amy#10", "Amy", "Zoe#1"]);
+    expect(
+      document.querySelectorAll(".attendance-grid .attendance-button"),
+    ).toHaveLength(INITIAL_STATE.teams.u8.roster.length);
+  });
+
   it("warns when attendance drops below the required side size", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -983,7 +1090,7 @@ describe("Sideline app", () => {
         .closest(".guest-attendance-section"),
     ).toBeInTheDocument();
 
-    ["Simon", "Noah", "Maddox", "Ollie", "Malik"].forEach((name) => {
+    ["Simon", "Noah", "Maddox", "Ollie", "Malik", "Collier"].forEach((name) => {
       fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
     });
 
@@ -1014,6 +1121,28 @@ describe("Sideline app", () => {
     expect(
       screen.getByRole("button", { name: "Add guest player" }),
     ).toBeInTheDocument();
+  });
+
+  it("includes Collier with his provisional number in U8 attendance", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    const attendance = screen.getByRole("button", {
+      name: "Collier Present",
+    });
+    expect(
+      attendance.querySelector(".attendance-player-number"),
+    ).toHaveTextContent("#56");
+    startGame();
+    expect(screen.getByRole("tab", { name: "Bench 5" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Plan Collier in" }),
+    ).toBeInTheDocument();
+    const game = JSON.parse(
+      localStorage.getItem(STORAGE_KEY) ?? "{}",
+    ).activeGame;
+    expect(game.presentIds).toContain("u8-p10");
+    expect(game.benchIds).toContain("u8-p10");
+    expect(Object.values(game.assignments)).toHaveLength(5);
   });
 
   it("adds a guest player for one game without changing the team roster", () => {
@@ -1078,7 +1207,7 @@ describe("Sideline app", () => {
   it("allows a confirmed short-sided start with every available player assigned", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    ["Simon", "Noah", "Maddox", "Ollie", "Malik"].forEach((name) => {
+    ["Simon", "Noah", "Maddox", "Ollie", "Malik", "Collier"].forEach((name) => {
       fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
     });
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
@@ -1131,7 +1260,7 @@ describe("Sideline app", () => {
   it("calls out the no-bench case when exactly enough players attend", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    ["Simon", "Noah", "Maddox", "Ollie"].forEach((name) => {
+    ["Simon", "Noah", "Maddox", "Ollie", "Collier"].forEach((name) => {
       fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
     });
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
@@ -1176,7 +1305,7 @@ describe("Sideline app", () => {
       Array.from(document.querySelectorAll(".starter-bench-list li")).map(
         (playerName) => playerName.textContent,
       ),
-    ).toEqual(["Dylan", "Evan", "Henry", "Noah"]);
+    ).toEqual(["Collier", "Dylan", "Evan", "Henry", "Noah"]);
     fireEvent.click(
       screen.getByRole("button", {
         name: "Change Ollie at Left Midfielder",
@@ -1191,6 +1320,7 @@ describe("Sideline app", () => {
         starterPicker.querySelectorAll(".starter-choice-player > strong"),
       ).map((playerName) => playerName.textContent),
     ).toEqual([
+      "Collier",
       "Dylan",
       "Evan",
       "Haru",
@@ -1759,6 +1889,7 @@ describe("Sideline app", () => {
     const planner = screen.getByRole("dialog", {
       name: "Plan substitutions",
     });
+    fireEvent.click(within(planner).getByRole("button", { name: "3" }));
     expect(planner.querySelector(".swap-column-headings")).toHaveTextContent(
       "INOUT",
     );
@@ -1910,6 +2041,7 @@ describe("Sideline app", () => {
     const planner = screen.getByRole("dialog", {
       name: "Plan substitutions",
     });
+    fireEvent.click(within(planner).getByRole("button", { name: "3" }));
     const originalIncoming = within(planner)
       .getAllByLabelText(/incoming player/)
       .map((button) => button.textContent);
@@ -2055,7 +2187,7 @@ describe("Sideline app", () => {
 
     const reminder = screen.getByLabelText("Substitution reminder");
     expect(reminder).toHaveTextContent("No player swaps in 5:00");
-    expect(screen.getByRole("tab", { name: "Bench 4" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Bench 5" })).toBeInTheDocument();
     expect(screen.getByLabelText("Rotation timer")).toHaveTextContent(
       "RotationDue now",
     );
@@ -2323,6 +2455,7 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
     fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "3" }));
     fireEvent.click(screen.getByRole("button", { name: "Ready 3 swaps" }));
     fireEvent.click(
       within(
@@ -2367,6 +2500,7 @@ describe("Sideline app", () => {
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
     fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "3" }));
     fireEvent.click(screen.getByRole("button", { name: "Ready 3 swaps" }));
 
     const summary = screen.getByRole("dialog", {
@@ -2863,11 +2997,11 @@ describe("Sideline app", () => {
       within(guestDialog).getByRole("button", { name: "Add guest" }),
     );
 
-    expect(screen.getByRole("tab", { name: "Bench 5" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Bench 6" })).toBeInTheDocument();
     expect(screen.getByText("Borrowed Casey")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Undo last change" }));
-    expect(screen.getByRole("tab", { name: "Bench 4" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Bench 5" })).toBeInTheDocument();
     expect(screen.queryByText("Borrowed Casey")).not.toBeInTheDocument();
   });
 
@@ -3009,7 +3143,7 @@ describe("Sideline app", () => {
     expect(dylanRow).not.toHaveTextContent("Sitting");
     expect(dylanRow).not.toHaveTextContent("bench");
     expect(screen.getByLabelText("Shared bench time")).toHaveTextContent(
-      "All 4 sitting since start0:00",
+      "All 5 sitting since start0:00",
     );
   });
 
@@ -3074,7 +3208,7 @@ describe("Sideline app", () => {
       team.sideSize,
     );
     expect(screen.getByLabelText("Shared bench time")).toHaveTextContent(
-      "3 of 4 sitting since start10:37",
+      "4 of 5 sitting since start10:37",
     );
     expect(
       screen
@@ -3958,7 +4092,7 @@ describe("Sideline app", () => {
   it("shows the assigned position when an available player fills an open slot", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    ["Dylan", "Henry", "Haru", "Evan"].forEach((name) => {
+    ["Dylan", "Henry", "Haru", "Evan", "Collier"].forEach((name) => {
       fireEvent.click(
         screen.getByRole("button", { name: new RegExp(`${name} Present`) }),
       );
