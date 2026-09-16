@@ -50,7 +50,7 @@ describe("persistence migrations", () => {
     });
     const collier = migrated.teams.u8.roster.at(-1)!;
 
-    expect(migrated.version).toBe(19);
+    expect(migrated.version).toBe(20);
     expect(collier).toEqual({
       id: "u8-p10",
       name: "Collier",
@@ -63,6 +63,10 @@ describe("persistence migrations", () => {
     expect(teams).toEqual(originalTeams);
     expect(migrated.activeGame).toEqual({
       ...activeGame,
+      startingLineup: {
+        starterIds: Object.values(game.assignments),
+        presentIds: [...Object.values(game.assignments), ...game.benchIds],
+      },
       unavailableIds: [...activeGame.unavailableIds, collier.id],
       totals: {
         ...activeGame.totals,
@@ -259,7 +263,13 @@ describe("persistence migrations", () => {
     localStorage.removeItem(STORAGE_KEY);
     sessionStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(game));
 
-    expect(loadState().activeGame).toEqual(game);
+    expect(loadState().activeGame).toEqual({
+      ...game,
+      startingLineup: {
+        starterIds: Object.values(game.assignments),
+        presentIds: [...Object.values(game.assignments), ...game.benchIds],
+      },
+    });
   });
 
   it("persists a queued substitution plan with the active game", () => {

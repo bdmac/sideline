@@ -50,6 +50,8 @@ Choose a local coach profile on first use. Brian can access both teams; Chris an
 
 An interrupted active game reopens automatically for an assigned persisted coach. The live timestamp and accumulated time recover from the last persisted state, and signing out never clears the game.
 
+U8 also remembers one game's kickoff lineup on this device. Automatic starter selection gives players who began that game on the bench a modest boost; position preferences and your manual choices still matter. The record updates at the next U8 kickoff, not during substitutions or setup, and does not affect U12.
+
 The header settings menu can keep the screen awake during an active visible game and play a chime plus supported vibration when a substitution reminder becomes due. Both features are optional and depend on browser/device capabilities.
 
 For testing or demos, enable **Settings → Demo mode**. During an active game, the expanded match header gains a fast-forward button that opens **Fast-forward**. Enter a positive number of minutes to add while advancing current field and bench time through the normal accounting path. The clock pauses automatically after the jump and leaves period transitions manual.

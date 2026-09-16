@@ -89,6 +89,8 @@ Drag feedback uses one compact row per affected player, with the dragged player 
 
 Starter bench players are drop targets when dragging from the pitch, using the same warm outline as pitch destinations. The swap preserves the occupied position and keeps keyboard focus on its incoming player. No extra confirmation or control is introduced.
 
+U8 automatic starter selection quietly considers the last kickoff: previous bench players receive a modest boost alongside position fit and keeper workload. There is no mandatory rotation, new warning, or extra setup step. Manual pickers keep their preference-first order. On both teams, untouched automatic lineups follow attendance using the same solver as Reset plus Auto-fill. After coach edits, attendance changes preserve occupied positions and fill only vacancies by preference; Reset remains the explicit way to rebuild the entire lineup.
+
 Undo and Reset in the starter toolbar use Primer's large invisible-button horizontal padding token, retaining the same inner spacing at rest and on hover. This overrides the legacy padding-free quiet-button treatment only in this toolbar; all three controls retain a minimum 44px touch target and wrap when needed on narrow screens.
 
 Player-level concerns in the starter picker use a compact Primer warning Banner, with 1rem of spacing above and below to separate it from the dialog header and replacement choices.

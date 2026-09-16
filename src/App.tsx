@@ -72,8 +72,9 @@ import {
   addGuestPlayerToBench,
   applySubstitutions,
   assignPlayerToPosition,
-  assignPlayersByPreference,
   assignStartingPlayersByPreference,
+  fillStartingLineup,
+  updateActiveGame,
   cancelQueuedSubstitutions,
   comparePlayersByNameThenNumber,
   compareSubstitutionDestinations,
@@ -976,7 +977,7 @@ function App() {
                   : undefined
               }
               onStart={(game) => {
-                commitState((current) => ({ ...current, activeGame: game }));
+                commitState((current) => updateActiveGame(current, game));
                 setScreen({ name: "live" });
               }}
             />
@@ -993,7 +994,7 @@ function App() {
                   : "Return to teams"
               }
               onChange={(game) =>
-                commitState((current) => ({ ...current, activeGame: game }))
+                commitState((current) => updateActiveGame(current, game))
               }
               onEnd={(game) => {
                 commitState((current) => ({ ...current, activeGame: null }));
@@ -1499,13 +1500,16 @@ function SetupScreen({
       activePlayers.map((player) => player.id),
       team.roster,
       team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
+      team.lastStartingLineup,
     ),
   );
   const [starterUndo, setStarterUndo] = useState<{
     assignments: Record<string, string>;
     presentIds: string[];
     formationId: string;
+    hasManualChoices: boolean;
   } | null>(null);
+  const [hasManualStarterChoices, setHasManualStarterChoices] = useState(false);
   const canUndoStarters =
     starterUndo?.presentIds === presentIds &&
     starterUndo.formationId === formationId;
@@ -1514,12 +1518,19 @@ function SetupScreen({
   ) => {
     const next = update(assignments);
     if (JSON.stringify(next) === JSON.stringify(assignments)) return;
-    setStarterUndo({ assignments, presentIds, formationId });
+    setStarterUndo({
+      assignments,
+      presentIds,
+      formationId,
+      hasManualChoices: hasManualStarterChoices,
+    });
+    setHasManualStarterChoices(true);
     setAssignments(next);
   };
 
   const changeFormation = (nextFormationId: string) => {
     setStarterUndo(null);
+    setHasManualStarterChoices(false);
     const nextFormation = getFormation(nextFormationId);
     const present = activePlayers.filter((player) =>
       presentIds.includes(player.id),
@@ -1531,6 +1542,7 @@ function SetupScreen({
         present.map((player) => player.id),
         setupTeam.roster,
         team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
+        team.lastStartingLineup,
       ),
     );
   };
@@ -1558,31 +1570,16 @@ function SetupScreen({
   };
 
   const autoFillStarters = () => {
-    changeStarterAssignments((currentAssignments) => {
-      const assignedIds = new Set(
-        Object.values(currentAssignments).filter(Boolean),
-      );
-      const availableIds = activePlayers
-        .filter(
-          (player) =>
-            presentIds.includes(player.id) && !assignedIds.has(player.id),
-        )
-        .map((player) => player.id);
-      const openFormation = {
-        ...formation,
-        positions: formation.positions.filter(
-          (position) => !currentAssignments[position.id],
-        ),
-      };
-      return {
-        ...currentAssignments,
-        ...assignPlayersByPreference(
-          openFormation,
-          availableIds,
-          setupTeam.roster,
-        ),
-      };
-    });
+    changeStarterAssignments((currentAssignments) =>
+      fillStartingLineup(
+        formation,
+        currentAssignments,
+        presentIds,
+        setupTeam.roster,
+        team.lastStartingLineup,
+        team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
+      ),
+    );
   };
 
   const resetStarters = () =>
@@ -1598,26 +1595,26 @@ function SetupScreen({
       const next = current.includes(playerId)
         ? current.filter((id) => id !== playerId)
         : [...current, playerId];
-      const stillPresent = new Set(next);
       setAssignments((currentAssignments) => {
-        const clean = Object.fromEntries(
-          Object.entries(currentAssignments).map(([positionId, id]) => [
-            positionId,
-            stillPresent.has(id) ? id : "",
-          ]),
-        );
-        const used = new Set(Object.values(clean).filter(Boolean));
-        const available = activePlayers
-          .filter(
-            (player) => stillPresent.has(player.id) && !used.has(player.id),
-          )
-          .map((player) => player.id);
-        for (const position of formation.positions) {
-          if (!clean[position.id] && available.length) {
-            clean[position.id] = available.shift()!;
-          }
+        if (!hasManualStarterChoices) {
+          return assignStartingPlayersByPreference(
+            formation,
+            activePlayers
+              .filter((player) => next.includes(player.id))
+              .map((player) => player.id),
+            setupTeam.roster,
+            team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
+            team.lastStartingLineup,
+          );
         }
-        return clean;
+        return fillStartingLineup(
+          formation,
+          currentAssignments,
+          next,
+          setupTeam.roster,
+          team.lastStartingLineup,
+          team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
+        );
       });
       return next;
     });
@@ -1948,6 +1945,7 @@ function SetupScreen({
               onClick={() => {
                 if (!starterUndo || !canUndoStarters) return;
                 setAssignments(starterUndo.assignments);
+                setHasManualStarterChoices(starterUndo.hasManualChoices);
                 setStarterUndo(null);
               }}
             >

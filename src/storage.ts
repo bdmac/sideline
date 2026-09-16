@@ -1,5 +1,5 @@
-import { INITIAL_STATE } from "./domain";
-import type { ActiveGame, AppState } from "./types";
+import { INITIAL_STATE, updateActiveGame } from "./domain";
+import type { ActiveGame, AppState, StartingLineup } from "./types";
 
 export const STORAGE_KEY = "sideline-state-v1";
 export const ACTIVE_GAME_KEY = "sideline-active-game";
@@ -150,7 +150,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
     parsed.version === 10
   ) {
     return {
-      version: 19,
+      version: 20,
       teams: structuredClone(INITIAL_STATE.teams),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -160,7 +160,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 11) {
     return {
-      version: 19,
+      version: 20,
       teams: applyU8DefaultFormation(
         applyCurrentRosterPreferences(parsed.teams as AppState["teams"]),
       ),
@@ -172,7 +172,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 12) {
     return {
-      version: 19,
+      version: 20,
       teams: applyU8DefaultFormation(
         applyJackPreferences(
           applyWilliamPreferences(parsed.teams as AppState["teams"]),
@@ -186,7 +186,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 13) {
     return {
-      version: 19,
+      version: 20,
       teams: applyU8DefaultFormation(
         applyJackPreferences(
           applyWilliamPreferences(parsed.teams as AppState["teams"]),
@@ -201,7 +201,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
   if (parsed.version === 14) {
     return {
       ...(parsed as AppState),
-      version: 19,
+      version: 20,
       teams: applyU8DefaultFormation(
         applyJackPreferences(
           applyWilliamPreferences(parsed.teams as AppState["teams"]),
@@ -216,7 +216,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
   if (parsed.version === 15) {
     return {
       ...(parsed as AppState),
-      version: 19,
+      version: 20,
       teams: applyU8DefaultFormation(
         applyJackPreferences(parsed.teams as AppState["teams"]),
       ),
@@ -229,7 +229,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
   if (parsed.version === 16) {
     return {
       ...(parsed as AppState),
-      version: 19,
+      version: 20,
       teams: applyJackPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -240,7 +240,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
   if (parsed.version === 17) {
     return {
       ...(parsed as AppState),
-      version: 19,
+      version: 20,
       teams: applyJackPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -248,10 +248,10 @@ const migratePriorState = (parsed: StoredState): AppState => {
     };
   }
 
-  if (parsed.version === 18 || parsed.version === 19) {
+  if (parsed.version === 18 || parsed.version === 19 || parsed.version === 20) {
     return {
       ...(parsed as AppState),
-      version: 19,
+      version: 20,
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
         : null,
@@ -261,8 +261,50 @@ const migratePriorState = (parsed: StoredState): AppState => {
   return structuredClone(INITIAL_STATE);
 };
 
+const isStartingLineup = (value: unknown): value is StartingLineup => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("starterIds" in value) ||
+    !("presentIds" in value)
+  )
+    return false;
+  const { starterIds, presentIds } = value;
+  return (
+    Array.isArray(starterIds) &&
+    Array.isArray(presentIds) &&
+    starterIds.length > 0 &&
+    starterIds.length <= 5 &&
+    presentIds.every((id) => typeof id === "string" && id.length > 0) &&
+    new Set(presentIds).size === presentIds.length &&
+    new Set(starterIds).size === starterIds.length &&
+    starterIds.every((id) => presentIds.includes(id))
+  );
+};
+
+const restoreStartingHistory = (state: AppState): AppState => {
+  const invalidTeamHistory =
+    state.teams.u8.lastStartingLineup !== undefined &&
+    !isStartingLineup(state.teams.u8.lastStartingLineup);
+  const invalidGameHistory =
+    state.activeGame?.teamId === "u8" &&
+    state.activeGame.startingLineup !== undefined &&
+    !isStartingLineup(state.activeGame.startingLineup);
+  const next =
+    invalidTeamHistory || invalidGameHistory ? structuredClone(state) : state;
+  if (invalidTeamHistory || invalidGameHistory) {
+    console.warn(
+      "Sideline ignored invalid U8 starting-lineup history; game data was preserved.",
+    );
+    if (invalidTeamHistory) delete next.teams.u8.lastStartingLineup;
+    if (invalidGameHistory && next.activeGame)
+      delete next.activeGame.startingLineup;
+  }
+  return next.activeGame ? updateActiveGame(next, next.activeGame) : next;
+};
+
 export const migrateStoredState = (parsed: StoredState): AppState => {
-  const state = migratePriorState(parsed);
+  const state = restoreStartingHistory(migratePriorState(parsed));
   const existingCollier = state.teams.u8.roster.find(
     (player) => player.id === "u8-p10",
   );
@@ -304,7 +346,7 @@ export const loadState = (): AppState => {
     const recoveryGame = readActiveGameRecovery();
     if (recoveryGame) state.activeGame = recoveryGame;
   }
-  return state;
+  return restoreStartingHistory(state);
 };
 
 export const saveState = (state: AppState) => {

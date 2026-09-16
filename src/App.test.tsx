@@ -2010,6 +2010,132 @@ describe("Sideline app", () => {
     },
   );
 
+  it("remembers one U8 kickoff across games and keeps manual choices during attendance changes", () => {
+    const app = render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    startGame();
+    const read = () =>
+      JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+    const firstGame = read().activeGame!;
+    const firstIds = Object.values(firstGame.assignments);
+    expect(read().teams.u8.lastStartingLineup).toBeUndefined();
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(read().teams.u8.lastStartingLineup?.starterIds).toEqual(firstIds);
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", { name: "End this game?" }),
+      ).getByRole("button", { name: "End game" }),
+    );
+    expect(read().activeGame).toBeNull();
+    app.unmount();
+    render(<App />);
+    fireEvent.click(screen.getByText("Golden Dragons"));
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+    const team = read().teams.u8;
+    const formation = getFormation(team.defaultFormationId);
+    const ids = team.roster.map((player) => player.id);
+    const expected = assignStartingPlayersByPreference(
+      formation,
+      ids,
+      team.roster,
+      4,
+      team.lastStartingLineup,
+    );
+    for (const position of formation.positions) {
+      const name = team.roster.find(
+        (player) => player.id === expected[position.id],
+      )!.name;
+      expect(
+        screen.getByRole("button", {
+          name: `Change ${name} at ${position.label}`,
+        }),
+      ).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    fireEvent.click(screen.getByRole("button", { name: "Auto-fill" }));
+    const returningNames = team.roster
+      .filter((p) => !firstIds.includes(p.id))
+      .map((p) => p.name);
+    expect(
+      returningNames.filter((name) =>
+        screen.queryByRole("button", {
+          name: new RegExp(`^Change ${name} at `),
+        }),
+      ).length,
+    ).toBeGreaterThanOrEqual(2);
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Change .* at Goalkeeper$/ }),
+    );
+    fireEvent.click(
+      within(
+        screen.getByRole("dialog", { name: "Choose Goalkeeper" }),
+      ).getByRole("button", { name: /^Maddox\b/ }),
+    );
+    const absentName = document.querySelector(
+      '.starter-slot:not([data-position-id="gk"]) > strong',
+    )!.textContent!;
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Attendance" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: `${absentName} Present` }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+    expect(
+      screen.getByRole("button", { name: "Change Maddox at Goalkeeper" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(read().teams.u8.lastStartingLineup?.starterIds).toEqual(firstIds);
+    const secondIds = Object.values(read().activeGame!.assignments);
+    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+    expect(read().teams.u8.lastStartingLineup?.starterIds).toEqual(secondIds);
+    expect(read().teams.u12.lastStartingLineup).toBeUndefined();
+  });
+
+  it.each([
+    ["Matt", "Rayek", "Jack"],
+    ["Matt", "Jack", "Rayek"],
+    ["Rayek", "Matt", "Jack"],
+    ["Rayek", "Jack", "Matt"],
+    ["Jack", "Matt", "Rayek"],
+    ["Jack", "Rayek", "Matt"],
+  ])(
+    "keeps U12 starters consistent after marking %s, %s, and %s absent",
+    (first, second, third) => {
+      render(<App />);
+      fireEvent.click(screen.getByText("Fireballers"));
+      for (const name of [first, second, third]) {
+        fireEvent.click(
+          screen.getByRole("button", { name: `${name} Present` }),
+        );
+      }
+      fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+      fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+      const striker = screen.getByRole("button", {
+        name: "Change Aaron at Striker",
+      });
+      expect(striker.querySelector(".starter-player-warning")).toBeNull();
+      expect(
+        screen.getByRole("button", {
+          name: "Place John on the starting pitch",
+        }),
+      ).toBeInTheDocument();
+      const lineupLabels = () =>
+        Array.from(document.querySelectorAll(".starter-slot"), (slot) =>
+          slot.getAttribute("aria-label"),
+        );
+      const initialLineup = lineupLabels();
+      fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+      fireEvent.click(screen.getByRole("button", { name: "Auto-fill" }));
+      expect(
+        screen.getByRole("button", { name: "Change Aaron at Striker" }),
+      ).toBeInTheDocument();
+      expect(lineupLabels()).toEqual(initialLineup);
+    },
+  );
+
   it("assigns starters from the tactics board and swaps occupied positions", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));

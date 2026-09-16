@@ -20,6 +20,12 @@ export type Team = {
   defaultPeriodCount: 2 | 4;
   defaultFormationId: string;
   roster: Player[];
+  lastStartingLineup?: StartingLineup;
+};
+
+export type StartingLineup = {
+  starterIds: string[];
+  presentIds: string[];
 };
 
 export type Position = {
@@ -128,10 +134,11 @@ export type ActiveGame = {
   history: GameEvent[];
   queuedSubstitutions?: SubstitutionPair[];
   guestPlayers?: Player[];
+  startingLineup?: StartingLineup;
 };
 
 export type AppState = {
-  version: 19;
+  version: 20;
   teams: Record<TeamId, Team>;
   activeGame: ActiveGame | null;
 };

@@ -6,6 +6,7 @@ import type {
   PlayerGameSummary,
   PlayerTotals,
   PositionRole,
+  StartingLineup,
   SubstitutionPair,
   Team,
   TeamId,
@@ -314,9 +315,46 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 19,
+  version: 20,
   teams: INITIAL_TEAMS,
   activeGame: null,
+};
+
+export const updateActiveGame = (
+  state: AppState,
+  game: ActiveGame,
+): AppState => {
+  if (
+    game.teamId !== "u8" ||
+    (!game.startingLineup &&
+      !game.clock.running &&
+      game.clock.elapsedSeconds === 0)
+  ) {
+    return { ...state, activeGame: game };
+  }
+  // Older active games have no snapshot. Events after kickoff retain the
+  // lineup following any pre-game edits made at 0:00.
+  const firstPlayedEvent = game.history.find((event) => event.atSeconds > 0);
+  const starterIds = Object.values(
+    firstPlayedEvent?.beforeAssignments ?? game.assignments,
+  );
+  const startingLineup = game.startingLineup ?? {
+    starterIds: [...starterIds],
+    presentIds: [
+      ...new Set([
+        ...starterIds,
+        ...(firstPlayedEvent?.beforeBenchIds ?? game.benchIds),
+      ]),
+    ],
+  };
+  return {
+    ...state,
+    activeGame: game.startingLineup ? game : { ...game, startingLineup },
+    teams: {
+      ...state.teams,
+      u8: { ...state.teams.u8, lastStartingLineup: startingLineup },
+    },
+  };
 };
 
 export const comparePlayersByNameThenNumber = (a: Player, b: Player) =>
@@ -932,6 +970,7 @@ export const assignPlayersByPreference = (
   playerIds: string[],
   roster: Player[],
   outfieldPenalties: Readonly<Record<string, number>> = {},
+  selectionBonuses: Readonly<Record<string, number>> = {},
 ) => {
   const playerById = new Map(roster.map((player) => [player.id, player]));
   const players = playerIds
@@ -962,6 +1001,7 @@ export const assignPlayersByPreference = (
       const candidate = {
         score:
           preferenceScore(player, positions[positionIndex].role) +
+          (selectionBonuses[player.id] ?? 0) +
           (positions[positionIndex].role === "goalkeeper"
             ? 0
             : -(outfieldPenalties[player.id] ?? 0)) +
@@ -993,11 +1033,26 @@ export const assignPlayersByPreference = (
   );
 };
 
+export const getStarterHistoryBonuses = (
+  formation: Formation,
+  previousLineup?: StartingLineup,
+): Readonly<Record<string, number>> => {
+  if (formation.sideSize !== 5 || !previousLineup) return {};
+  // Half a preference-rank step: enough to break recurring starter ties,
+  // without forcing a complete lineup change at the expense of position fit.
+  return Object.fromEntries(
+    previousLineup.presentIds
+      .filter((id) => !previousLineup.starterIds.includes(id))
+      .map((id) => [id, 500]),
+  );
+};
+
 export const assignStartingPlayersByPreference = (
   formation: Formation,
   playerIds: string[],
   roster: Player[],
   periodCount: 2 | 4 = 4,
+  previousLineup?: StartingLineup,
 ) => {
   const keepers = roster.filter(
     (p) => playerIds.includes(p.id) && p.preferredRoles.includes("goalkeeper"),
@@ -1017,7 +1072,58 @@ export const assignStartingPlayersByPreference = (
     playerIds,
     roster,
     Object.fromEntries(keepers.map((p) => [p.id, penalty])),
+    getStarterHistoryBonuses(formation, previousLineup),
   );
+};
+
+export const fillStartingLineup = (
+  formation: Formation,
+  assignments: Record<string, string>,
+  presentIds: string[],
+  roster: Player[],
+  previousLineup?: StartingLineup,
+  periodCount: 2 | 4 = 4,
+) => {
+  const present = roster.filter(
+    (player) => player.active && presentIds.includes(player.id),
+  );
+  const presentSet = new Set(present.map((player) => player.id));
+  const clean = Object.fromEntries(
+    formation.positions.map((position) => [
+      position.id,
+      presentSet.has(assignments[position.id]) ? assignments[position.id] : "",
+    ]),
+  );
+  const assigned = new Set(Object.values(clean));
+  if (!Object.values(clean).some(Boolean)) {
+    return {
+      ...clean,
+      ...assignStartingPlayersByPreference(
+        formation,
+        present.map((player) => player.id),
+        roster,
+        periodCount,
+        previousLineup,
+      ),
+    };
+  }
+  return {
+    ...clean,
+    ...assignPlayersByPreference(
+      {
+        ...formation,
+        positions: formation.positions.filter(
+          (position) => !clean[position.id],
+        ),
+      },
+      present
+        .filter((player) => !assigned.has(player.id))
+        .map((player) => player.id),
+      roster,
+      {},
+      getStarterHistoryBonuses(formation, previousLineup),
+    ),
+  };
 };
 
 export const getGoalkeeperStintSeconds = (game: ActiveGame) =>
