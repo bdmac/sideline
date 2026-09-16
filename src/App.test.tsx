@@ -2654,7 +2654,7 @@ describe("Sideline app", () => {
         fireEvent(source, event);
       };
       touchPointer("pointerdown");
-      act(() => vi.advanceTimersByTime(199));
+      act(() => vi.advanceTimersByTime(124));
       expect(document.querySelector(".player-drag-preview")).toBeNull();
       if (gesture === "hold") act(() => vi.advanceTimersByTime(1));
       else if (gesture === "tap") {
