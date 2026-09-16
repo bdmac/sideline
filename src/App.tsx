@@ -83,14 +83,17 @@ import {
   formatDuration,
   getCurrentBenchSeconds,
   getCurrentFieldSeconds,
-  getCurrentPositionStintSeconds,
   getFormation,
   getFormationsForTeam,
+  getGoalkeeperChangeStatus,
+  getGoalkeeperPreparationWarning,
   getMatchClockSeconds,
   getMaxSubstitutionCount,
+  getNextSubstitutionSeconds,
   getPeriodStatus,
   getPlayingTimePaceWarning,
   getRecommendedSubstitutionCount,
+  getRoutineRotationStatus,
   getScore,
   getSubstitutionPlanningSnapshot,
   getSubstitutionReminderStatus,
@@ -123,6 +126,13 @@ import { playSubstitutionAlert, supportsSubstitutionAlert } from "./gameAlert";
 import { loadState, saveState } from "./storage";
 import { type ColorMode, loadColorMode, saveColorMode } from "./theme";
 import { useRotationDueReview } from "./useRotationDueReview";
+import { StarterLineup } from "./StarterLineup";
+import { PlayerDragPreview } from "./PlayerDragPreview";
+import {
+  compareStarterPlayersByPreference,
+  getStarterLineupAdvice,
+} from "./starterLineupModel";
+import { preferredRoleLabel } from "./playerLabels";
 import type {
   ActiveGame,
   AppState,
@@ -184,15 +194,6 @@ const formatPlayerDuration = (seconds: number, zeroLabel = "0:00") => {
   if (safe < 60) return formatDuration(safe);
   return `${Math.round(safe / 60)} min`;
 };
-
-const preferredRoleLabel = (role: Player["preferredRoles"][number]) =>
-  role === "goalkeeper"
-    ? "Goalkeeper"
-    : role === "defender"
-      ? "Defense"
-      : role === "midfielder"
-        ? "Midfield"
-        : "Forward";
 
 const preferredRoleAbbreviation = (role: Player["preferredRoles"][number]) =>
   role === "goalkeeper"
@@ -565,15 +566,20 @@ function DemoClockDialog({
 }) {
   const [targetMinute, setTargetMinute] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const currentElapsedSeconds = materializeGame(game, Date.now()).clock
-    .elapsedSeconds;
+  const current = materializeGame(game, Date.now());
+  const currentMatchSeconds = getPeriodStatus(
+    current.durationSeconds,
+    current.clock.elapsedSeconds,
+    current.periodCount,
+    current.period,
+  ).matchClockSeconds;
   const parsedTargetMinute = Number(targetMinute);
   const validOffset =
     targetMinute.trim() !== "" &&
     Number.isInteger(parsedTargetMinute) &&
     parsedTargetMinute > 0;
   const jumpTargetSeconds = validOffset
-    ? currentElapsedSeconds + parsedTargetMinute * 60
+    ? currentMatchSeconds + parsedTargetMinute * 60
     : null;
   const submitFastForward = () => {
     if (!validOffset) {
@@ -627,8 +633,8 @@ function DemoClockDialog({
         }}
       >
         <small className="demo-clock-current">
-          Current elapsed time:{" "}
-          <strong>{formatDuration(currentElapsedSeconds)}</strong>
+          Current match time:{" "}
+          <strong>{formatDuration(currentMatchSeconds)}</strong>
         </small>
         <label htmlFor="demo-clock-minute">Jump forward by minutes</label>
         <input
@@ -1490,10 +1496,28 @@ function SetupScreen({
       formation,
       activePlayers.map((player) => player.id),
       team.roster,
+      team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
     ),
   );
+  const [starterUndo, setStarterUndo] = useState<{
+    assignments: Record<string, string>;
+    presentIds: string[];
+    formationId: string;
+  } | null>(null);
+  const canUndoStarters =
+    starterUndo?.presentIds === presentIds &&
+    starterUndo.formationId === formationId;
+  const changeStarterAssignments = (
+    update: (current: Record<string, string>) => Record<string, string>,
+  ) => {
+    const next = update(assignments);
+    if (JSON.stringify(next) === JSON.stringify(assignments)) return;
+    setStarterUndo({ assignments, presentIds, formationId });
+    setAssignments(next);
+  };
 
   const changeFormation = (nextFormationId: string) => {
+    setStarterUndo(null);
     const nextFormation = getFormation(nextFormationId);
     const present = activePlayers.filter((player) =>
       presentIds.includes(player.id),
@@ -1504,6 +1528,7 @@ function SetupScreen({
         nextFormation,
         present.map((player) => player.id),
         setupTeam.roster,
+        team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
       ),
     );
   };
@@ -1531,7 +1556,7 @@ function SetupScreen({
   };
 
   const autoFillStarters = () => {
-    setAssignments((currentAssignments) => {
+    changeStarterAssignments((currentAssignments) => {
       const assignedIds = new Set(
         Object.values(currentAssignments).filter(Boolean),
       );
@@ -1559,13 +1584,14 @@ function SetupScreen({
   };
 
   const resetStarters = () =>
-    setAssignments(
+    changeStarterAssignments(() =>
       Object.fromEntries(
         formation.positions.map((position) => [position.id, ""]),
       ),
     );
 
   const toggleAttendance = (playerId: string) => {
+    setStarterUndo(null);
     setPresentIds((current) => {
       const next = current.includes(playerId)
         ? current.filter((id) => id !== playerId)
@@ -1900,7 +1926,8 @@ function SetupScreen({
             <div>
               <h2>Assign starters</h2>
               <p className="section-hint">
-                Tap a position to change its player.
+                Drag players to swap; on phones, hold a bench player first. Or
+                tap a bench player, then a position.
               </p>
             </div>
             <span>
@@ -1908,6 +1935,22 @@ function SetupScreen({
             </span>
           </div>
           <div className="starter-tools">
+            <Button
+              className="quiet-button"
+              variant="invisible"
+              size="large"
+              leadingVisual={RotateCcw}
+              aria-label="Undo lineup change"
+              title="Undo lineup change"
+              disabled={!canUndoStarters}
+              onClick={() => {
+                if (!starterUndo || !canUndoStarters) return;
+                setAssignments(starterUndo.assignments);
+                setStarterUndo(null);
+              }}
+            >
+              Undo
+            </Button>
             <Button
               className="secondary-action"
               variant="default"
@@ -1928,35 +1971,20 @@ function SetupScreen({
               Reset
             </Button>
           </div>
-          <StarterPitch
+          <StarterLineup
+            key={`${formationId}:${presentIds.join(",")}`}
             formation={formation}
             assignments={assignments}
-            team={setupTeam}
-            onChoosePosition={setStarterPositionId}
-          />
-          <div className="bench-preview">
-            <strong>Starting bench</strong>
-            {benchIds.length ? (
-              <ul className="starter-bench-list">
-                {[...benchIds]
-                  .sort((a, b) =>
-                    playerName(setupTeam, a).localeCompare(
-                      playerName(setupTeam, b),
-                    ),
-                  )
-                  .map((id) => (
-                    <li key={id}>{playerName(setupTeam, id)}</li>
-                  ))}
-              </ul>
-            ) : (
-              <span>
-                No bench — exactly enough players
-                {presentIds.length === team.sideSize
-                  ? ". 🪦 their little legs and lungs."
-                  : ""}
-              </span>
+            players={activePlayers.filter((player) =>
+              presentIds.includes(player.id),
             )}
-          </div>
+            onChoosePosition={setStarterPositionId}
+            onMove={(playerId, positionId) =>
+              changeStarterAssignments((current) =>
+                assignPlayerToPosition(current, positionId, playerId),
+              )
+            }
+          />
         </section>
       )}
 
@@ -2008,13 +2036,13 @@ function SetupScreen({
           )}
           onClose={() => setStarterPositionId(null)}
           onSelect={(playerId) => {
-            setAssignments((current) =>
+            changeStarterAssignments((current) =>
               assignPlayerToPosition(current, starterPositionId, playerId),
             );
             setStarterPositionId(null);
           }}
           onClear={() => {
-            setAssignments((current) => ({
+            changeStarterAssignments((current) => ({
               ...current,
               [starterPositionId]: "",
             }));
@@ -2208,7 +2236,33 @@ function LiveGameScreen({
   const periodShortLabel = `${period.count === 4 ? "Q" : "H"}${period.current}`;
   const breakAddedTimeSeconds = periodBreak ? period.addedTimeSeconds : 0;
   const substitutionReminder = getSubstitutionReminderStatus(displayed);
+  const routineRotation = getRoutineRotationStatus(displayed);
+  const rotationTimingLabel = !routineRotation.recommended
+    ? "No more scheduled"
+    : substitutionReminder.due
+      ? "Due now"
+      : `Due in ${formatDuration(
+          Math.max(
+            0,
+            substitutionReminder.intervalSeconds -
+              substitutionReminder.secondsSinceLastSubstitution,
+          ),
+        )}`;
+  const goalkeeperPreparationWarning = routineRotation.recommended
+    ? getGoalkeeperPreparationWarning(displayed, team)
+    : null;
+  const keeperPreparationNote = goalkeeperPreparationWarning ? (
+    <small
+      className="rotation-preparation-note"
+      role="status"
+      aria-live={queuedPairs.length > 0 ? "polite" : "off"}
+      aria-label="Goalkeeper preparation"
+    >
+      {goalkeeperPreparationWarning}
+    </small>
+  ) : null;
   const rotationDue =
+    routineRotation.recommended &&
     substitutionReminder.due &&
     game.benchIds.length > 0 &&
     !periodBreak &&
@@ -2772,6 +2826,7 @@ function LiveGameScreen({
                 substitutionReminder.secondsSinceLastSubstitution,
               )}
             </small>
+            {keeperPreparationNote}
           </span>
           <Button
             className="secondary-action"
@@ -2784,11 +2839,29 @@ function LiveGameScreen({
           </Button>
         </section>
       )}
+      {goalkeeperPreparationWarning &&
+        queuedPairs.length === 0 &&
+        !showSubstitutionReminder &&
+        !periodBreak &&
+        !periodBoundaryReached && (
+          <Banner
+            className="goalkeeper-preparation-banner"
+            variant="warning"
+            layout="compact"
+            role="status"
+            aria-label="Goalkeeper preparation"
+          >
+            <Banner.Title as="h3">Next keeper needs preparation</Banner.Title>
+            <Banner.Description>
+              {goalkeeperPreparationWarning}
+            </Banner.Description>
+          </Banner>
+        )}
       {queuedPairs.length > 0 && !periodBreak && !periodBoundaryReached && (
         <section
           className={`queued-substitution-banner ${
             queuedPlanErrors.length ? "invalid" : ""
-          }`}
+          } ${keeperPreparationNote && queuedPlanErrors.length === 0 ? "has-preparation" : ""}`}
           aria-label="Ready substitutions"
         >
           <span className="queued-substitution-copy">
@@ -2804,30 +2877,25 @@ function LiveGameScreen({
           </span>
           <span
             className="queued-substitution-timer"
-            aria-label={`Next rotation ${
-              substitutionReminder.due
-                ? "due now"
-                : `due in ${formatDuration(
-                    Math.max(
-                      0,
-                      substitutionReminder.intervalSeconds -
-                        substitutionReminder.secondsSinceLastSubstitution,
-                    ),
-                  )}`
-            }`}
+            aria-label={
+              !routineRotation.recommended
+                ? "No further scheduled rotation; manual plan is still available"
+                : `Next rotation ${
+                    substitutionReminder.due
+                      ? "due now"
+                      : `due in ${formatDuration(
+                          Math.max(
+                            0,
+                            substitutionReminder.intervalSeconds -
+                              substitutionReminder.secondsSinceLastSubstitution,
+                          ),
+                        )}`
+                  }`
+            }
           >
-            <strong>
-              {substitutionReminder.due
-                ? "Due now"
-                : `Due in ${formatDuration(
-                    Math.max(
-                      0,
-                      substitutionReminder.intervalSeconds -
-                        substitutionReminder.secondsSinceLastSubstitution,
-                    ),
-                  )}`}
-            </strong>
+            <strong>{rotationTimingLabel}</strong>
           </span>
+          {queuedPlanErrors.length === 0 && keeperPreparationNote}
           <Button
             className="secondary-action queued-substitution-review"
             variant="default"
@@ -2884,14 +2952,7 @@ function LiveGameScreen({
           {game.benchIds.length > 0 && (
             <div className="rotation-status" aria-label="Rotation timer">
               <span>Rotation</span>
-              <strong>
-                {substitutionReminder.due
-                  ? "Due now"
-                  : `Due in ${formatDuration(
-                      substitutionReminder.intervalSeconds -
-                        substitutionReminder.secondsSinceLastSubstitution,
-                    )}`}
-              </strong>
+              <strong>{rotationTimingLabel}</strong>
             </div>
           )}
           <div
@@ -3470,12 +3531,13 @@ function Pitch({
   const pitchRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     playerId: string;
+    pointerId: number;
     sourcePositionId: string;
     targetPositionId: string | null;
     startX: number;
     startY: number;
-    deltaX: number;
-    deltaY: number;
+    x: number;
+    y: number;
     dragging: boolean;
   } | null>(null);
   const [dragState, setDragState] = useState(dragRef.current);
@@ -3485,7 +3547,6 @@ function Pitch({
     message: string;
   } | null>(null);
   const suppressClickRef = useRef(false);
-  const returnAnimationRef = useRef<Animation | null>(null);
   const feedbackTimerRef = useRef<number | null>(null);
 
   const findDropTargetPositionId = (
@@ -3512,7 +3573,6 @@ function Pitch({
 
   useEffect(
     () => () => {
-      returnAnimationRef.current?.cancel();
       if (feedbackTimerRef.current !== null) {
         window.clearTimeout(feedbackTimerRef.current);
       }
@@ -3526,7 +3586,12 @@ function Pitch({
     sourcePositionId: string,
   ) => {
     const drag = dragRef.current;
-    if (!drag || drag.playerId !== playerId) return;
+    if (
+      !drag ||
+      drag.playerId !== playerId ||
+      drag.pointerId !== event.pointerId
+    )
+      return;
     const deltaX = event.clientX - drag.startX;
     const deltaY = event.clientY - drag.startY;
     const dragging = drag.dragging || Math.hypot(deltaX, deltaY) > 8;
@@ -3541,8 +3606,8 @@ function Pitch({
     const nextDrag = {
       ...drag,
       targetPositionId,
-      deltaX,
-      deltaY,
+      x: event.clientX,
+      y: event.clientY,
       dragging: true,
     };
     dragRef.current = nextDrag;
@@ -3555,6 +3620,7 @@ function Pitch({
     canceled = false,
   ) => {
     const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag?.dragging) {
       event.preventDefault();
       suppressClickRef.current = true;
@@ -3594,39 +3660,6 @@ function Pitch({
           feedbackTimerRef.current = null;
         }, 1_300);
         onMovePlayer(drag.playerId, targetPositionId);
-      } else {
-        const playerElement = event.currentTarget;
-        const currentStyle = window.getComputedStyle(playerElement);
-        const reduceMotion =
-          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
-          false;
-        returnAnimationRef.current?.cancel();
-        if (typeof playerElement.animate === "function") {
-          const animation = playerElement.animate(
-            [
-              {
-                transform: currentStyle.transform,
-                boxShadow: currentStyle.boxShadow,
-                opacity: currentStyle.opacity,
-              },
-              {
-                transform: "translate(-50%, -50%)",
-                boxShadow: "0 5px 0 var(--pitch-shadow)",
-                opacity: "1",
-              },
-            ],
-            {
-              duration: reduceMotion ? 1 : 260,
-              easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-            },
-          );
-          returnAnimationRef.current = animation;
-          animation.onfinish = () => {
-            if (returnAnimationRef.current === animation) {
-              returnAnimationRef.current = null;
-            }
-          };
-        }
       }
     }
     dragRef.current = null;
@@ -3716,11 +3749,6 @@ function Pitch({
         const style = {
           left: `${position.x}%`,
           top: `${position.y}%`,
-          ...(dragState?.sourcePositionId === position.id && dragState.dragging
-            ? {
-                transform: `translate(calc(-50% + ${dragState.deltaX}px), calc(-50% + ${dragState.deltaY}px))`,
-              }
-            : {}),
         };
         const swapConfirmed =
           swapFeedback?.playerIds.includes(playerId) ||
@@ -3750,18 +3778,22 @@ function Pitch({
                 : "Tap for actions or drag to another position"
             }
             onPointerDown={(event) => {
-              if (event.button !== 0) return;
-              returnAnimationRef.current?.cancel();
-              returnAnimationRef.current = null;
+              if (
+                event.button !== 0 ||
+                event.isPrimary === false ||
+                dragRef.current
+              )
+                return;
               event.currentTarget.setPointerCapture?.(event.pointerId);
               const nextDrag = {
                 playerId: player.id,
+                pointerId: event.pointerId,
                 sourcePositionId: position.id,
                 targetPositionId: null,
                 startX: event.clientX,
                 startY: event.clientY,
-                deltaX: 0,
-                deltaY: 0,
+                x: event.clientX,
+                y: event.clientY,
                 dragging: false,
               };
               dragRef.current = nextDrag;
@@ -3770,6 +3802,7 @@ function Pitch({
             onPointerMove={(event) => updateDrag(event, player.id, position.id)}
             onPointerUp={finishDrag}
             onPointerCancel={(event) => finishDrag(event, true)}
+            onLostPointerCapture={(event) => finishDrag(event, true)}
             onClick={(event) => {
               if (suppressClickRef.current) {
                 event.preventDefault();
@@ -3805,6 +3838,13 @@ function Pitch({
           </button>
         );
       })}
+      {dragState?.dragging && (
+        <PlayerDragPreview
+          name={playerName(team, dragState.playerId)}
+          x={dragState.x}
+          y={dragState.y}
+        />
+      )}
     </div>
   );
 }
@@ -3831,53 +3871,6 @@ function FormationDiagram({
   );
 }
 
-function StarterPitch({
-  formation,
-  assignments,
-  team,
-  onChoosePosition,
-}: {
-  formation: ReturnType<typeof getFormation>;
-  assignments: Record<string, string>;
-  team: Team;
-  onChoosePosition: (positionId: string) => void;
-}) {
-  return (
-    <div
-      className="pitch starter-pitch"
-      aria-label={`${formation.name} starter assignments`}
-    >
-      <div className="pitch-halfway" aria-hidden="true" />
-      <div className="pitch-circle" aria-hidden="true" />
-      <div className="pitch-box top" aria-hidden="true" />
-      <div className="pitch-box bottom" aria-hidden="true" />
-      <span className="pitch-direction attack" aria-hidden="true">
-        Attack
-      </span>
-      <span className="pitch-direction defend" aria-hidden="true">
-        Defend
-      </span>
-      {formation.positions.map((position) => {
-        const playerId = assignments[position.id];
-        const player = team.roster.find((item) => item.id === playerId);
-        return (
-          <button
-            type="button"
-            className={`pitch-player starter-slot ${player ? "" : "empty"}`}
-            key={position.id}
-            style={{ left: `${position.x}%`, top: `${position.y}%` }}
-            aria-label={`${player ? `Change ${player.name}` : "Assign player"} at ${position.label}`}
-            onClick={() => onChoosePosition(position.id)}
-          >
-            <span className="position-label">{position.shortLabel}</span>
-            <strong>{player?.name ?? "Open"}</strong>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function StarterPicker({
   positionId,
   formation,
@@ -3897,14 +3890,23 @@ function StarterPicker({
 }) {
   const position = formation.positions.find((item) => item.id === positionId);
   const currentPlayerId = assignments[positionId];
+  const currentPlayer = presentPlayers.find(
+    (player) => player.id === currentPlayerId,
+  );
+  const advice = getStarterLineupAdvice(formation, assignments, presentPlayers);
+  const issues = advice.issuesByPosition[positionId] ?? [];
   const choices = presentPlayers
     .filter((player) => player.id !== currentPlayerId)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) =>
+      position
+        ? compareStarterPlayersByPreference(a, b, position.role)
+        : a.name.localeCompare(b.name),
+    );
 
   return (
     <SidelineDialog
       title={`Choose ${position?.label ?? "position"}`}
-      description="Choosing another starter swaps their positions."
+      description="Choose a bench player to replace this starter, or another starter to swap positions."
       className="compact-sheet starter-picker"
       onClose={onClose}
       footer={
@@ -3930,6 +3932,22 @@ function StarterPicker({
         </>
       }
     >
+      {issues.length > 0 && (
+        <Banner
+          className="starter-current-notes"
+          variant="warning"
+          layout="compact"
+          role="status"
+          aria-label="Current starter concerns"
+        >
+          <Banner.Title as="h3">
+            {currentPlayer
+              ? `${currentPlayer.name} at ${position?.label}`
+              : position?.label}
+          </Banner.Title>
+          <Banner.Description>{issues.join(" ")}</Banner.Description>
+        </Banner>
+      )}
       <div className="starter-choice-list">
         {choices.map((player) => {
           const assignedPosition = Object.entries(assignments).find(
@@ -3947,6 +3965,7 @@ function StarterPicker({
             <button
               type="button"
               key={player.id}
+              aria-label={`${player.name} Prefers ${player.preferredRoles.map(preferredRoleLabel).join(" · ")} Currently ${assignedLabel ?? "on starting bench"}`}
               onClick={() => onSelect(player.id)}
             >
               <span className="starter-choice-player">
@@ -5079,6 +5098,84 @@ function PlayerActionMenu({
   );
 }
 
+function getKeeperChangeNotice(
+  game: ActiveGame,
+  team: Team,
+  pairs: SubstitutionPair[],
+  timing: "next-rotation" | "now",
+) {
+  const status = getGoalkeeperChangeStatus(
+    game,
+    pairs,
+    timing === "next-rotation"
+      ? getNextSubstitutionSeconds(game)
+      : game.clock.elapsedSeconds,
+  );
+  if (!status) return null;
+  const messages: string[] = [];
+  const outgoingName = playerName(team, status.outgoingPlayerId);
+  const incomingName = playerName(team, status.incomingPlayerId);
+  if (status.early) {
+    const target = formatDuration(status.targetSeconds);
+    messages.push(
+      timing === "next-rotation"
+        ? `${outgoingName} would not complete their recommended ${target} turn in goal by the next rotation.`
+        : `Sending now would end ${outgoingName}'s turn before the recommended ${target}.`,
+    );
+  }
+  if (status.needsRest) {
+    const interval = formatDuration(status.intervalSeconds);
+    messages.push(
+      timing === "next-rotation"
+        ? `${incomingName} would not have their recommended ${interval} bench turn before the next rotation.`
+        : `${incomingName} has not had their recommended ${interval} bench turn before taking over.`,
+    );
+  }
+  const incomingKeeper = team.roster.find(
+    (player) => player.id === status.incomingPlayerId,
+  );
+  if (incomingKeeper && !incomingKeeper.preferredRoles.includes("goalkeeper")) {
+    messages.push(`${incomingName} does not typically play goalkeeper.`);
+  }
+  if (messages.length === 0) return null;
+  return {
+    title: status.early
+      ? timing === "next-rotation"
+        ? "Early keeper change"
+        : "Wait on this rotation"
+      : status.needsRest
+        ? "Keeper needs more rest"
+        : null,
+    message: messages.join(" "),
+  };
+}
+
+function KeeperChangeNotice({
+  notice,
+  id,
+}: {
+  notice: ReturnType<typeof getKeeperChangeNotice>;
+  id: string;
+}) {
+  if (!notice) return null;
+  return notice.title ? (
+    <Banner
+      id={id}
+      className="keeper-change-warning"
+      variant="warning"
+      layout="compact"
+      role="status"
+    >
+      <Banner.Title as="h3">{notice.title}</Banner.Title>
+      <Banner.Description>{notice.message}</Banner.Description>
+    </Banner>
+  ) : (
+    <p id={id} className="sub-count-explanation" role="status">
+      {notice.message}
+    </p>
+  );
+}
+
 function SubstitutionPlanner({
   game,
   team,
@@ -5093,6 +5190,7 @@ function SubstitutionPlanner({
   onConfirm: (pairs: SubstitutionPair[]) => void;
 }) {
   const countLimitId = useId();
+  const routineRotation = getRoutineRotationStatus(game);
   const recommendedCount = getRecommendedSubstitutionCount(game, team);
   const initialCount = initialPairs?.length ?? recommendedCount;
   const [count, setCount] = useState(initialCount);
@@ -5196,25 +5294,11 @@ function SubstitutionPlanner({
       goalkeeperPosition.id
     ] &&
     maxCount === Object.keys(game.assignments).length;
-  const keeperPair = pairs.find(
-    (pair) => pair.positionId === goalkeeperPosition?.id && !pair.keeperHandoff,
-  );
-  const incomingKeeper = keeperPair
-    ? team.roster.find((player) => player.id === keeperPair.inPlayerId)
-    : undefined;
-  const earlyKeeperChange =
-    keeperPair &&
-    getCurrentPositionStintSeconds(game, keeperPair.positionId) <
-      getSubstitutionReminderStatus(game).intervalSeconds;
-  const atypicalKeeper = Boolean(
-    incomingKeeper && !incomingKeeper.preferredRoles.includes("goalkeeper"),
-  );
-  const keeperPreferenceWarning =
-    atypicalKeeper && incomingKeeper
-      ? `${incomingKeeper.name} does not typically play goalkeeper.`
-      : null;
-  const showKeeperNotice = Boolean(
-    keeperPair && (earlyKeeperChange || atypicalKeeper),
+  const keeperNotice = getKeeperChangeNotice(
+    game,
+    team,
+    pairs,
+    "next-rotation",
   );
   const showCountLimit = Boolean(
     handoff && countIsLimited && !canOverrideKeeper,
@@ -5348,6 +5432,8 @@ function SubstitutionPlanner({
   const duplicateIns =
     new Set(pairs.map((pair) => pair.inPlayerId)).size !== pairs.length;
   const pairErrors = validateSubstitutionPairs(game, pairs);
+  const waitingForManualCount =
+    !routineRotation.recommended && pairs.length === 0;
   const valid =
     pairs.length === count &&
     !duplicateOuts &&
@@ -5376,7 +5462,11 @@ function SubstitutionPlanner({
   return (
     <SidelineDialog
       title="Plan substitutions"
-      description="Suggested for fairness. Ready the plan now, then send the players in when the change happens."
+      description={
+        routineRotation.recommended
+          ? "Suggested for fairness. Ready the plan now, then send the players in when the change happens."
+          : "No further routine rotation is scheduled. Manual changes are still available if needed."
+      }
       onClose={onClose}
       width="720px"
       className="substitution-dialog substitution-sheet"
@@ -5398,7 +5488,9 @@ function SubstitutionPlanner({
             disabled={!valid}
             onClick={() => onConfirm(pairs)}
           >
-            Ready {count} swap{count === 1 ? "" : "s"}
+            {waitingForManualCount
+              ? "Choose a swap count"
+              : `Ready ${count} swap${count === 1 ? "" : "s"}`}
           </Button>
         </>
       }
@@ -5418,7 +5510,7 @@ function SubstitutionPlanner({
             aria-describedby={
               showCountLimit
                 ? countLimitId
-                : showKeeperNotice
+                : keeperNotice
                   ? keeperNoticeId
                   : undefined
             }
@@ -5450,32 +5542,7 @@ function SubstitutionPlanner({
             {overrideError}
           </p>
         )}
-        {showKeeperNotice &&
-          keeperPair &&
-          (earlyKeeperChange ? (
-            <Banner
-              id={keeperNoticeId}
-              className="keeper-change-warning"
-              variant="warning"
-              layout="compact"
-              role="status"
-            >
-              <Banner.Title as="h3">Early keeper change</Banner.Title>
-              <Banner.Description>
-                {playerName(team, keeperPair.outPlayerId)} has not completed
-                their recommended turn in goal.
-                {keeperPreferenceWarning ? ` ${keeperPreferenceWarning}` : ""}
-              </Banner.Description>
-            </Banner>
-          ) : (
-            <p
-              id={keeperNoticeId}
-              className="sub-count-explanation"
-              role="status"
-            >
-              {keeperPreferenceWarning}
-            </p>
-          ))}
+        <KeeperChangeNotice notice={keeperNotice} id={keeperNoticeId} />
 
         <div className="swap-list">
           <div className="swap-column-headings" aria-hidden="true">
@@ -5701,7 +5768,7 @@ function SubstitutionPlanner({
           )}
         </div>
 
-        {!valid && (
+        {!valid && !waitingForManualCount && (
           <p className="error-message">
             {pairErrors[0] ??
               "Choose a different outgoing and incoming player for every swap."}
@@ -5917,6 +5984,8 @@ function QueuedSubstitutionSummary({
   onExecute: () => void;
 }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const keeperNoticeId = useId();
+  const keeperNotice = getKeeperChangeNotice(game, team, pairs, "now");
 
   if (deleteConfirm) {
     return (
@@ -5944,7 +6013,7 @@ function QueuedSubstitutionSummary({
           </span>
         </>
       }
-      className="substitution-ready-sheet"
+      className="substitution-ready-sheet queued-substitution-sheet"
       width="620px"
       onClose={onClose}
       footerClassName="queued-plan-actions"
@@ -5974,6 +6043,7 @@ function QueuedSubstitutionSummary({
             size="large"
             leadingVisual={Check}
             disabled={errors.length > 0}
+            aria-describedby={keeperNotice ? keeperNoticeId : undefined}
             onClick={onExecute}
           >
             Send 'em in
@@ -5981,6 +6051,7 @@ function QueuedSubstitutionSummary({
         </>
       }
     >
+      <KeeperChangeNotice notice={keeperNotice} id={keeperNoticeId} />
       <ReadySwapList
         pairs={pairs}
         formation={formation}

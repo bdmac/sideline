@@ -1386,15 +1386,20 @@ select:hover {
 
 .starter-tools {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-bottom: 0.85rem;
 }
 
 .starter-tools .secondary-action {
   min-height: 44px;
   padding-block: 0.5rem;
+}
+
+.starter-tools .quiet-button {
+  padding-inline: var(--control-large-paddingInline-spacious, 1rem);
 }
 
 .starter-pitch {
@@ -1404,6 +1409,160 @@ select:hover {
 
 .starter-slot {
   min-height: 58px;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  scroll-margin-top: 1rem;
+}
+
+.starter-lineup {
+  max-width: 520px;
+  margin-inline: auto;
+}
+
+.starter-player-warning {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  box-sizing: content-box;
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--fgColor-attention, #9a6700);
+}
+
+.starter-current-notes {
+  margin-block: 1rem;
+}
+
+.starter-slot.starter-drop-target,
+.starter-bench-name.starter-drop-target {
+  outline: 3px solid var(--warm);
+  outline-offset: 3px;
+  background: var(--warm-pale);
+  color: var(--warm-dark);
+}
+
+.starter-drag-source {
+  opacity: 0.5;
+}
+
+.player-drag-preview {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  padding: 0.6rem 1rem;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 2px solid var(--turf);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 5px 8px var(--pitch-shadow);
+  font-weight: 800;
+}
+
+.player-drag-feedback {
+  position: absolute;
+  z-index: 10;
+  top: 0.5rem;
+  left: 0.5rem;
+  right: 0.5rem;
+  pointer-events: none;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 5px 8px var(--pitch-shadow);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.player-drag-warning {
+  color: var(--fgColor-attention, #9a6700);
+}
+
+.player-drag-feedback-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.player-drag-feedback-row + .player-drag-feedback-row {
+  border-top: 1px solid var(--line);
+  padding-top: 0.35rem;
+}
+
+.player-drag-destination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.4rem;
+}
+
+.player-drag-destination > * {
+  min-width: 0;
+}
+
+.player-drag-destination > strong {
+  font-size: 0.9rem;
+}
+
+.player-drag-fit {
+  max-width: 8rem;
+  text-align: right;
+  font-weight: 650;
+}
+
+.starter-lineup .starter-bench {
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.starter-bench .starter-bench-list {
+  gap: 0.5rem;
+}
+
+.starter-bench .starter-bench-list li {
+  display: flex;
+  padding: 0;
+  max-width: 100%;
+}
+
+.starter-bench-list button {
+  min-height: 44px;
+  min-width: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.starter-bench-name {
+  padding: 0.5rem 0.7rem;
+  overflow-wrap: anywhere;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.starter-bench-name[aria-pressed="true"] {
+  background: var(--turf-pale);
+  color: var(--turf-dark);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.starter-bench-name:hover {
+  background: var(--turf-pale);
 }
 
 .bench-preview {
@@ -1841,6 +2000,17 @@ select:hover {
     "copy action";
 }
 
+.queued-substitution-banner.has-preparation {
+  grid-template-areas:
+    "copy timer"
+    "note note"
+    ". action";
+}
+
+.goalkeeper-preparation-banner {
+  margin-top: 1rem;
+}
+
 .queued-substitution-copy {
   grid-area: copy;
 }
@@ -1874,6 +2044,19 @@ select:hover {
   margin-top: 0.15rem;
   color: var(--ink-soft);
   font-size: 0.75rem;
+}
+
+.queued-substitution-banner .rotation-preparation-note,
+.substitution-reminder-banner .rotation-preparation-note {
+  grid-area: note;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.substitution-reminder-banner .rotation-preparation-note {
+  margin-top: 0.5rem;
 }
 
 .queued-substitution-banner button,
@@ -2001,9 +2184,7 @@ select:hover {
 }
 
 .pitch-player.dragging {
-  z-index: 5;
-  box-shadow: 0 9px 18px rgba(9, 26, 29, 0.28);
-  opacity: 0.88;
+  opacity: 0.5;
 }
 
 .pitch-player.drop-target {
@@ -2940,12 +3121,8 @@ select:hover {
   line-height: 1.5;
 }
 
-.keeper-change-warning[data-component="Banner"][data-variant="warning"] {
-  --banner-bgColor: var(--warm-pale);
-  --banner-borderColor: var(--warm);
-  --banner-icon-fgColor: var(--warm-dark);
-  margin-bottom: 1rem;
-  color: var(--warm-dark);
+.keeper-change-warning {
+  margin-block: 1rem;
 }
 
 .keeper-change-warning [data-component="Banner.Title"] {
@@ -3388,9 +3565,19 @@ select:hover {
   border-bottom: 0;
 }
 
+.queued-substitution-sheet .sheet-header {
+  padding-bottom: 1.25rem;
+  border-bottom: 2px solid var(--rule-strong);
+}
+
 .ready-swap-list {
   border-top: 2px solid var(--rule-strong);
   margin: 1rem 0;
+}
+
+.queued-substitution-sheet .ready-swap-list {
+  border-top: 0;
+  margin-top: 0;
 }
 
 .ready-swap-list.removable .ready-swap-headings {
@@ -4622,6 +4809,13 @@ select:hover {
   .queued-substitution-banner {
     grid-template-areas:
       "copy timer"
+      "action action";
+  }
+
+  .queued-substitution-banner.has-preparation {
+    grid-template-areas:
+      "copy timer"
+      "note note"
       "action action";
   }
 
