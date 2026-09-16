@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { CircleAlert } from "lucide-react";
 import { PlayerDragPreview } from "./PlayerDragPreview";
+import { TOUCH_DRAG_HOLD_MS } from "./playerDrag";
 import type { Formation, Player } from "./types";
 import {
   getStarterLineupAdvice,
@@ -107,17 +108,22 @@ export function StarterLineup({
 
   useEffect(() => {
     const bench = benchRef.current;
+    const pitch = pitchRef.current;
     const preventDragScroll = (event: TouchEvent) => {
       if (dragRef.current?.active && event.cancelable) event.preventDefault();
     };
     bench?.addEventListener("touchmove", preventDragScroll, { passive: false });
+    pitch?.addEventListener("touchmove", preventDragScroll, { passive: false });
     const preventContextMenu = (event: Event) => {
       if (dragRef.current) event.preventDefault();
     };
     bench?.addEventListener("contextmenu", preventContextMenu);
+    pitch?.addEventListener("contextmenu", preventContextMenu);
     return () => {
       bench?.removeEventListener("touchmove", preventDragScroll);
+      pitch?.removeEventListener("touchmove", preventDragScroll);
       bench?.removeEventListener("contextmenu", preventContextMenu);
+      pitch?.removeEventListener("contextmenu", preventContextMenu);
     };
   }, [bench.length]);
 
@@ -215,7 +221,7 @@ export function StarterLineup({
     cancel();
   };
 
-  const pointerHandlers = (playerId: string, fromBench = false) => ({
+  const pointerHandlers = (playerId: string) => ({
     onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
       if (event.button !== 0 || event.isPrimary === false || dragRef.current)
         return;
@@ -229,7 +235,7 @@ export function StarterLineup({
         y: event.clientY,
         active: false,
         target: null,
-        waitingForHold: fromBench && event.pointerType === "touch",
+        waitingForHold: event.pointerType === "touch",
       };
       if (dragRef.current.waitingForHold) {
         holdTimer.current = setTimeout(() => {
@@ -237,7 +243,7 @@ export function StarterLineup({
           if (!current) return;
           dragRef.current = { ...current, active: true, waitingForHold: false };
           setDrag(dragRef.current);
-        }, 250);
+        }, TOUCH_DRAG_HOLD_MS);
       }
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
@@ -432,7 +438,7 @@ export function StarterLineup({
                       : undefined
                   }
                   aria-pressed={selectedPlayerId === player.id}
-                  {...pointerHandlers(player.id, true)}
+                  {...pointerHandlers(player.id)}
                   onClick={() => selectBenchPlayer(player.id)}
                 >
                   {player.name}

@@ -2617,6 +2617,81 @@ describe("Sideline app", () => {
     ).toHaveLength(2);
   });
 
+  it.each(["hold", "swipe", "tap", "cancel", "blur", "escape"])(
+    "requires a deliberate touch hold on live pitch players (%s)",
+    (gesture) => {
+      render(<App />);
+      fireEvent.click(screen.getByText("Golden Dragons"));
+      startGame();
+      vi.useFakeTimers();
+      const source = screen.getByRole("button", {
+        name: "Open actions for Ollie",
+      });
+      const target = screen.getByRole("button", {
+        name: "Open actions for Haru",
+      });
+      vi.spyOn(target, "getBoundingClientRect").mockReturnValue({
+        left: 640,
+        top: 380,
+        right: 760,
+        bottom: 460,
+        width: 120,
+        height: 80,
+        x: 640,
+        y: 380,
+        toJSON: () => ({}),
+      });
+      const before = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+      const touchPointer = (type: string, x = 300, y = 420) => {
+        const event = new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          clientX: x,
+          clientY: y,
+        });
+        Object.defineProperty(event, "pointerType", { value: "touch" });
+        fireEvent(source, event);
+      };
+      touchPointer("pointerdown");
+      act(() => vi.advanceTimersByTime(399));
+      expect(document.querySelector(".player-drag-preview")).toBeNull();
+      if (gesture === "hold") act(() => vi.advanceTimersByTime(1));
+      else if (gesture === "tap") {
+        touchPointer("pointerup");
+        fireEvent.click(source);
+      } else if (gesture === "cancel") touchPointer("pointercancel");
+      else if (gesture === "blur") fireEvent.blur(window);
+      else if (gesture === "escape")
+        fireEvent.keyDown(window, { key: "Escape" });
+      touchPointer("pointermove", 700, 420);
+      const touchMove = new Event("touchmove", {
+        bubbles: true,
+        cancelable: true,
+      });
+      fireEvent(source, touchMove);
+      expect(touchMove.defaultPrevented).toBe(gesture === "hold");
+      act(() => vi.advanceTimersByTime(500));
+      if (gesture === "hold") {
+        expect(source).toHaveClass("dragging");
+        expect(target).toHaveClass("drop-target");
+      } else expect(document.querySelector(".player-drag-preview")).toBeNull();
+      touchPointer("pointerup", 700, 420);
+      const after = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+      if (gesture === "hold") {
+        expect(screen.getByText("Ollie ↔ Haru")).toBeInTheDocument();
+        expect(validateGame(after.activeGame!, 5)).toEqual([]);
+      } else {
+        expect(after.activeGame?.assignments).toEqual(
+          before.activeGame?.assignments,
+        );
+        expect(after.activeGame?.history).toEqual(before.activeGame?.history);
+        if (gesture === "tap")
+          expect(screen.getByRole("dialog")).toBeInTheDocument();
+      }
+    },
+  );
+
   it("readies substitutions without changing the lineup, then sends them in", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -5153,7 +5228,7 @@ describe("Sideline app", () => {
 
     expect(
       screen.getByText(
-        "Tap a player for actions, or drag them onto another position.",
+        "Tap a player for actions, or drag them onto another position. On phones, hold first.",
       ),
     ).toBeInTheDocument();
     openPositionEditor("Simon");

@@ -51,6 +51,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
   type ReactNode,
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
@@ -128,6 +129,7 @@ import { type ColorMode, loadColorMode, saveColorMode } from "./theme";
 import { useRotationDueReview } from "./useRotationDueReview";
 import { StarterLineup } from "./StarterLineup";
 import { PlayerDragPreview } from "./PlayerDragPreview";
+import { TOUCH_DRAG_HOLD_MS } from "./playerDrag";
 import {
   compareStarterPlayersByPreference,
   getStarterLineupAdvice,
@@ -1926,8 +1928,8 @@ function SetupScreen({
             <div>
               <h2>Assign starters</h2>
               <p className="section-hint">
-                Drag players to swap; on phones, hold a bench player first. Or
-                tap a bench player, then a position.
+                Drag players to swap; on phones, hold a player first. Or tap a
+                bench player, then a position.
               </p>
             </div>
             <span>
@@ -2914,7 +2916,8 @@ function LiveGameScreen({
             <div>
               <h1>On the field</h1>
               <small className="section-hint">
-                Tap a player for actions, or drag them onto another position.
+                Tap a player for actions, or drag them onto another position. On
+                phones, hold first.
               </small>
             </div>
             <span>
@@ -3539,6 +3542,7 @@ function Pitch({
     x: number;
     y: number;
     dragging: boolean;
+    waitingForHold: boolean;
   } | null>(null);
   const [dragState, setDragState] = useState(dragRef.current);
   const [swapFeedback, setSwapFeedback] = useState<{
@@ -3548,6 +3552,41 @@ function Pitch({
   } | null>(null);
   const suppressClickRef = useRef(false);
   const feedbackTimerRef = useRef<number | null>(null);
+  const holdTimerRef = useRef<number | null>(null);
+
+  const cancelDrag = useCallback(() => {
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    dragRef.current = null;
+    setDragState(null);
+  }, []);
+
+  useEffect(() => {
+    const pitch = pitchRef.current;
+    const preventDragScroll = (event: TouchEvent) => {
+      if (dragRef.current?.dragging && event.cancelable) event.preventDefault();
+    };
+    const preventContextMenu = (event: Event) => {
+      if (dragRef.current) event.preventDefault();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") cancelDrag();
+    };
+    pitch?.addEventListener("touchmove", preventDragScroll, { passive: false });
+    pitch?.addEventListener("contextmenu", preventContextMenu);
+    window.addEventListener("blur", cancelDrag);
+    window.addEventListener("keydown", escape);
+    return () => {
+      if (holdTimerRef.current !== null)
+        window.clearTimeout(holdTimerRef.current);
+      pitch?.removeEventListener("touchmove", preventDragScroll);
+      pitch?.removeEventListener("contextmenu", preventContextMenu);
+      window.removeEventListener("blur", cancelDrag);
+      window.removeEventListener("keydown", escape);
+    };
+  }, [cancelDrag]);
 
   const findDropTargetPositionId = (
     clientX: number,
@@ -3596,6 +3635,10 @@ function Pitch({
     const deltaY = event.clientY - drag.startY;
     const dragging = drag.dragging || Math.hypot(deltaX, deltaY) > 8;
     if (!dragging) return;
+    if (drag.waitingForHold) {
+      cancelDrag();
+      return;
+    }
 
     const targetPositionId = findDropTargetPositionId(
       event.clientX,
@@ -3621,6 +3664,10 @@ function Pitch({
   ) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
     if (drag?.dragging) {
       event.preventDefault();
       suppressClickRef.current = true;
@@ -3795,9 +3842,24 @@ function Pitch({
                 x: event.clientX,
                 y: event.clientY,
                 dragging: false,
+                waitingForHold: event.pointerType === "touch",
               };
               dragRef.current = nextDrag;
               setDragState(nextDrag);
+              if (nextDrag.waitingForHold) {
+                holdTimerRef.current = window.setTimeout(() => {
+                  holdTimerRef.current = null;
+                  const current = dragRef.current;
+                  if (!current) return;
+                  const active = {
+                    ...current,
+                    dragging: true,
+                    waitingForHold: false,
+                  };
+                  dragRef.current = active;
+                  setDragState(active);
+                }, TOUCH_DRAG_HOLD_MS);
+              }
             }}
             onPointerMove={(event) => updateDrag(event, player.id, position.id)}
             onPointerUp={finishDrag}

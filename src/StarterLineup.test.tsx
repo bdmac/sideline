@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { StarterLineup } from "./StarterLineup";
 import { assignPlayerToPosition, getFormation } from "./domain";
 import type { Player } from "./types";
@@ -79,6 +79,7 @@ function pointer(element: HTMLElement, type: string, x: number, y: number) {
 }
 
 describe("starter lineup interactions", () => {
+  afterEach(() => vi.useRealTimers());
   it.each(["no bench", "outfield bench", "keeper reserve"] as const)(
     "keeps outfield keeper options free of reserve labels and warnings with %s",
     (attendance) => {
@@ -166,6 +167,7 @@ describe("starter lineup interactions", () => {
   it.each(["mouse", "touch"])(
     "swaps a pitch player with a bench player on %s drop",
     (pointerType) => {
+      vi.useFakeTimers();
       const { move, choose, target: source } = setup();
       const benchPlayer = screen.getByRole("button", {
         name: "Place Reserve on the starting pitch",
@@ -192,6 +194,7 @@ describe("starter lineup interactions", () => {
         fireEvent(source, event);
       };
       dispatch("pointerdown", 250, 230);
+      if (pointerType === "touch") act(() => vi.advanceTimersByTime(400));
       dispatch("pointermove", 70, 425);
       expect(benchPlayer).toHaveClass("starter-drop-target");
       expect(
@@ -392,14 +395,21 @@ describe("starter lineup interactions", () => {
     expect(choose).toHaveBeenCalledWith(defender.id);
   });
 
-  it.each(["hold", "swipe", "tap"] as const)(
-    "uses touch %s on the whole bench button without a grip",
-    (gesture) => {
+  it.each(
+    ["bench", "pitch"].flatMap((origin) =>
+      ["hold", "swipe", "tap"].map((gesture) => ({ origin, gesture })),
+    ),
+  )(
+    "uses touch $gesture on a $origin player without accidental drags",
+    ({ origin, gesture }) => {
       vi.useFakeTimers();
       try {
-        const { move } = setup();
+        const { move, choose } = setup();
         const source = screen.getByRole("button", {
-          name: "Place Reserve on the starting pitch",
+          name:
+            origin === "bench"
+              ? "Place Reserve on the starting pitch"
+              : `Change Keeper at ${keeper.label}`,
         });
         expect(document.querySelector(".starter-bench-grip")).toBeNull();
         const touchPointer = (type: string, x: number, y: number) => {
@@ -413,10 +423,10 @@ describe("starter lineup interactions", () => {
           fireEvent(source, event);
         };
         touchPointer("pointerdown", 50, 400);
-        act(() => vi.advanceTimersByTime(100));
+        act(() => vi.advanceTimersByTime(399));
         expect(document.querySelector(".player-drag-preview")).toBeNull();
         if (gesture === "hold") {
-          act(() => vi.advanceTimersByTime(150));
+          act(() => vi.advanceTimersByTime(1));
           expect(
             document.querySelector(".player-drag-preview"),
           ).toBeInTheDocument();
@@ -428,7 +438,10 @@ describe("starter lineup interactions", () => {
           fireEvent(source, touchMove);
           expect(touchMove.defaultPrevented).toBe(true);
           touchPointer("pointerup", 250, 230);
-          expect(move).toHaveBeenCalledExactlyOnceWith("reserve", defender.id);
+          expect(move).toHaveBeenCalledExactlyOnceWith(
+            origin === "bench" ? "reserve" : "keeper",
+            defender.id,
+          );
         } else if (gesture === "swipe") {
           touchPointer("pointermove", 50, 350);
           act(() => vi.advanceTimersByTime(300));
@@ -444,7 +457,9 @@ describe("starter lineup interactions", () => {
           touchPointer("pointerup", 50, 400);
           fireEvent.click(source);
           act(() => vi.advanceTimersByTime(300));
-          expect(source).toHaveAttribute("aria-pressed", "true");
+          if (origin === "bench")
+            expect(source).toHaveAttribute("aria-pressed", "true");
+          else expect(choose).toHaveBeenCalledExactlyOnceWith(keeper.id);
           expect(document.querySelector(".player-drag-preview")).toBeNull();
           expect(move).not.toHaveBeenCalled();
         }
