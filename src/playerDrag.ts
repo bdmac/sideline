@@ -1,1 +1,1 @@
-export const TOUCH_DRAG_HOLD_MS = 400;
+export const TOUCH_DRAG_HOLD_MS = 200;

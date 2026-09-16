@@ -194,7 +194,7 @@ describe("starter lineup interactions", () => {
         fireEvent(source, event);
       };
       dispatch("pointerdown", 250, 230);
-      if (pointerType === "touch") act(() => vi.advanceTimersByTime(400));
+      if (pointerType === "touch") act(() => vi.advanceTimersByTime(200));
       dispatch("pointermove", 70, 425);
       expect(benchPlayer).toHaveClass("starter-drop-target");
       expect(
@@ -423,7 +423,7 @@ describe("starter lineup interactions", () => {
           fireEvent(source, event);
         };
         touchPointer("pointerdown", 50, 400);
-        act(() => vi.advanceTimersByTime(399));
+        act(() => vi.advanceTimersByTime(199));
         expect(document.querySelector(".player-drag-preview")).toBeNull();
         if (gesture === "hold") {
           act(() => vi.advanceTimersByTime(1));
