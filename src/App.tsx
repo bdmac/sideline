@@ -89,6 +89,7 @@ import {
   getMatchClockSeconds,
   getMaxSubstitutionCount,
   getPeriodStatus,
+  getPlayingTimePaceWarning,
   getRecommendedSubstitutionCount,
   getScore,
   getSubstitutionPlanningSnapshot,
@@ -118,11 +119,7 @@ import {
   loadDevicePreferences,
   saveDevicePreferences,
 } from "./devicePreferences";
-import {
-  playSubstitutionAlert,
-  prepareSubstitutionAlert,
-  supportsSubstitutionAlert,
-} from "./gameAlert";
+import { playSubstitutionAlert, supportsSubstitutionAlert } from "./gameAlert";
 import { loadState, saveState } from "./storage";
 import { type ColorMode, loadColorMode, saveColorMode } from "./theme";
 import { useRotationDueReview } from "./useRotationDueReview";
@@ -406,13 +403,11 @@ function SettingsMenu({
     enabled: boolean,
   ) => void;
 }) {
-  const wakeLockStatusText = !wakeLockSupported
+  const wakeLockIssue = !wakeLockSupported
     ? "Not supported by this browser."
-    : preferences.keepScreenAwake && wakeLockStatus === "active"
-      ? "Active for the current game."
-      : preferences.keepScreenAwake && wakeLockStatus === "error"
-        ? "Enabled, but the device could not keep the screen awake."
-        : "Turns on automatically while a game is active.";
+    : preferences.keepScreenAwake && wakeLockStatus === "error"
+      ? "Enabled, but the device could not keep the screen awake."
+      : null;
 
   return (
     <ActionMenu>
@@ -445,8 +440,13 @@ function SettingsMenu({
               <strong id="keep-screen-awake-label">Keep screen awake</strong>
               <small id="keep-screen-awake-description">
                 Prevents auto-lock while Sideline is visible during an active
-                game. {wakeLockStatusText}
+                game.
               </small>
+              {wakeLockIssue && (
+                <small id="keep-screen-awake-status" role="status">
+                  {wakeLockIssue}
+                </small>
+              )}
             </span>
             <ToggleSwitch
               checked={preferences.keepScreenAwake}
@@ -455,7 +455,11 @@ function SettingsMenu({
                 onPreferenceChange("keepScreenAwake", enabled)
               }
               aria-labelledby="keep-screen-awake-label"
-              aria-describedby="keep-screen-awake-description"
+              aria-describedby={
+                wakeLockIssue
+                  ? "keep-screen-awake-description keep-screen-awake-status"
+                  : "keep-screen-awake-description"
+              }
             />
           </div>
           <div className="settings-option">
@@ -467,11 +471,13 @@ function SettingsMenu({
                 Substitution alerts
               </strong>
               <small id="substitution-alerts-description">
-                Plays a two-note chime when a rotation reminder becomes due,
-                plus vibration when supported.
-                {!substitutionAlertSupported &&
-                  " Not supported by this browser."}
+                Notify me when a bench rotation is due.
               </small>
+              {!substitutionAlertSupported && (
+                <small id="substitution-alerts-status">
+                  Not supported by this browser.
+                </small>
+              )}
             </span>
             <ToggleSwitch
               checked={preferences.substitutionAlerts}
@@ -480,7 +486,11 @@ function SettingsMenu({
                 onPreferenceChange("substitutionAlerts", enabled)
               }
               aria-labelledby="substitution-alerts-label"
-              aria-describedby="substitution-alerts-description"
+              aria-describedby={
+                substitutionAlertSupported
+                  ? "substitution-alerts-description"
+                  : "substitution-alerts-description substitution-alerts-status"
+              }
             />
           </div>
           <div className="settings-option">
@@ -829,7 +839,7 @@ function App() {
   ) => {
     const next = { ...devicePreferences, [preference]: enabled };
     if (preference === "substitutionAlerts" && enabled) {
-      void prepareSubstitutionAlert();
+      void playSubstitutionAlert();
     }
     setDevicePreferences(next);
     saveDevicePreferences(next);
@@ -2053,6 +2063,9 @@ function LiveGameScreen({
 }) {
   const now = useClockNow(game.clock.running);
   const [headerCollapseProgress, setHeaderCollapseProgress] = useState(0);
+  const [mobileViewport, setMobileViewport] = useState(
+    () => window.innerWidth <= 760,
+  );
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [queuedPlanOpen, setQueuedPlanOpen] = useState(false);
   const [goalScorerOpen, setGoalScorerOpen] = useState(false);
@@ -2088,7 +2101,9 @@ function LiveGameScreen({
   const [demoClockOpen, setDemoClockOpen] = useState(false);
   const [error, setError] = useState("");
   const alertedReminderCycle = useRef<string | null>(null);
+  const previousAlertsEnabled = useRef(substitutionAlertsEnabled);
   const formation = getFormation(game.formationId);
+  const compactDemoControls = demoClockEnabled && mobileViewport;
 
   useEffect(() => {
     const updateHeader = () =>
@@ -2096,8 +2111,13 @@ function LiveGameScreen({
         Math.min(1, Math.max(0, (window.scrollY - 32) / 96)),
       );
     updateHeader();
+    const updateViewport = () => setMobileViewport(window.innerWidth <= 760);
     window.addEventListener("scroll", updateHeader, { passive: true });
-    return () => window.removeEventListener("scroll", updateHeader);
+    window.addEventListener("resize", updateViewport);
+    return () => {
+      window.removeEventListener("scroll", updateHeader);
+      window.removeEventListener("resize", updateViewport);
+    };
   }, []);
 
   useEffect(() => {
@@ -2194,14 +2214,7 @@ function LiveGameScreen({
     !periodBreak &&
     !periodBoundaryReached;
   const showSubstitutionReminder = rotationDue && queuedPairs.length === 0;
-  const latestRotationEvent = game.history
-    .filter(
-      (event) =>
-        event.type === "substitution" ||
-        (event.type === "unavailable" && event.pairs.length > 0),
-    )
-    .at(-1);
-  const reminderCycleKey = `${game.id}:${latestRotationEvent?.id ?? "start"}`;
+  const reminderCycleKey = substitutionReminder.cycleKey;
   const compactHeaderInteractive = headerCollapseProgress > 0.8;
   const clockActionLabel = game.clock.running
     ? "Pause"
@@ -2222,6 +2235,9 @@ function LiveGameScreen({
       : setClockRunning(game, !game.clock.running);
 
   useEffect(() => {
+    const justEnabled =
+      substitutionAlertsEnabled && !previousAlertsEnabled.current;
+    previousAlertsEnabled.current = substitutionAlertsEnabled;
     if (
       !substitutionAlertsEnabled ||
       !rotationDue ||
@@ -2230,7 +2246,8 @@ function LiveGameScreen({
       return;
     }
     alertedReminderCycle.current = reminderCycleKey;
-    void playSubstitutionAlert();
+    // Enabling the setting already previews this alert.
+    if (!justEnabled) void playSubstitutionAlert();
   }, [reminderCycleKey, rotationDue, substitutionAlertsEnabled]);
 
   useRotationDueReview({
@@ -2354,7 +2371,7 @@ function LiveGameScreen({
             </span>
           </div>
           <div className="match-header-actions" aria-label="Match controls">
-            {demoClockEnabled ? (
+            {compactDemoControls ? (
               <IconButton
                 className={`match-clock-button demo-match-header-action ${
                   game.clock.running ? "" : "turf-clock-action"
@@ -2389,7 +2406,7 @@ function LiveGameScreen({
                 onClick={() => setDemoClockOpen(true)}
               />
             )}
-            {demoClockEnabled ? (
+            {compactDemoControls ? (
               <IconButton
                 className="demo-match-header-action"
                 variant="danger"
@@ -2750,7 +2767,7 @@ function LiveGameScreen({
           <span>
             <strong>Time to consider substitutions</strong>
             <small>
-              No player swaps in{" "}
+              Rotation timer:{" "}
               {formatDuration(
                 substitutionReminder.secondsSinceLastSubstitution,
               )}
@@ -3015,10 +3032,10 @@ function LiveGameScreen({
                     );
                     const playedSeconds =
                       displayed.totals[id]?.fieldSeconds ?? 0;
-                    const belowMinimumPace =
-                      displayed.clock.elapsedSeconds >=
-                        game.durationSeconds * 0.25 &&
-                      playedSeconds / displayed.clock.elapsedSeconds < 0.5;
+                    const paceWarning = getPlayingTimePaceWarning(
+                      displayed,
+                      id,
+                    );
                     return (
                       <PlayerTimeRow
                         key={id}
@@ -3033,7 +3050,7 @@ function LiveGameScreen({
                         aggregateBenchTime={
                           displayed.totals[id]?.benchSeconds ?? 0
                         }
-                        belowMinimumPace={belowMinimumPace}
+                        paceWarning={paceWarning}
                         queuedPositionLabel={queuedPosition?.shortLabel}
                         queuedOutgoingPlayerName={
                           queuedPair
@@ -4774,7 +4791,7 @@ function PlayerTimeRow({
   showCurrentBenchTime,
   playedTime,
   aggregateBenchTime,
-  belowMinimumPace,
+  paceWarning,
   queuedPositionLabel,
   queuedOutgoingPlayerName,
   onQueue,
@@ -4786,7 +4803,7 @@ function PlayerTimeRow({
   showCurrentBenchTime: boolean;
   playedTime: number;
   aggregateBenchTime: number;
-  belowMinimumPace: boolean;
+  paceWarning: number | null;
   queuedPositionLabel?: string;
   queuedOutgoingPlayerName?: string;
   onQueue: () => void;
@@ -4814,10 +4831,10 @@ function PlayerTimeRow({
             Going in at {queuedPositionLabel}
             {queuedOutgoingPlayerName ? ` for ${queuedOutgoingPlayerName}` : ""}
           </span>
-        ) : belowMinimumPace ? (
+        ) : paceWarning !== null ? (
           <span className="minimum-play-warning">
             <CircleAlert size={13} aria-hidden="true" />
-            Below 50% pace
+            Below {Math.round(paceWarning * 1000) / 10}% pace
           </span>
         ) : (
           hasEarlierBenchTime && (
@@ -6333,6 +6350,8 @@ function GameLog({
   completed?: boolean;
   followsRoster?: boolean;
 }) {
+  if (!completed && game.history.length === 0) return null;
+
   const periodLength = game.durationSeconds / game.periodCount;
   const periodLabel = game.periodCount === 4 ? "Quarter" : "Half";
   const periodEndByNumber = new Map(

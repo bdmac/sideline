@@ -21,15 +21,6 @@ export const supportsSubstitutionAlert = () =>
     navigator.vibrate,
   );
 
-export const prepareSubstitutionAlert = async () => {
-  try {
-    const context = getAudioContext();
-    if (context?.state === "suspended") await context.resume();
-  } catch (error) {
-    console.error("Sideline could not prepare the substitution chime.", error);
-  }
-};
-
 export const playSubstitutionAlert = async () => {
   if (navigator.vibrate) navigator.vibrate([160, 80, 160]);
 

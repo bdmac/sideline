@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Player } from "./types";
+import type { Player, TeamId } from "./types";
 import {
   addGuestPlayer,
   addGuestPlayerToBench,
@@ -19,7 +19,9 @@ import {
   getFormationsForTeam,
   getMatchClockSeconds,
   getMaxSubstitutionCount,
+  getMinimumPlayingTimePace,
   getPeriodStatus,
+  getPlayingTimePaceWarning,
   getRecommendedSubstitutionCount,
   getScore,
   getSubstitutionPlanningSnapshot,
@@ -46,6 +48,314 @@ import {
   validateGame,
   validateSubstitutionPairs,
 } from "./domain";
+
+describe("minimum playing-time pace", () => {
+  const createPaceGame = (teamId: TeamId, count: number, duration?: number) => {
+    const source = INITIAL_TEAMS[teamId];
+    const team = { ...source, roster: [...source.roster] };
+    while (team.roster.length < count) {
+      team.roster.push({
+        ...source.roster[0],
+        id: `extra-${team.roster.length}`,
+      });
+    }
+    return createGame(
+      team,
+      team.defaultFormationId,
+      team.roster.slice(0, count).map((player) => player.id),
+      duration ?? team.defaultDurationMinutes,
+      1_000,
+    );
+  };
+
+  it.each([
+    { teamId: "u8", count: 10, floor: 0.4 },
+    { teamId: "u8", count: 9, floor: 4 / 9 },
+    { teamId: "u8", count: 8, floor: 0.5 },
+    { teamId: "u8", count: 7, floor: 0.5 },
+    { teamId: "u8", count: 5, floor: 0.5 },
+    { teamId: "u8", count: 4, floor: 0.5 },
+    { teamId: "u12", count: 15, floor: 0.48 },
+    { teamId: "u12", count: 14, floor: 0.5 },
+    { teamId: "u12", count: 12, floor: 0.5 },
+    { teamId: "u12", count: 18, floor: 0.4 },
+  ] as const)(
+    "uses actual $teamId attendance of $count, including the goalkeeper",
+    ({ teamId, count, floor }) => {
+      const game = createPaceGame(teamId, count);
+      const before = structuredClone(game);
+      expect(getMinimumPlayingTimePace(game)).toBe(floor);
+      expect(game).toEqual(before);
+    },
+  );
+
+  it.each([
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 40,
+      elapsed: 599,
+      played: 0,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 40,
+      elapsed: 600,
+      played: 0,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 40,
+      elapsed: 2400,
+      played: 1080,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 40,
+      elapsed: 2400,
+      played: 1020,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 40,
+      elapsed: 2400,
+      played: 960,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 40,
+      elapsed: 2400,
+      played: 959,
+      warn: true,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 40,
+      elapsed: 2460,
+      played: 984,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 40,
+      elapsed: 2460,
+      played: 983,
+      warn: true,
+    },
+    {
+      teamId: "u8",
+      count: 9,
+      duration: 40,
+      elapsed: 900,
+      played: 400,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 9,
+      duration: 40,
+      elapsed: 900,
+      played: 399,
+      warn: true,
+    },
+    {
+      teamId: "u8",
+      count: 7,
+      duration: 40,
+      elapsed: 2400,
+      played: 1200,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 7,
+      duration: 40,
+      elapsed: 2400,
+      played: 1199,
+      warn: true,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 80,
+      elapsed: 1199,
+      played: 0,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 80,
+      elapsed: 4800,
+      played: 1920,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 80,
+      elapsed: 4800,
+      played: 1919,
+      warn: true,
+    },
+    {
+      teamId: "u12",
+      count: 15,
+      duration: 60,
+      elapsed: 900,
+      played: 0,
+      warn: false,
+    },
+    {
+      teamId: "u12",
+      count: 15,
+      duration: 60,
+      elapsed: 960,
+      played: 0,
+      warn: false,
+    },
+    {
+      teamId: "u12",
+      count: 15,
+      duration: 60,
+      elapsed: 961,
+      played: 0,
+      warn: true,
+    },
+    {
+      teamId: "u12",
+      count: 15,
+      duration: 60,
+      elapsed: 3600,
+      played: 1728,
+      warn: false,
+    },
+    {
+      teamId: "u12",
+      count: 15,
+      duration: 60,
+      elapsed: 3600,
+      played: 1727,
+      warn: true,
+    },
+    {
+      teamId: "u12",
+      count: 14,
+      duration: 60,
+      elapsed: 3600,
+      played: 1800,
+      warn: false,
+    },
+    {
+      teamId: "u12",
+      count: 14,
+      duration: 60,
+      elapsed: 3600,
+      played: 1799,
+      warn: true,
+    },
+  ] as const)(
+    "handles $teamId/$count, $duration minutes, $elapsed elapsed and $played played",
+    ({ teamId, count, duration, elapsed, played, warn }) => {
+      const game = createPaceGame(teamId, count, duration);
+      const id = game.benchIds[0];
+      game.clock.elapsedSeconds = elapsed;
+      game.totals[id] = {
+        fieldSeconds: played,
+        benchSeconds: elapsed - played,
+      };
+      const before = structuredClone(game);
+      expect(getPlayingTimePaceWarning(game, id)).toBe(
+        warn ? getMinimumPlayingTimePace(game) : null,
+      );
+      expect(
+        getPlayingTimePaceWarning(game, Object.values(game.assignments)[0]!),
+      ).toBeNull();
+      expect(getPlayingTimePaceWarning(game, "absent-player")).toBeNull();
+      expect(game).toEqual(before);
+    },
+  );
+
+  it.each(["u8", "u12"] as const)(
+    "recalculates %s attendance for injuries, returns, and guests",
+    (teamId) => {
+      const team = INITIAL_TEAMS[teamId];
+      const initialCount = team.roster.length;
+      let game = createPaceGame(teamId, initialCount);
+      const id = game.benchIds[0];
+      game.clock.elapsedSeconds = game.durationSeconds / 2;
+      game = markUnavailable(game, id, team.sideSize, 1_000);
+      expect(getMinimumPlayingTimePace(game)).toBe(
+        Math.min(0.5, (4 * team.sideSize) / (5 * (initialCount - 1))),
+      );
+      expect(getPlayingTimePaceWarning(game, id)).toBeNull();
+      game = markAvailable(game, id, team.sideSize, 1_000);
+      expect(getMinimumPlayingTimePace(game)).toBe(
+        Math.min(0.5, (4 * team.sideSize) / (5 * initialCount)),
+      );
+      expect(getPlayingTimePaceWarning(game, id)).toBeNull();
+      const guest = { ...team.roster[0], id: "late-guest", guest: true };
+      game = addGuestPlayerToBench(game, guest, team.sideSize, 1_000);
+      expect(getMinimumPlayingTimePace(game)).toBe(
+        Math.min(0.5, (4 * team.sideSize) / (5 * (initialCount + 1))),
+      );
+      expect(getPlayingTimePaceWarning(game, guest.id)).toBeNull();
+      expect(validateGame(game, team.sideSize)).toEqual([]);
+      for (const playerId of [...game.presentIds]) {
+        game = markUnavailable(game, playerId, team.sideSize, 1_000);
+      }
+      expect(getMinimumPlayingTimePace(game)).toBeNull();
+      expect(getPlayingTimePaceWarning(game, id)).toBeNull();
+    },
+  );
+
+  it.each(["u8", "u12"] as const)(
+    "keeps ordinary alternating %s rotations quiet until the bench turn is overdue",
+    (teamId) => {
+      const team = INITIAL_TEAMS[teamId];
+      let game = createPaceGame(teamId, team.sideSize * 2);
+      const id = game.benchIds[0];
+      const { intervalSeconds } = getSubstitutionReminderStatus(game);
+      for (let turn = 0; turn < 2; turn++) {
+        game = fastForwardGame(game, intervalSeconds, 1_000);
+        game = applySubstitutions(
+          game,
+          Object.entries(game.assignments).map(
+            ([positionId, outPlayerId], index) => ({
+              positionId,
+              outPlayerId,
+              inPlayerId: game.benchIds[index],
+            }),
+          ),
+          team.sideSize,
+          1_000,
+        );
+      }
+      game = fastForwardGame(game, intervalSeconds, 1_000);
+      expect(
+        game.totals[id].fieldSeconds / game.clock.elapsedSeconds,
+      ).toBeLessThan(0.4);
+      expect(getPlayingTimePaceWarning(game, id)).toBeNull();
+      game = fastForwardGame(game, 60, 1_000);
+      expect(getPlayingTimePaceWarning(game, id)).toBeNull();
+      game = fastForwardGame(game, 1, 1_000);
+      expect(getPlayingTimePaceWarning(game, id)).toBe(0.4);
+      expect(validateGame(game, team.sideSize)).toEqual([]);
+    },
+  );
+});
 
 describe("demo clock fast-forwarding", () => {
   it("adds an offset after materializing the running clock", () => {
@@ -1012,7 +1322,7 @@ describe("scorekeeping", () => {
 });
 
 describe("substitutions", () => {
-  it("prompts U8 after one eighth of game time and resets after an executed substitution", () => {
+  it("prompts U8 after one quarter of game time and resets after an executed substitution", () => {
     const team = INITIAL_TEAMS.u8;
     let game = createGame(
       team,
@@ -1022,15 +1332,15 @@ describe("substitutions", () => {
       1_000,
     );
 
-    game.clock.elapsedSeconds = 299;
+    game.clock.elapsedSeconds = 599;
     expect(getSubstitutionReminderStatus(game)).toMatchObject({
       due: false,
       hasExecutedSubstitution: false,
-      intervalSeconds: 300,
-      secondsSinceLastSubstitution: 299,
+      intervalSeconds: 600,
+      secondsSinceLastSubstitution: 599,
     });
 
-    game.clock.elapsedSeconds = 300;
+    game.clock.elapsedSeconds = 600;
     expect(getSubstitutionReminderStatus(game).due).toBe(true);
 
     game = applySubstitutions(
@@ -1039,16 +1349,54 @@ describe("substitutions", () => {
       team.sideSize,
       2_000,
     );
-    game.clock.elapsedSeconds = 599;
+    game.clock.elapsedSeconds = 1199;
     expect(getSubstitutionReminderStatus(game).due).toBe(false);
 
-    game.clock.elapsedSeconds = 600;
+    game.clock.elapsedSeconds = 1200;
     expect(getSubstitutionReminderStatus(game)).toMatchObject({
       due: true,
       hasExecutedSubstitution: true,
-      secondsSinceLastSubstitution: 300,
+      secondsSinceLastSubstitution: 600,
     });
   });
+
+  it.each([
+    ["u8", 40, 2, 400],
+    ["u8", 40, 4, 600],
+    ["u8", 48, 4, 720],
+    ["u8", 48, 2, 480],
+    ["u8", 60, 2, 600],
+    ["u8", 60, 4, 900],
+    ["u8", 41, 2, 410],
+    ["u12", 40, 2, 600],
+    ["u12", 40, 4, 600],
+    ["u12", 48, 2, 720],
+    ["u12", 60, 2, 900],
+    ["u12", 60, 4, 900],
+  ] as const)(
+    "uses the configured cadence for %s, %i minutes, %i periods",
+    (teamId, duration, periods, interval) => {
+      const team = INITIAL_TEAMS[teamId];
+      const game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((player) => player.id),
+        duration,
+        1_000,
+        periods,
+      );
+      const before = structuredClone(game);
+      expect(getSubstitutionReminderStatus(game).intervalSeconds).toBe(
+        interval,
+      );
+      game.clock.elapsedSeconds = interval - 1;
+      expect(getSubstitutionReminderStatus(game).due).toBe(false);
+      game.clock.elapsedSeconds++;
+      expect(getSubstitutionReminderStatus(game).due).toBe(true);
+      expect(game.history).toEqual(before.history);
+      expect(game.assignments).toEqual(before.assignments);
+    },
+  );
 
   it("uses a quarter-game cadence for the longer U12 interval", () => {
     const team = INITIAL_TEAMS.u12;
@@ -1063,28 +1411,99 @@ describe("substitutions", () => {
     expect(getSubstitutionReminderStatus(game).intervalSeconds).toBe(900);
   });
 
-  it("resets the reminder after an automatic replacement", () => {
-    const team = INITIAL_TEAMS.u8;
-    let game = createGame(
-      team,
-      team.defaultFormationId,
-      team.roster.map((player) => player.id),
-      team.defaultDurationMinutes,
-      1_000,
-    );
-    game.clock.elapsedSeconds = 300;
-    game = markUnavailable(
-      game,
-      Object.values(game.assignments)[0],
-      team.sideSize,
-      2_000,
-    );
+  it.each(["u8", "u12"] as const)(
+    "preserves the %s deadline after an automatic replacement",
+    (teamId) => {
+      const team = INITIAL_TEAMS[teamId];
+      let game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+      );
+      const original = getSubstitutionReminderStatus(game);
+      game.clock.elapsedSeconds = original.intervalSeconds / 3;
+      game = markUnavailable(
+        game,
+        Object.values(game.assignments)[0],
+        team.sideSize,
+        2_000,
+      );
 
-    game.clock.elapsedSeconds = 599;
-    expect(getSubstitutionReminderStatus(game).due).toBe(false);
-    game.clock.elapsedSeconds = 600;
-    expect(getSubstitutionReminderStatus(game).due).toBe(true);
-  });
+      expect(game.history.at(-1)?.pairs).toHaveLength(1);
+      expect(getSubstitutionReminderStatus(game)).toMatchObject({
+        cycleKey: original.cycleKey,
+        hasExecutedSubstitution: true,
+        secondsSinceLastSubstitution: original.intervalSeconds / 3,
+      });
+      const replacement = game.history.at(-1)!.pairs[0].inPlayerId;
+      expect(getCurrentFieldSeconds(game, replacement)).toBe(0);
+      const snapshot = getSubstitutionPlanningSnapshot(game);
+      expect(snapshot.clock.elapsedSeconds).toBe(original.intervalSeconds);
+      game.clock.elapsedSeconds = original.intervalSeconds - 1;
+      expect(getSubstitutionReminderStatus(game).due).toBe(false);
+      game.clock.elapsedSeconds = original.intervalSeconds;
+      expect(getSubstitutionReminderStatus(game).due).toBe(true);
+      expect(getCurrentFieldSeconds(game, replacement)).toBe(
+        (original.intervalSeconds * 2) / 3,
+      );
+    },
+  );
+
+  it.each(["u8", "u12"] as const)(
+    "restarts %s cadence for a deliberate partial batch, but not a later injury",
+    (teamId) => {
+      const team = INITIAL_TEAMS[teamId];
+      let game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+      );
+      const original = getSubstitutionReminderStatus(game);
+      game.clock.elapsedSeconds = original.intervalSeconds - 60;
+      game = applySubstitutions(
+        game,
+        suggestSubstitutions(game, 3, team),
+        team.sideSize,
+        2_000,
+      );
+      const planned = getSubstitutionReminderStatus(game);
+      expect(planned.secondsSinceLastSubstitution).toBe(0);
+      expect(planned.cycleKey).not.toBe(original.cycleKey);
+      game.clock.elapsedSeconds = original.intervalSeconds;
+      expect(getSubstitutionReminderStatus(game).due).toBe(false);
+      game = markUnavailable(
+        game,
+        Object.values(game.assignments)[0],
+        team.sideSize,
+        3_000,
+      );
+      expect(getSubstitutionReminderStatus(game)).toMatchObject({
+        cycleKey: planned.cycleKey,
+        secondsSinceLastSubstitution: 60,
+        due: false,
+      });
+      game.clock.elapsedSeconds = original.intervalSeconds * 2 - 61;
+      expect(getSubstitutionReminderStatus(game).due).toBe(false);
+      game.clock.elapsedSeconds++;
+      expect(getSubstitutionReminderStatus(game)).toMatchObject({
+        cycleKey: planned.cycleKey,
+        due: true,
+      });
+      game = undoLastEvent(game, 4_000);
+      expect(getSubstitutionReminderStatus(game).cycleKey).toBe(
+        planned.cycleKey,
+      );
+      game = undoLastEvent(game, 5_000);
+      expect(getSubstitutionReminderStatus(game)).toMatchObject({
+        cycleKey: original.cycleKey,
+        due: true,
+      });
+    },
+  );
 
   it("adds or updates one bench player inside the queued batch", () => {
     const team = INITIAL_TEAMS.u8;
@@ -1227,9 +1646,11 @@ describe("substitutions", () => {
     const planningGame = getSubstitutionPlanningSnapshot(game);
 
     expect(getCurrentFieldSeconds(game, pair.inPlayerId)).toBe(0);
-    expect(getCurrentFieldSeconds(planningGame, pair.inPlayerId)).toBe(5 * 60);
+    expect(getCurrentFieldSeconds(planningGame, pair.inPlayerId)).toBe(10 * 60);
     expect(getCurrentBenchSeconds(game, pair.outPlayerId)).toBe(0);
-    expect(getCurrentBenchSeconds(planningGame, pair.outPlayerId)).toBe(5 * 60);
+    expect(getCurrentBenchSeconds(planningGame, pair.outPlayerId)).toBe(
+      10 * 60,
+    );
     expect(planningGame.totals).toEqual(game.totals);
     expect(game.clock.elapsedSeconds).toBe(5 * 60);
   });

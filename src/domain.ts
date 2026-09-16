@@ -611,9 +611,8 @@ export const getMatchClockSeconds = (
 };
 
 export const getSubstitutionReminderStatus = (game: ActiveGame) => {
-  const intervalSeconds = Math.round(
-    game.durationSeconds * (game.teamId === "u8" ? 0.125 : 0.25),
-  );
+  const rotations = game.teamId === "u8" && game.periodCount === 2 ? 6 : 4;
+  const intervalSeconds = Math.round(game.durationSeconds / rotations);
   const lastExecutedSubstitution = game.history
     .filter(
       (event) =>
@@ -621,17 +620,54 @@ export const getSubstitutionReminderStatus = (game: ActiveGame) => {
         (event.type === "unavailable" && event.pairs.length > 0),
     )
     .at(-1);
+  const lastPlannedSubstitution = game.history
+    .filter((event) => event.type === "substitution")
+    .at(-1);
   const secondsSinceLastSubstitution = Math.max(
     0,
-    game.clock.elapsedSeconds - (lastExecutedSubstitution?.atSeconds ?? 0),
+    game.clock.elapsedSeconds - (lastPlannedSubstitution?.atSeconds ?? 0),
   );
 
   return {
+    cycleKey: `${game.id}:${lastPlannedSubstitution?.id ?? "start"}`,
     due: secondsSinceLastSubstitution >= intervalSeconds,
+    // Personnel changes affect planning even when they do not reset cadence.
     hasExecutedSubstitution: Boolean(lastExecutedSubstitution),
     intervalSeconds,
     secondsSinceLastSubstitution,
   };
+};
+
+export const getMinimumPlayingTimePace = (game: ActiveGame): number | null => {
+  const availableCount = game.presentIds.filter(
+    (id) => !game.unavailableIds.includes(id),
+  ).length;
+  if (availableCount === 0) return null;
+  const { sideSize } = getFormation(game.formationId);
+  return Math.min(0.5, (4 * sideSize) / (5 * availableCount));
+};
+
+export const getPlayingTimePaceWarning = (
+  game: ActiveGame,
+  playerId: string,
+): number | null => {
+  const elapsed = game.clock.elapsedSeconds;
+  if (
+    elapsed < game.durationSeconds * 0.25 ||
+    !game.benchIds.includes(playerId)
+  ) {
+    return null;
+  }
+  const { intervalSeconds } = getSubstitutionReminderStatus(game);
+  // Allow a normal bench turn and one minute to complete the next rotation.
+  if (getCurrentBenchSeconds(game, playerId) <= intervalSeconds + 60) {
+    return null;
+  }
+  const minimumPace = getMinimumPlayingTimePace(game);
+  const playedSeconds = game.totals[playerId]?.fieldSeconds ?? 0;
+  return minimumPace !== null && playedSeconds / elapsed < minimumPace
+    ? minimumPace
+    : null;
 };
 
 export const getSubstitutionTimeBandSize = (game: ActiveGame) =>

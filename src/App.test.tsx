@@ -70,7 +70,8 @@ const prepareUpcomingRotation = (queued: boolean, alertsEnabled = true) => {
     Date.now(),
     2,
   );
-  game.clock.elapsedSeconds = 299;
+  game.clock.elapsedSeconds =
+    getSubstitutionReminderStatus(game).intervalSeconds - 1;
   if (queued) {
     game = queueSubstitutions(game, suggestSubstitutions(game, 1, team));
   }
@@ -95,6 +96,11 @@ describe("Sideline app", () => {
     Object.defineProperty(window, "scrollY", {
       configurable: true,
       value: 0,
+    });
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 1024,
     });
   });
 
@@ -519,9 +525,16 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     expect(wakeLockSwitch).toHaveAttribute("aria-pressed", "false");
     expect(alertSwitch).toHaveAttribute("aria-pressed", "false");
+    const awakeDescription =
+      /^\s*Prevents auto-lock while Sideline is visible during an active game\.$/;
+    const alertsDescription = /^\s*Notify me when a bench rotation is due\.$/;
+    expect(wakeLockSwitch).toHaveAccessibleDescription(awakeDescription);
+    expect(alertSwitch).toHaveAccessibleDescription(alertsDescription);
 
     fireEvent.click(wakeLockSwitch);
     fireEvent.click(alertSwitch);
+    expect(wakeLockSwitch).toHaveAccessibleDescription(awakeDescription);
+    expect(alertSwitch).toHaveAccessibleDescription(alertsDescription);
 
     expect(
       JSON.parse(localStorage.getItem(DEVICE_PREFERENCES_STORAGE_KEY) ?? "{}"),
@@ -537,6 +550,55 @@ describe("Sideline app", () => {
         ?.getAttribute("data-position-regular"),
     ).not.toBe("bottom");
   });
+
+  it("previews alerts only when toggled on, not off or restored", () => {
+    const vibrate = vi.fn();
+    Object.defineProperty(navigator, "vibrate", {
+      value: vibrate,
+      configurable: true,
+    });
+    const { unmount } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const toggle = screen.getByRole("button", { name: "Substitution alerts" });
+    expect(vibrate).not.toHaveBeenCalled();
+    fireEvent.click(toggle);
+    expect(vibrate).toHaveBeenCalledExactlyOnceWith([160, 80, 160]);
+    fireEvent.click(toggle);
+    expect(vibrate).toHaveBeenCalledOnce();
+    fireEvent.click(toggle);
+    expect(vibrate).toHaveBeenCalledTimes(2);
+    unmount();
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(
+      screen.getByRole("button", { name: "Substitution alerts" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(vibrate).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([false, true])(
+    "does not duplicate an alert preview or suppress a future deadline (already due=%s)",
+    (alreadyDue) => {
+      const { game, vibrate } = prepareUpcomingRotation(false, false);
+      if (alreadyDue) {
+        game.clock.elapsedSeconds =
+          getSubstitutionReminderStatus(game).intervalSeconds;
+        const state = structuredClone(INITIAL_STATE);
+        state.activeGame = game;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+      render(<App />);
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Substitution alerts" }),
+      );
+      expect(vibrate).toHaveBeenCalledOnce();
+      act(() => vi.advanceTimersByTime(1_000));
+      expect(vibrate).toHaveBeenCalledTimes(alreadyDue ? 1 : 2);
+      act(() => vi.advanceTimersByTime(2_000));
+      expect(vibrate).toHaveBeenCalledTimes(alreadyDue ? 1 : 2);
+    },
+  );
 
   it("persists demo mode and gates the expanded-header clock control", async () => {
     const state = structuredClone(INITIAL_STATE);
@@ -585,11 +647,68 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pause" })).toHaveAttribute(
       "data-component",
-      "IconButton",
+      "Button",
     );
     expect(screen.getByRole("button", { name: "End game" })).toHaveAttribute(
       "data-component",
-      "IconButton",
+      "Button",
+    );
+    expect(screen.getByRole("button", { name: "Pause" })).toHaveTextContent(
+      "Pause",
+    );
+    expect(screen.getByRole("button", { name: "End game" })).toHaveTextContent(
+      "End game",
+    );
+  });
+
+  it("keeps demo clock controls labeled above the mobile breakpoint", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    state.activeGame = createGame(
+      team,
+      team.defaultFormationId,
+      team.roster.map((player) => player.id),
+      team.defaultDurationMinutes,
+      Date.now(),
+    );
+    state.activeGame.clock.elapsedSeconds = 120;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(
+      DEVICE_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        keepScreenAwake: false,
+        substitutionAlerts: false,
+        demoClock: true,
+      }),
+    );
+    window.innerWidth = 390;
+    render(<App />);
+    for (const width of [390, 760, 761, 1024]) {
+      window.innerWidth = width;
+      fireEvent.resize(window);
+      const kind = width <= 760 ? "IconButton" : "Button";
+      const clock = screen.getByRole("button", { name: "Resume" });
+      const end = screen.getByRole("button", { name: "End game" });
+      expect(clock).toHaveAttribute("data-component", kind);
+      expect(end).toHaveAttribute("data-component", kind);
+      if (width > 760) {
+        expect(clock).toHaveTextContent("Resume");
+        expect(end).toHaveTextContent("End game");
+      } else {
+        expect(clock).toHaveTextContent(/^$/);
+        expect(end).toHaveTextContent(/^$/);
+      }
+      expect(
+        screen.getByRole("button", { name: "Fast-forward game clock" }),
+      ).toHaveAttribute("data-component", "IconButton");
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+    expect(screen.getByRole("button", { name: "Pause" })).toHaveTextContent(
+      "Pause",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(screen.getByRole("button", { name: "Resume" })).toHaveTextContent(
+      "Resume",
     );
   });
 
@@ -688,9 +807,63 @@ describe("Sideline app", () => {
 
     await waitFor(() => expect(request).toHaveBeenCalledWith("screen"));
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const toggle = screen.getByRole("button", { name: "Keep screen awake" });
+    const description =
+      /^\s*Prevents auto-lock while Sideline is visible during an active game\.$/;
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(toggle).toHaveAccessibleDescription(description);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(release).toHaveBeenCalledOnce());
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(toggle).toHaveAccessibleDescription(description);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(toggle).toHaveAccessibleDescription(description);
+  });
+
+  it("reports a wake-lock failure separately from the static setting description", async () => {
+    Object.defineProperty(navigator, "wakeLock", {
+      value: {
+        request: vi.fn().mockRejectedValue(new Error("Wake lock denied")),
+      },
+      configurable: true,
+    });
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    state.activeGame = createGame(
+      team,
+      team.defaultFormationId,
+      team.roster.map((player) => player.id),
+      team.defaultDurationMinutes,
+      Date.now(),
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(
+      DEVICE_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        keepScreenAwake: true,
+        substitutionAlerts: false,
+        demoClock: false,
+      }),
+    );
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(
-      await screen.findByText(/Active for the current game\./),
-    ).toBeInTheDocument();
+      await screen.findByText(
+        "Enabled, but the device could not keep the screen awake.",
+      ),
+    ).toHaveAttribute("role", "status");
+    expect(
+      document.getElementById("keep-screen-awake-description")?.textContent,
+    ).toBe(
+      "Prevents auto-lock while Sideline is visible during an active game.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Keep screen awake" }),
+    ).toHaveAccessibleDescription(
+      /Prevents auto-lock.*Enabled, but the device could not keep the screen awake\./,
+    );
   });
 
   it("plays one alert for each due substitution-reminder cycle", async () => {
@@ -714,8 +887,11 @@ describe("Sideline app", () => {
       team.roster.map((player) => player.id),
       team.defaultDurationMinutes,
       1_000,
+      2,
     );
-    state.activeGame.clock.elapsedSeconds = 300;
+    state.activeGame.clock.elapsedSeconds = getSubstitutionReminderStatus(
+      state.activeGame,
+    ).intervalSeconds;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
     render(<App />);
@@ -799,10 +975,79 @@ describe("Sideline app", () => {
     },
   );
 
-  it("alerts and opens again after a confirmed rotation starts a new cycle", () => {
+  it.each([false, true])(
+    "preserves the reminder cycle through an injury replacement (already due=%s)",
+    (alreadyDue) => {
+      const { vibrate } = prepareUpcomingRotation(false);
+      render(<App />);
+      if (alreadyDue) {
+        act(() => vi.advanceTimersByTime(1_000));
+        fireEvent.click(
+          within(screen.getByRole("dialog")).getByRole("button", {
+            name: "Close",
+          }),
+        );
+        expect(vibrate).toHaveBeenCalledOnce();
+      }
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+      const initialReminder = getSubstitutionReminderStatus(saved.activeGame!);
+      const outgoingId = Object.values(saved.activeGame!.assignments)[0];
+      const name = saved.teams.u8.roster.find(
+        (player) => player.id === outgoingId,
+      )!.name;
+      fireEvent.click(
+        screen.getByRole("button", { name: `Open actions for ${name}` }),
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: `Take ${name} out of game` }),
+      );
+      fireEvent.click(
+        within(screen.getByRole("alertdialog")).getByRole("button", {
+          name: "Remove player",
+        }),
+      );
+      fireEvent.click(
+        within(
+          screen.getByRole("dialog", { name: "Players are in" }),
+        ).getByRole("button", { name: "Close" }),
+      );
+      const updated = JSON.parse(
+        localStorage.getItem(STORAGE_KEY)!,
+      ) as AppState;
+      expect(updated.activeGame!.history.at(-1)?.pairs).toHaveLength(1);
+      expect(getSubstitutionReminderStatus(updated.activeGame!).cycleKey).toBe(
+        initialReminder.cycleKey,
+      );
+      expect(vibrate).toHaveBeenCalledTimes(alreadyDue ? 1 : 0);
+      act(() => vi.advanceTimersByTime(1_000));
+      expect(vibrate).toHaveBeenCalledOnce();
+      expect(screen.getByLabelText("Substitution reminder")).toHaveTextContent(
+        "Rotation timer:",
+      );
+      if (alreadyDue) {
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      } else {
+        expect(
+          screen.getByRole("dialog", { name: "Plan substitutions" }),
+        ).toBeInTheDocument();
+        fireEvent.click(
+          within(screen.getByRole("dialog")).getByRole("button", {
+            name: "Close",
+          }),
+        );
+      }
+      act(() => vi.advanceTimersByTime(2_000));
+      expect(vibrate).toHaveBeenCalledOnce();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    },
+  );
+
+  it("restarts the interval after an early confirmed rotation and opens at the new deadline", () => {
     const { vibrate } = prepareUpcomingRotation(true);
     render(<App />);
-    act(() => vi.advanceTimersByTime(1_000));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review substitutions" }),
+    );
     const review = screen.getByRole("dialog", {
       name: /Review substitutions/,
     });
@@ -815,8 +1060,11 @@ describe("Sideline app", () => {
         within(confirmation).getByRole("button", { name: "Close" }),
       );
     }
-    act(() => vi.advanceTimersByTime(300_000));
-    expect(vibrate).toHaveBeenCalledTimes(2);
+    act(() => vi.advanceTimersByTime(399_000));
+    expect(vibrate).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(vibrate).toHaveBeenCalledOnce();
     expect(
       screen.getByRole("dialog", { name: "Plan substitutions" }),
     ).toBeInTheDocument();
@@ -834,6 +1082,7 @@ describe("Sideline app", () => {
         team.roster.map((player) => player.id),
         team.defaultDurationMinutes,
         Date.now(),
+        2,
       ),
       true,
       Date.now(),
@@ -841,13 +1090,13 @@ describe("Sideline app", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     render(<App />);
 
-    vi.setSystemTime(new Date("2026-09-14T12:05:01Z"));
+    vi.setSystemTime(new Date("2026-09-14T12:10:01Z"));
     act(() => window.dispatchEvent(new Event("pageshow")));
 
     const recovered = JSON.parse(
       localStorage.getItem(STORAGE_KEY) ?? "{}",
     ).activeGame;
-    expect(recovered.clock.elapsedSeconds).toBe(301);
+    expect(recovered.clock.elapsedSeconds).toBe(601);
     expect(recovered.clock.lastStartedAt).toBe(Date.now());
     expect(screen.getByLabelText("Substitution reminder")).toBeInTheDocument();
   });
@@ -1432,20 +1681,44 @@ describe("Sideline app", () => {
     expect(screen.getByText("Evan added to game")).toBeInTheDocument();
   });
 
-  it("hides empty live-game exception and timeline sections", () => {
-    render(<App />);
-    fireEvent.click(screen.getByText("Golden Dragons"));
-    startGame();
+  it.each([
+    { teamName: "Golden Dragons", firstMarker: "Quarter 1 started" },
+    { teamName: "Fireballers", firstMarker: "Half 1 started" },
+  ])(
+    "hides $teamName timeline until a real event exists",
+    ({ teamName, firstMarker }) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-16T12:00:00Z"));
+      render(<App />);
+      fireEvent.click(screen.getByText(teamName));
+      startGame();
 
-    expect(screen.queryByText("Out of game")).not.toBeInTheDocument();
-    expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
+      expect(screen.queryByText("Out of game")).not.toBeInTheDocument();
+      expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+      fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+      act(() => {
+        vi.advanceTimersByTime(2_000);
+      });
+      expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+      expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+      expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
 
-    expect(screen.getByText("Game timeline").closest("details")).toHaveClass(
-      "follows-roster",
-    );
-  });
+      fireEvent.click(screen.getByRole("button", { name: "Record a goal" }));
+      fireEvent.click(screen.getByRole("button", { name: "Opponent scored" }));
+      const timeline = screen.getByText("Game timeline").closest("details")!;
+      expect(timeline).toHaveClass("follows-roster");
+      expect(timeline).not.toHaveAttribute("open");
+      expect(timeline).toHaveTextContent("1 events");
+      fireEvent.click(screen.getByText("Game timeline"));
+      expect(within(timeline).getByText(firstMarker)).toBeVisible();
+      expect(within(timeline).getByText("Opponent scored")).toBeVisible();
+      fireEvent.click(screen.getByRole("button", { name: "Undo last change" }));
+      expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
+    },
+  );
 
   it("opens U12 setup directly without configurable duration or format", () => {
     render(<App />);
@@ -1492,6 +1765,7 @@ describe("Sideline app", () => {
       screen.getByRole("heading", { name: "On the field" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Game clock, running")).toBeInTheDocument();
+    expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
   });
 
   it("shows each player's position time before closing an ended game", () => {
@@ -2171,7 +2445,7 @@ describe("Sideline app", () => {
     expect(screen.getByRole("button", { name: "Ready 6 swaps" })).toBeEnabled();
   });
 
-  it("prompts U8 to plan substitutions after five minutes without a swap", () => {
+  it("prompts U8 using halves after six minutes forty seconds without a swap", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;
     const game = createGame(
@@ -2182,14 +2456,14 @@ describe("Sideline app", () => {
       1_000,
       2,
     );
-    game.clock.elapsedSeconds = 300;
+    game.clock.elapsedSeconds = 400;
     state.activeGame = game;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
     render(<App />);
 
     const reminder = screen.getByLabelText("Substitution reminder");
-    expect(reminder).toHaveTextContent("No player swaps in 5:00");
+    expect(reminder).toHaveTextContent("Rotation timer: 6:40");
     expect(screen.getByRole("tab", { name: "Bench 5" })).toBeInTheDocument();
     expect(screen.getByLabelText("Rotation timer")).toHaveTextContent(
       "RotationDue now",
@@ -2220,7 +2494,7 @@ describe("Sideline app", () => {
     render(<App />);
 
     expect(screen.getByLabelText("Rotation timer")).toHaveTextContent(
-      "RotationDue in 3:00",
+      "RotationDue in 4:40",
     );
   });
 
@@ -2899,9 +3173,9 @@ describe("Sideline app", () => {
     expect(
       within(readyBanner).getByText("3 substitutions ready"),
     ).toBeVisible();
-    expect(within(readyBanner).getByText("Due in 5:00")).toBeVisible();
+    expect(within(readyBanner).getByText("Due in 10:00")).toBeVisible();
     expect(
-      within(readyBanner).getByLabelText("Next rotation due in 5:00"),
+      within(readyBanner).getByLabelText("Next rotation due in 10:00"),
     ).toBeVisible();
     expect(
       within(readyBanner).queryByRole("button", { name: "Send 'em in" }),
@@ -3489,7 +3763,7 @@ describe("Sideline app", () => {
       1_000,
     );
     const benchPlayerId = game.benchIds[0];
-    game.clock.elapsedSeconds = 10 * 60;
+    game.clock.elapsedSeconds = 12 * 60;
     game.totals[benchPlayerId] = {
       fieldSeconds: 2 * 60,
       benchSeconds: 12 * 60,
@@ -3505,7 +3779,7 @@ describe("Sideline app", () => {
     expect(benchPlayer).toHaveTextContent("2 min played");
     expect(benchPlayer).not.toHaveTextContent("Sitting");
     expect(screen.getByLabelText("Shared bench time")).toHaveTextContent(
-      "All 2 sitting since start10:00",
+      "All 2 sitting since start12:00",
     );
     expect(benchPlayer).toHaveTextContent("Below 50% pace");
     expect(benchPlayer).not.toHaveTextContent("12 min bench");
@@ -3540,6 +3814,106 @@ describe("Sideline app", () => {
     expect(benchPlayer).not.toHaveTextContent("Sitting");
     expect(benchPlayer).not.toHaveTextContent("Below 50% pace");
   });
+
+  it.each([
+    {
+      teamId: "u8",
+      count: 10,
+      elapsed: 40 * 60,
+      played: 17 * 60,
+      floor: "40",
+      warning: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      elapsed: 40 * 60,
+      played: 16 * 60,
+      floor: "40",
+      warning: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      elapsed: 40 * 60,
+      played: 15 * 60,
+      floor: "40",
+      warning: true,
+    },
+    {
+      teamId: "u8",
+      count: 9,
+      elapsed: 40 * 60,
+      played: 14 * 60,
+      floor: "44.4",
+      warning: true,
+    },
+    {
+      teamId: "u8",
+      count: 7,
+      elapsed: 40 * 60,
+      played: 19 * 60,
+      floor: "50",
+      warning: true,
+    },
+    {
+      teamId: "u12",
+      count: 15,
+      elapsed: 60 * 60,
+      played: 28 * 60,
+      floor: "48",
+      warning: true,
+    },
+    {
+      teamId: "u12",
+      count: 15,
+      elapsed: 60 * 60,
+      played: 1728,
+      floor: "48",
+      warning: false,
+    },
+    {
+      teamId: "u12",
+      count: 14,
+      elapsed: 60 * 60,
+      played: 29 * 60,
+      floor: "50",
+      warning: true,
+    },
+  ] as const)(
+    "shows the attendance-aware $floor% floor for $teamId/$count ($played seconds played)",
+    ({ teamId, count, elapsed, played, floor, warning }) => {
+      const state = structuredClone(INITIAL_STATE);
+      const team = state.teams[teamId];
+      const game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.slice(0, count).map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+      );
+      expect(game.benchIds).toHaveLength(count - team.sideSize);
+      const id = game.benchIds[0];
+      game.clock.elapsedSeconds = elapsed;
+      game.totals[id] = {
+        fieldSeconds: played,
+        benchSeconds: elapsed - played,
+      };
+      state.activeGame = game;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      const row = screen
+        .getByRole("button", {
+          name: `Plan ${team.roster.find((player) => player.id === id)!.name} in`,
+        })
+        .closest<HTMLDivElement>(".player-time-row")!;
+      expect(within(row).queryByText(`Below ${floor}% pace`) !== null).toBe(
+        warning,
+      );
+      if (!warning)
+        expect(row.querySelector(".minimum-play-warning")).toBeNull();
+    },
+  );
 
   it("does not show minimum-play warnings before one quarter of the game", () => {
     const state = structuredClone(INITIAL_STATE);
@@ -4389,6 +4763,9 @@ describe("Sideline app", () => {
     expect(
       within(compactHeader as HTMLElement).getByText("10:00"),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Record a goal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Opponent scored" }));
     fireEvent.click(screen.getByText("Game timeline"));
     const periodMarker = screen.getByText("Quarter 2 started").closest("li");
     expect(periodMarker).toBeInTheDocument();
