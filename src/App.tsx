@@ -3873,12 +3873,12 @@ function Pitch({
             data-position-id={position.id}
             aria-label={`Plan substitution for ${player.name}${
               plannedIncomingName
-                ? `. Coming out for ${plannedIncomingName}`
+                ? `. Scheduled out for ${plannedIncomingName}`
                 : ""
             }`}
             title={
               plannedIncomingName
-                ? `Coming out for ${plannedIncomingName}. Tap to edit the substitution or drag to another position`
+                ? `Scheduled out for ${plannedIncomingName}. Tap to edit the substitution or drag to another position`
                 : "Tap to plan a substitution or drag to another position"
             }
             onPointerDown={(event) => {
@@ -4469,7 +4469,7 @@ function BenchSubstitutionPicker({
             ? [
                 {
                   label: "Next rotation",
-                  value: `Going in at ${
+                  value: `Scheduled in at ${
                     selectedPosition?.shortLabel ?? selectedPositionEntry?.[0]
                   } for ${playerName(team, selectedOutPlayerId)}`,
                   emphasis: "warm" as const,
@@ -4542,7 +4542,7 @@ function BenchSubstitutionPicker({
                 {plannedIncomingName && (
                   <span className="replacement-player-status outgoing-status">
                     <ArrowRightLeft size={13} aria-hidden="true" />
-                    Going out for {plannedIncomingName}
+                    Scheduled out for {plannedIncomingName}
                   </span>
                 )}
               </button>
@@ -4690,7 +4690,7 @@ function FieldSubstitutionPicker({
             ? [
                 {
                   label: "Next rotation",
-                  value: `Coming out for ${playerName(team, selectedInPlayerId)}`,
+                  value: `Scheduled out for ${playerName(team, selectedInPlayerId)}`,
                   emphasis: "warm" as const,
                   wide: true,
                   action: currentPair ? (
@@ -4770,7 +4770,7 @@ function FieldSubstitutionPicker({
                 {plannedOutgoingName && (
                   <span className="replacement-player-status incoming-status">
                     <ArrowRightLeft size={13} aria-hidden="true" />
-                    Going in for {plannedOutgoingName}
+                    Scheduled in for {plannedOutgoingName}
                   </span>
                 )}
               </button>
@@ -4857,7 +4857,7 @@ function FieldPlayerTimeRow({
           {queued ? (
             <span className="bench-queue-status">
               <ArrowRightLeft size={12} aria-hidden="true" />
-              Coming out for {queuedIncomingName}
+              Scheduled out for {queuedIncomingName}
             </span>
           ) : (
             hasEarlierFieldTime && (
@@ -4967,7 +4967,7 @@ function PlayerTimeRow({
           {queued ? (
             <span className="bench-queue-status">
               <ArrowRightLeft size={12} aria-hidden="true" />
-              Going in at {queuedPositionLabel}
+              Scheduled in at {queuedPositionLabel}
               {queuedOutgoingPlayerName
                 ? ` for ${queuedOutgoingPlayerName}`
                 : ""}
@@ -5718,7 +5718,7 @@ function SubstitutionPlanner({
                     ],
                     statusText:
                       usedInSwap >= 0
-                        ? `Going out for ${playerName(
+                        ? `Scheduled out for ${playerName(
                             team,
                             pairs[usedInSwap].inPlayerId,
                           )}`
@@ -5760,7 +5760,7 @@ function SubstitutionPlanner({
                     ],
                     statusText:
                       usedInSwap >= 0
-                        ? `Going in for ${playerName(
+                        ? `Scheduled in for ${playerName(
                             team,
                             pairs[usedInSwap].outPlayerId,
                           )}`
@@ -6827,7 +6827,7 @@ function PositionEditor({
             ? [
                 {
                   label: "Next rotation",
-                  value: `Coming out for ${playerName(
+                  value: `Scheduled out for ${playerName(
                     team,
                     currentPair.inPlayerId,
                   )}`,

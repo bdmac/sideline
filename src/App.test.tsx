@@ -2932,7 +2932,7 @@ describe("Sideline app", () => {
       .find((item) => item.textContent?.includes(firstOutgoingName));
     expect(repeatedOutgoing).toBeDefined();
     expect(repeatedOutgoing).toHaveTextContent(
-      `Going out for ${firstIncomingName}`,
+      `Scheduled out for ${firstIncomingName}`,
     );
     expect(
       repeatedOutgoing?.querySelector(
@@ -2973,7 +2973,7 @@ describe("Sideline app", () => {
         ?.querySelector(".replacement-selected-icon"),
     ).toBeInTheDocument();
     expect(repeatedIncoming).toHaveTextContent(
-      `Going in for ${secondOutgoingName}`,
+      `Scheduled in for ${secondOutgoingName}`,
     );
     expect(
       repeatedIncoming?.querySelector(
@@ -3018,7 +3018,7 @@ describe("Sideline app", () => {
     ).toHaveLength(3);
     expect(
       screen.getByRole("button", {
-        name: /Plan substitution for Simon\. Coming out for/,
+        name: /Plan substitution for Simon\. Scheduled out for/,
       }),
     ).toBeInTheDocument();
     expect(document.querySelectorAll(".pitch-plan-icon")).toHaveLength(3);
@@ -4015,7 +4015,7 @@ describe("Sideline app", () => {
       item.getAttribute("data-player-id"),
     );
     expect(visibleOutgoingIds).toEqual(expectedOutgoingOptions);
-    expect(outgoingMenuItems.at(-1)).toHaveTextContent(/^.+Going out for /);
+    expect(outgoingMenuItems.at(-1)).toHaveTextContent(/^.+Scheduled out for /);
     fireEvent.keyDown(document, { key: "Escape" });
 
     const expectedIncomingOptions = [...game.benchIds].sort(
@@ -4032,7 +4032,7 @@ describe("Sideline app", () => {
     ).toBe(true);
     const plannedIncomingIds = new Set(
       incomingMenuItems
-        .filter((item) => item.textContent?.includes("Going in for"))
+        .filter((item) => item.textContent?.includes("Scheduled in for"))
         .map((item) => item.getAttribute("data-player-id")),
     );
     expect(
@@ -4319,7 +4319,7 @@ describe("Sideline app", () => {
             direction === "bench"
               ? `Edit ${player.name} going in`
               : direction === "pitch"
-                ? `Plan substitution for ${player.name}. Coming out for ${team.roster.find((item) => item.id === pair.inPlayerId)!.name}`
+                ? `Plan substitution for ${player.name}. Scheduled out for ${team.roster.find((item) => item.id === pair.inPlayerId)!.name}`
                 : `Edit planned substitution for ${player.name} out`,
         }),
       );
@@ -4382,7 +4382,7 @@ describe("Sideline app", () => {
             direction === "bench"
               ? `Edit ${incoming.name} going in`
               : direction === "pitch"
-                ? `Plan substitution for ${outgoing.name}. Coming out for ${incoming.name}`
+                ? `Plan substitution for ${outgoing.name}. Scheduled out for ${incoming.name}`
                 : `Edit planned substitution for ${outgoing.name} out`,
         }),
       );
@@ -4626,7 +4626,7 @@ describe("Sideline app", () => {
     );
 
     expect(screen.getByText("1 substitution ready")).toBeInTheDocument();
-    const benchPlanStatus = screen.getByText("Going in at CB for Simon");
+    const benchPlanStatus = screen.getByText("Scheduled in at CB for Simon");
     expect(benchPlanStatus).toBeInTheDocument();
     expect(
       benchPlanStatus.querySelector(".lucide-arrow-right-left"),
@@ -4662,7 +4662,9 @@ describe("Sideline app", () => {
     ).toHaveTextContent("Dylan");
     fireEvent.click(within(planner).getByRole("button", { name: "Close" }));
 
-    expect(screen.getByText("Going in at CB for Simon")).toBeInTheDocument();
+    expect(
+      screen.getByText("Scheduled in at CB for Simon"),
+    ).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", {
         name: "Edit Dylan going in",
@@ -4672,7 +4674,7 @@ describe("Sideline app", () => {
       name: "Dylan #4 Plan in",
     });
     expect(editPicker).toHaveTextContent(
-      "Next rotationGoing in at CB for Simon",
+      "Next rotationScheduled in at CB for Simon",
     );
     const selectedOutgoing = within(editPicker).getByRole("button", {
       name: /Simon #10.*Center Back/,
@@ -4687,9 +4689,11 @@ describe("Sideline app", () => {
       }),
     );
     expect(editPicker).toHaveTextContent(
-      "Next rotationGoing in at LM for Ollie",
+      "Next rotationScheduled in at LM for Ollie",
     );
-    expect(screen.getByText("Going in at CB for Simon")).toBeInTheDocument();
+    expect(
+      screen.getByText("Scheduled in at CB for Simon"),
+    ).toBeInTheDocument();
     fireEvent.click(
       within(editPicker).getByRole("button", { name: "Update plan" }),
     );
@@ -4697,7 +4701,9 @@ describe("Sideline app", () => {
     expect(
       screen.queryByRole("dialog", { name: /^[0-9]+ Substitutions?$/ }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Going in at LM for Ollie")).toBeInTheDocument();
+    expect(
+      screen.getByText("Scheduled in at LM for Ollie"),
+    ).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Review substitutions" }),
     );
@@ -4722,7 +4728,7 @@ describe("Sideline app", () => {
     expect(removeFromQueue.querySelector("svg")).toBeInTheDocument();
     fireEvent.click(removeFromQueue);
 
-    expect(screen.queryByText(/Going in at/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Scheduled in at/)).not.toBeInTheDocument();
     expect(screen.queryByText("1 substitution ready")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Plan Dylan in" }),
@@ -4763,7 +4769,7 @@ describe("Sideline app", () => {
       }),
     );
     expect(screen.getByText("Dylan out of game")).toBeInTheDocument();
-    expect(screen.queryByText(/Going in at/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Scheduled in at/)).not.toBeInTheDocument();
     expect(screen.queryByText("1 substitution ready")).not.toBeInTheDocument();
   });
 
@@ -5808,7 +5814,7 @@ describe("Sideline app", () => {
       const openPlanned = () =>
         fireEvent.click(
           screen.getByRole("button", {
-            name: `Plan substitution for ${outgoing.name}. Coming out for ${incoming.name}`,
+            name: `Plan substitution for ${outgoing.name}. Scheduled out for ${incoming.name}`,
           }),
         );
       openPlanned();
@@ -5816,7 +5822,7 @@ describe("Sideline app", () => {
         name: `${outgoing.name} #${outgoing.number} Plan out`,
       });
       expect(picker).toHaveTextContent(
-        `Next rotationComing out for ${incoming.name}`,
+        `Next rotationScheduled out for ${incoming.name}`,
       );
       expect(
         within(picker).getByRole("button", {
@@ -5832,7 +5838,7 @@ describe("Sideline app", () => {
         }),
       );
       expect(picker).toHaveTextContent(
-        `Next rotationComing out for ${replacement.name}`,
+        `Next rotationScheduled out for ${replacement.name}`,
       );
       expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual(queued);
       fireEvent.click(within(picker).getByRole("button", { name: "Close" }));
@@ -5865,7 +5871,7 @@ describe("Sideline app", () => {
       expect(updated.activeGame!.history).toEqual(game.history);
       expect(
         screen.getByRole("button", {
-          name: `Plan substitution for ${outgoing.name}. Coming out for ${replacement.name}`,
+          name: `Plan substitution for ${outgoing.name}. Scheduled out for ${replacement.name}`,
         }),
       ).toBeInTheDocument();
     },
@@ -5907,7 +5913,7 @@ describe("Sideline app", () => {
         name: "Edit planned substitution for Simon out",
       })
       .closest(".player-time-row");
-    expect(simonRow).toHaveTextContent("Coming out for Dylan");
+    expect(simonRow).toHaveTextContent("Scheduled out for Dylan");
     expect(
       simonRow?.querySelector(".bench-queue-status .lucide-arrow-right-left"),
     ).toBeInTheDocument();
@@ -5922,7 +5928,9 @@ describe("Sideline app", () => {
     const editPicker = screen.getByRole("dialog", {
       name: /Simon #10 Plan out/,
     });
-    expect(editPicker).toHaveTextContent("Next rotationComing out for Dylan");
+    expect(editPicker).toHaveTextContent(
+      "Next rotationScheduled out for Dylan",
+    );
     const selectedIncoming = within(editPicker).getByRole("button", {
       name: /Dylan/,
     });
@@ -5939,7 +5947,7 @@ describe("Sideline app", () => {
     const alreadyPlannedIncoming = within(otherPicker).getByRole("button", {
       name: /Dylan/,
     });
-    expect(alreadyPlannedIncoming).toHaveTextContent("Going in for Simon");
+    expect(alreadyPlannedIncoming).toHaveTextContent("Scheduled in for Simon");
     expect(
       alreadyPlannedIncoming.querySelector(
         ".replacement-player-status.incoming-status .lucide-arrow-right-left",
