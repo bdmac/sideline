@@ -2671,6 +2671,7 @@ select:hover {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.6rem;
   align-items: center;
+  padding-inline-end: 4px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -2766,6 +2767,7 @@ select:hover {
 .player-time-main[data-live-bench-player-id] {
   grid-template-columns: 20px minmax(0, 1fr) auto;
   column-gap: 0.4rem;
+  padding-inline-start: 4px;
   cursor: grab;
   touch-action: pan-y;
   user-select: none;
