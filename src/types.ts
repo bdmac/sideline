@@ -91,6 +91,7 @@ export type SubstitutionPair = {
 
 export type GameEvent = {
   id: string;
+  substitutionKind?: "planned" | "immediate";
   type:
     | "substitution"
     | "position-change"

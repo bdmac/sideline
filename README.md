@@ -54,6 +54,10 @@ U8 also remembers one game's kickoff lineup on this device. Automatic starter se
 
 The header settings menu can keep the screen awake during an active visible game and play a chime plus supported vibration when a substitution reminder becomes due. Both features are optional and depend on browser/device capabilities.
 
+Drag a live bench player onto a field player to send that substitution immediately. On touchscreens, hold briefly (125ms) before dragging; phones show a temporary pitch so you do not have to scroll while holding a player. Release away from a player to cancel. Tapping a row still opens the keyboard-accessible planner, and Bench / On field tabs use taps rather than swipes.
+
+Immediate swaps and taking a player out leave the team rotation timer running toward its existing deadline. Only sending a planned rotation, including a partial batch, restarts that interval. Each player's playing and bench times still update for every change.
+
 For testing or demos, enable **Settings → Demo mode**. During an active game, the expanded match header gains a fast-forward button that opens **Fast-forward**. Enter a positive number of minutes to add while advancing current field and bench time through the normal accounting path. The clock pauses automatically after the jump and leaves period transitions manual.
 
 ## Data

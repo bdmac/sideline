@@ -1,4 +1,8 @@
-import { INITIAL_STATE, updateActiveGame } from "./domain";
+import {
+  INITIAL_STATE,
+  isImmediateSubstitution,
+  updateActiveGame,
+} from "./domain";
 import type { ActiveGame, AppState, StartingLineup } from "./types";
 
 export const STORAGE_KEY = "sideline-state-v1";
@@ -129,6 +133,11 @@ const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
     presentIds,
     unavailableIds,
     totals,
+    history: game.history.map((event) =>
+      event.substitutionKind === undefined && isImmediateSubstitution(event)
+        ? { ...event, substitutionKind: "immediate" }
+        : event,
+    ),
   };
 };
 

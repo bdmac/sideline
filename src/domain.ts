@@ -2,6 +2,7 @@ import type {
   ActiveGame,
   AppState,
   Formation,
+  GameEvent,
   Player,
   PlayerGameSummary,
   PlayerTotals,
@@ -648,6 +649,13 @@ export const getMatchClockSeconds = (
   );
 };
 
+export const isImmediateSubstitution = (event: GameEvent) =>
+  event.type === "substitution" &&
+  (event.substitutionKind === "immediate" ||
+    // Released versions identified immediate swaps only in their history note.
+    (event.substitutionKind === undefined &&
+      event.note?.startsWith("Sent immediately.") === true));
+
 export const getSubstitutionReminderStatus = (game: ActiveGame) => {
   const rotations = game.teamId === "u8" && game.periodCount === 2 ? 6 : 4;
   const intervalSeconds = Math.round(game.durationSeconds / rotations);
@@ -659,7 +667,10 @@ export const getSubstitutionReminderStatus = (game: ActiveGame) => {
     )
     .at(-1);
   const lastPlannedSubstitution = game.history
-    .filter((event) => event.type === "substitution")
+    .filter(
+      (event) =>
+        event.type === "substitution" && !isImmediateSubstitution(event),
+    )
     .at(-1);
   const secondsSinceLastSubstitution = Math.max(
     0,
@@ -2231,6 +2242,7 @@ export const applySubstitutions = (
   pairs: SubstitutionPair[],
   sideSize: number,
   now = Date.now(),
+  options: { kind?: GameEvent["substitutionKind"] } = {},
 ): ActiveGame => {
   const current = materializeGame(game, now);
   const pairErrors = validateSubstitutionPairs(current, pairs);
@@ -2259,6 +2271,7 @@ export const applySubstitutions = (
       {
         id: `sub-${now}`,
         type: "substitution",
+        substitutionKind: options.kind ?? "planned",
         atSeconds: current.clock.elapsedSeconds,
         pairs,
         beforeAssignments: current.assignments,
@@ -2284,7 +2297,9 @@ export const applyImmediateSubstitution = (
     throw new Error("The substitution must use the active game's team");
   }
   const pair = getBenchSubstitution(game, inPlayerId, outPlayerId);
-  const next = applySubstitutions(game, [pair], team.sideSize, now);
+  const next = applySubstitutions(game, [pair], team.sideSize, now, {
+    kind: "immediate",
+  });
   const previousPlan = game.queuedSubstitutions ?? [];
   const remainingCount = Math.max(0, previousPlan.length - 1);
   const planningGame = {

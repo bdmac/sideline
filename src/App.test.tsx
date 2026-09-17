@@ -4160,6 +4160,9 @@ describe("Sideline app", () => {
       const result = screen.getByRole("dialog", { name: "Players are in" });
       expect(result).toHaveTextContent("No plan was created.");
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+      expect(saved.activeGame?.history.at(-1)?.substitutionKind).toBe(
+        "immediate",
+      );
       expect(saved.activeGame?.assignments).toEqual({
         ...game.assignments,
         [positionId]: inPlayerId,
@@ -5496,7 +5499,7 @@ describe("Sideline app", () => {
     expect(goalTotal).toHaveTextContent("×4");
   });
 
-  it("switches between bench and on-field lists with tabs and swipe", () => {
+  it("switches between bench and on-field lists with tabs and keyboard, not swipes", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
@@ -5539,6 +5542,8 @@ describe("Sideline app", () => {
     fireEvent.touchEnd(panel, {
       changedTouches: [{ clientX: 160, clientY: 98 }],
     });
+    expect(fieldTab).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(benchTab);
     expect(benchTab).toHaveAttribute("aria-selected", "true");
   });
 

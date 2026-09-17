@@ -6,10 +6,14 @@ import {
   fastForwardGame,
   getCurrentBenchSeconds,
   getCurrentFieldSeconds,
+  getNextSubstitutionSeconds,
   getRecommendedSubstitutionCount,
+  getSubstitutionPlanningSnapshot,
+  getSubstitutionReminderStatus,
   INITIAL_STATE,
   INITIAL_TEAMS,
   materializeGame,
+  markUnavailable,
   queueSubstitutions,
   setClockRunning,
   suggestSubstitutions,
@@ -17,7 +21,7 @@ import {
   validateGame,
   validateSubstitutionPairs,
 } from "./domain";
-import { loadState, saveState } from "./storage";
+import { ACTIVE_GAME_KEY, loadState, saveState, STORAGE_KEY } from "./storage";
 import type { TeamId } from "./types";
 
 function setup(teamId: TeamId = "u12") {
@@ -65,10 +69,163 @@ describe("immediate single substitutions", () => {
       expect(next.queuedSubstitutions).toBeUndefined();
       expect(next.history).toHaveLength(1);
       expect(next.history[0].pairs).toEqual([pair]);
+      expect(next.history[0].substitutionKind).toBe("immediate");
       expect(next.history[0].note).toContain("No plan was created");
       expect(next.clock).toEqual(game.clock);
       expect(validateGame(next, team.sideSize)).toEqual([]);
       expect(game).toEqual(before);
+    },
+  );
+
+  it.each([
+    ["u8", 4],
+    ["u8", 2],
+    ["u12", 4],
+    ["u12", 2],
+  ] as const)(
+    "preserves the %s rotation deadline with %i periods",
+    (teamId, periodCount) => {
+      const { team, game, pair } = setup(teamId);
+      game.periodCount = periodCount;
+      const original = getSubstitutionReminderStatus(game);
+      const advanced = fastForwardGame(
+        game,
+        original.intervalSeconds - 120,
+        2_000,
+      );
+      const next = applyImmediateSubstitution(
+        advanced,
+        pair.inPlayerId,
+        pair.outPlayerId,
+        team,
+        3_000,
+      );
+      expect(getSubstitutionReminderStatus(next)).toMatchObject({
+        cycleKey: original.cycleKey,
+        hasExecutedSubstitution: true,
+        due: false,
+        secondsSinceLastSubstitution: original.intervalSeconds - 120,
+      });
+      expect(getNextSubstitutionSeconds(next)).toBe(original.intervalSeconds);
+      expect(getSubstitutionPlanningSnapshot(next).clock.elapsedSeconds).toBe(
+        original.intervalSeconds,
+      );
+      const due = fastForwardGame(next, 120, 4_000);
+      expect(getSubstitutionReminderStatus(due)).toMatchObject({
+        cycleKey: original.cycleKey,
+        due: true,
+      });
+    },
+  );
+
+  it.each(["u8", "u12"] as const)(
+    "keeps the last planned %s rotation through immediate swaps, take-outs, and undo",
+    (teamId) => {
+      const { team, game, pair } = setup(teamId);
+      const initial = getSubstitutionReminderStatus(game);
+      const advanced = fastForwardGame(
+        game,
+        initial.intervalSeconds - 60,
+        2_000,
+      );
+      const planned = applySubstitutions(
+        advanced,
+        [pair],
+        team.sideSize,
+        3_000,
+      );
+      const rotation = getSubstitutionReminderStatus(planned);
+      expect(rotation.cycleKey).not.toBe(initial.cycleKey);
+      expect(rotation.secondsSinceLastSubstitution).toBe(0);
+      const later = fastForwardGame(planned, 30, 4_000);
+      const immediate = applyImmediateSubstitution(
+        later,
+        later.benchIds[0],
+        Object.values(later.assignments)[2],
+        team,
+        5_000,
+      );
+      const removed = markUnavailable(
+        immediate,
+        Object.values(immediate.assignments)[3],
+        team.sideSize,
+        6_000,
+      );
+      for (const current of [immediate, removed]) {
+        expect(getSubstitutionReminderStatus(current)).toMatchObject({
+          cycleKey: rotation.cycleKey,
+          secondsSinceLastSubstitution: 30,
+        });
+        expect(getNextSubstitutionSeconds(current)).toBe(
+          getNextSubstitutionSeconds(planned),
+        );
+      }
+      const undoRemoval = undoLastEvent(removed, 7_000);
+      const undoImmediate = undoLastEvent(undoRemoval, 8_000);
+      expect(getSubstitutionReminderStatus(undoImmediate).cycleKey).toBe(
+        rotation.cycleKey,
+      );
+      expect(
+        getSubstitutionReminderStatus(undoLastEvent(undoImmediate, 9_000))
+          .cycleKey,
+      ).toBe(initial.cycleKey);
+    },
+  );
+
+  it("recommends four rested players while Andrew has sat 26 seconds and Lazar two minutes", () => {
+    const { team, game } = setup();
+    let next = fastForwardGame(game, 840, 2_000);
+    next = applyImmediateSubstitution(next, "u12-p10", "u12-p2", team, 3_000);
+    next = fastForwardGame(next, 94, 4_000);
+    next = applyImmediateSubstitution(next, "u12-p11", "u12-p8", team, 5_000);
+    next = fastForwardGame(next, 26, 6_000);
+    expect(getCurrentBenchSeconds(next, "u12-p8")).toBe(26);
+    expect(getCurrentBenchSeconds(next, "u12-p2")).toBe(120);
+    expect(getSubstitutionReminderStatus(next).due).toBe(true);
+    expect(getRecommendedSubstitutionCount(next, team)).toBe(4);
+    const pairs = suggestSubstitutions(next, 4, team);
+    expect(new Set(pairs.map((pair) => pair.inPlayerId))).toEqual(
+      new Set(["u12-p12", "u12-p13", "u12-p14", "u12-p15"]),
+    );
+    expect(validateSubstitutionPairs(next, pairs)).toEqual([]);
+  });
+
+  it.each(["primary", "local-recovery", "session-recovery"])(
+    "restores legacy immediate swaps without resetting cadence (%s)",
+    (source) => {
+      const { team, game, pair } = setup();
+      const planned = applySubstitutions(
+        fastForwardGame(game, 300, 2_000),
+        [pair],
+        team.sideSize,
+        3_000,
+      );
+      const next = applyImmediateSubstitution(
+        fastForwardGame(planned, 100, 4_000),
+        planned.benchIds[0],
+        Object.values(planned.assignments)[2],
+        team,
+        5_000,
+      );
+      const legacy = structuredClone(next);
+      legacy.history.forEach((event) => delete event.substitutionKind);
+      const expected = getSubstitutionReminderStatus(next);
+      expect(getSubstitutionReminderStatus(legacy)).toEqual(expected);
+      saveState({ ...structuredClone(INITIAL_STATE), activeGame: legacy });
+      if (source !== "primary") localStorage.removeItem(STORAGE_KEY);
+      if (source === "session-recovery")
+        localStorage.removeItem(ACTIVE_GAME_KEY);
+      const recovered = loadState().activeGame!;
+      expect(recovered.history[0].substitutionKind).toBeUndefined();
+      expect(recovered.history[1].substitutionKind).toBe("immediate");
+      expect(recovered.assignments).toEqual(next.assignments);
+      expect(recovered.totals).toEqual(next.totals);
+      expect(recovered.clock).toEqual(next.clock);
+      expect(getSubstitutionReminderStatus(recovered)).toEqual(expected);
+      saveState({ ...structuredClone(INITIAL_STATE), activeGame: recovered });
+      expect(getSubstitutionReminderStatus(loadState().activeGame!)).toEqual(
+        expected,
+      );
     },
   );
 
@@ -111,7 +268,9 @@ describe("immediate single substitutions", () => {
         2_000,
       );
       const replanningGame = {
-        ...applySubstitutions(planned, [pair], team.sideSize, 2_000),
+        ...applySubstitutions(planned, [pair], team.sideSize, 2_000, {
+          kind: "immediate",
+        }),
         benchIds: next.benchIds.filter((id) => id !== pair.outPlayerId),
       };
       const count = Math.min(

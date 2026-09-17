@@ -50,6 +50,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
   type ReactNode,
+  type RefObject,
   useCallback,
   useEffect,
   useId,
@@ -130,6 +131,11 @@ import { type ColorMode, loadColorMode, saveColorMode } from "./theme";
 import { useRotationDueReview } from "./useRotationDueReview";
 import { StarterLineup } from "./StarterLineup";
 import { PlayerDragPreview } from "./PlayerDragPreview";
+import { LiveBenchDropPitch } from "./LiveBenchDropPitch";
+import {
+  useLiveBenchDrag,
+  type LiveBenchDragBindings,
+} from "./useLiveBenchDrag";
 import { TOUCH_DRAG_HOLD_MS } from "./playerDrag";
 import {
   compareStarterPlayersByPreference,
@@ -2111,7 +2117,6 @@ function LiveGameScreen({
     includeQueue: boolean;
   } | null>(null);
   const [rosterView, setRosterView] = useState<"field" | "bench">("bench");
-  const rosterSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const [confirmedPairs, setConfirmedPairs] = useState<
     SubstitutionPair[] | null
   >(null);
@@ -2394,46 +2399,68 @@ function LiveGameScreen({
 
   const sendSingleSubstitution = (inPlayerId: string, outPlayerId: string) => {
     let executedPairs: SubstitutionPair[] = [];
-    if (
-      safeChange(() => {
-        const next = applyImmediateSubstitution(
-          game,
-          inPlayerId,
-          outPlayerId,
-          team,
-          Date.now(),
-        );
-        const event = next.history.at(-1);
-        if (event?.type !== "substitution") {
-          throw new Error("The immediate substitution could not be verified.");
-        }
-        executedPairs = event.pairs;
-        return next;
-      })
-    ) {
+    const succeeded = safeChange(() => {
+      const next = applyImmediateSubstitution(
+        game,
+        inPlayerId,
+        outPlayerId,
+        team,
+        Date.now(),
+      );
+      const event = next.history.at(-1);
+      if (event?.type !== "substitution") {
+        throw new Error("The immediate substitution could not be verified.");
+      }
+      executedPairs = event.pairs;
+      return next;
+    });
+    if (succeeded) {
       setBenchQueuePlayerId(null);
       setFieldQueuePlayerId(null);
       setConfirmedPairs(executedPairs);
     }
+    return succeeded;
   };
+
+  const benchDrag = useLiveBenchDrag({
+    lineupKey: JSON.stringify([
+      game.id,
+      game.assignments,
+      game.benchIds,
+      game.unavailableIds,
+    ]),
+    assignments: game.assignments,
+    benchIds: game.benchIds,
+    onDrop: sendSingleSubstitution,
+  });
+  const activeBenchDrag = benchDrag.drag?.active ? benchDrag.drag : null;
+  const draggedBenchPlayer = activeBenchDrag
+    ? team.roster.find((player) => player.id === activeBenchDrag.playerId)
+    : undefined;
+  const benchDropPositionId = activeBenchDrag?.targetPositionId;
+  const benchDropNotice = getKeeperChangeNotice(
+    displayed,
+    team,
+    draggedBenchPlayer &&
+      benchDropPositionId &&
+      game.assignments[benchDropPositionId]
+      ? [
+          {
+            inPlayerId: draggedBenchPlayer.id,
+            outPlayerId: game.assignments[benchDropPositionId],
+            positionId: benchDropPositionId,
+          },
+        ]
+      : [],
+    "now",
+    { warnAboutRest: false, compact: true },
+  );
 
   const moveRosterTabFocus = (view: "field" | "bench") => {
     setRosterView(view);
     window.requestAnimationFrame(() =>
       document.getElementById(`roster-${view}-tab`)?.focus(),
     );
-  };
-
-  const finishRosterSwipe = (x: number, y: number) => {
-    const start = rosterSwipeStart.current;
-    rosterSwipeStart.current = null;
-    if (!start) return;
-    const deltaX = x - start.x;
-    const deltaY = y - start.y;
-    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) {
-      return;
-    }
-    setRosterView(deltaX < 0 ? "field" : "bench");
   };
 
   return (
@@ -2953,25 +2980,31 @@ function LiveGameScreen({
               )}
             </span>
           </div>
-          <Pitch
-            formation={formation}
-            assignments={game.assignments}
-            team={team}
-            game={displayed}
-            showPlayerTimes={showFieldPlayerTimes}
-            onEditPlayer={(playerId) =>
-              setFieldActions({
-                playerId,
-                includeQueue: game.benchIds.length > 0,
-              })
-            }
-            onAddGuestAtPosition={setGuestPositionId}
-            onMovePlayer={(playerId, positionId) =>
-              safeChange(() =>
-                movePlayer(game, playerId, positionId, Date.now()),
-              )
-            }
-          />
+          <div className="live-pitch-frame">
+            <Pitch
+              pitchRef={benchDrag.pitchRef}
+              benchDropTargetPositionId={
+                activeBenchDrag?.compact ? null : benchDropPositionId
+              }
+              formation={formation}
+              assignments={game.assignments}
+              team={team}
+              game={displayed}
+              showPlayerTimes={showFieldPlayerTimes}
+              onEditPlayer={(playerId) =>
+                setFieldActions({
+                  playerId,
+                  includeQueue: game.benchIds.length > 0,
+                })
+              }
+              onAddGuestAtPosition={setGuestPositionId}
+              onMovePlayer={(playerId, positionId) =>
+                safeChange(() =>
+                  movePlayer(game, playerId, positionId, Date.now()),
+                )
+              }
+            />
+          </div>
         </section>
 
         <aside className="bench-section">
@@ -3037,19 +3070,6 @@ function LiveGameScreen({
             className="roster-tab-panel"
             role="tabpanel"
             aria-labelledby={`roster-${rosterView}-tab`}
-            onTouchStart={(event) => {
-              const touch = event.touches[0];
-              rosterSwipeStart.current = touch
-                ? { x: touch.clientX, y: touch.clientY }
-                : null;
-            }}
-            onTouchEnd={(event) => {
-              const touch = event.changedTouches[0];
-              if (touch) finishRosterSwipe(touch.clientX, touch.clientY);
-            }}
-            onTouchCancel={() => {
-              rosterSwipeStart.current = null;
-            }}
           >
             {rosterView === "field" ? (
               fieldIds.length ? (
@@ -3123,6 +3143,8 @@ function LiveGameScreen({
                       <PlayerTimeRow
                         key={id}
                         player={team.roster.find((player) => player.id === id)!}
+                        dragBindings={benchDrag.bindings(id)}
+                        dragging={activeBenchDrag?.playerId === id}
                         goalCount={playerGoalCount(displayed, id)}
                         currentBenchTime={benchTimes[id]}
                         showCurrentBenchTime={
@@ -3253,6 +3275,29 @@ function LiveGameScreen({
         </Button>
       </div>
 
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {benchDrag.message}
+      </span>
+      {activeBenchDrag && draggedBenchPlayer && (
+        <>
+          <LiveBenchDropPitch
+            compact={activeBenchDrag.compact}
+            formation={formation}
+            assignments={game.assignments}
+            players={team.roster}
+            incoming={draggedBenchPlayer}
+            targetPositionId={activeBenchDrag.targetPositionId}
+            pitchRef={benchDrag.compactPitchRef}
+            fieldRef={benchDrag.pitchRef}
+            warning={benchDropNotice?.message}
+          />
+          <PlayerDragPreview
+            name={draggedBenchPlayer.name}
+            x={activeBenchDrag.x}
+            y={activeBenchDrag.y}
+          />
+        </>
+      )}
       {plannerOpen && (
         <SubstitutionPlanner
           game={displayed}
@@ -3543,6 +3588,8 @@ function LiveGameScreen({
 }
 
 function Pitch({
+  pitchRef,
+  benchDropTargetPositionId,
   formation,
   assignments,
   team,
@@ -3552,6 +3599,8 @@ function Pitch({
   onAddGuestAtPosition,
   onMovePlayer,
 }: {
+  pitchRef: RefObject<HTMLDivElement | null>;
+  benchDropTargetPositionId?: string | null;
   formation: ReturnType<typeof getFormation>;
   assignments: Record<string, string>;
   team: Team;
@@ -3561,7 +3610,6 @@ function Pitch({
   onAddGuestAtPosition: (positionId: string) => void;
   onMovePlayer: (playerId: string, positionId: string) => void;
 }) {
-  const pitchRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     playerId: string;
     pointerId: number;
@@ -3616,7 +3664,7 @@ function Pitch({
       window.removeEventListener("blur", cancelDrag);
       window.removeEventListener("keydown", escape);
     };
-  }, [cancelDrag]);
+  }, [cancelDrag, pitchRef]);
 
   const findDropTargetPositionId = (
     clientX: number,
@@ -3839,7 +3887,10 @@ function Pitch({
                 ? "dragging"
                 : ""
             } ${
-              dragState?.targetPositionId === position.id ? "drop-target" : ""
+              dragState?.targetPositionId === position.id ||
+              benchDropTargetPositionId === position.id
+                ? "drop-target"
+                : ""
             } ${swapConfirmed ? "swap-confirmed" : ""}`}
             key={position.id}
             style={style}
@@ -4964,6 +5015,8 @@ function FieldPlayerTimeRow({
 
 function PlayerTimeRow({
   player,
+  dragBindings,
+  dragging,
   goalCount,
   currentBenchTime,
   showCurrentBenchTime,
@@ -4976,6 +5029,8 @@ function PlayerTimeRow({
   onUnavailable,
 }: {
   player: Player;
+  dragBindings: ReturnType<LiveBenchDragBindings>;
+  dragging: boolean;
   goalCount: number;
   currentBenchTime: number;
   showCurrentBenchTime: boolean;
@@ -4997,7 +5052,9 @@ function PlayerTimeRow({
     >
       <button
         type="button"
-        className="player-time-main"
+        className={`player-time-main ${dragging ? "bench-source-dragging" : ""}`}
+        data-live-bench-player-id={player.id}
+        {...dragBindings}
         onClick={onQueue}
         aria-label={
           queued ? `Edit ${player.name} going in` : `Plan ${player.name} in`
@@ -5247,7 +5304,10 @@ function getKeeperChangeNotice(
   team: Team,
   pairs: SubstitutionPair[],
   timing: "next-rotation" | "now",
-  { warnAboutRest = true }: { warnAboutRest?: boolean } = {},
+  {
+    warnAboutRest = true,
+    compact = false,
+  }: { warnAboutRest?: boolean; compact?: boolean } = {},
 ) {
   const status = getGoalkeeperChangeStatus(
     game,
@@ -5264,9 +5324,11 @@ function getKeeperChangeNotice(
   if (status.early) {
     const target = formatDuration(status.targetSeconds);
     messages.push(
-      timing === "next-rotation"
-        ? `${outgoingName} would not complete their recommended ${target} turn in goal by the next rotation.`
-        : `Sending now would end ${outgoingName}'s turn before the recommended ${target}.`,
+      compact
+        ? "Early keeper change."
+        : timing === "next-rotation"
+          ? `${outgoingName} would not complete their recommended ${target} turn in goal by the next rotation.`
+          : `Sending now would end ${outgoingName}'s turn before the recommended ${target}.`,
     );
   }
   if (needsRest) {
