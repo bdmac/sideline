@@ -6220,10 +6220,10 @@ function QueuedSubstitutionSummary({
 
   return (
     <SidelineDialog
-      title={`Review substitutions (${pairs.length})`}
+      title={`${pairs.length} ${pairs.length === 1 ? "Substitution" : "Substitutions"}`}
       description={
         <>
-          Get these players ready. Nothing changes until you send them in.
+          Send 'em in now or you can send them in later. Your call coach.
           <span className="mobile-inline-instruction">
             {" "}
             Swipe a substitution to remove it.
@@ -6254,7 +6254,7 @@ function QueuedSubstitutionSummary({
             aria-describedby={keeperNotice ? keeperNoticeId : undefined}
             onClick={onExecute}
           >
-            Send 'em in
+            Send 'em now
           </Button>
         </>
       }
