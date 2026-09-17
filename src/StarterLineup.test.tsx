@@ -80,6 +80,19 @@ function pointer(element: HTMLElement, type: string, x: number, y: number) {
 
 describe("starter lineup interactions", () => {
   afterEach(() => vi.useRealTimers());
+  it("shows a decorative grip only on starting bench cards", () => {
+    setup();
+    const bench = screen.getByRole("button", {
+      name: "Place Reserve on the starting pitch",
+    });
+    const grip = bench.querySelector(".starter-bench-grip");
+    expect(grip).toHaveAttribute("aria-hidden", "true");
+    expect(grip).toHaveAttribute("focusable", "false");
+    expect(bench.querySelector("button")).toBeNull();
+    expect(document.querySelector(".starter-slot .bench-row-grip")).toBeNull();
+    fireEvent.click(bench);
+    expect(bench).toHaveAttribute("aria-pressed", "true");
+  });
   it.each(["no bench", "outfield bench", "keeper reserve"] as const)(
     "keeps outfield keeper options free of reserve labels and warnings with %s",
     (attendance) => {
@@ -414,7 +427,6 @@ describe("starter lineup interactions", () => {
               ? "Place Reserve on the starting pitch"
               : `Change Keeper at ${keeper.label}`,
         });
-        expect(document.querySelector(".starter-bench-grip")).toBeNull();
         const touchPointer = (type: string, x: number, y: number) => {
           const event = new MouseEvent(type, {
             bubbles: true,

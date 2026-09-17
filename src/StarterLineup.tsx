@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, GripVertical } from "lucide-react";
 import { PlayerDragPreview } from "./PlayerDragPreview";
 import { TOUCH_DRAG_HOLD_MS } from "./playerDrag";
 import type { Formation, Player } from "./types";
@@ -441,7 +441,13 @@ export function StarterLineup({
                   {...pointerHandlers(player.id)}
                   onClick={() => selectBenchPlayer(player.id)}
                 >
-                  {player.name}
+                  <GripVertical
+                    className="bench-row-grip starter-bench-grip"
+                    size={18}
+                    aria-hidden="true"
+                    focusable="false"
+                  />
+                  <span>{player.name}</span>
                 </button>
               </li>
             ))}

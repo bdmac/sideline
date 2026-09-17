@@ -3333,10 +3333,6 @@ function LiveGameScreen({
             setQueuedPlanOpen(false);
             setPlannerOpen(true);
           }}
-          onCancel={() => {
-            safeChange(() => cancelQueuedSubstitutions(game));
-            setQueuedPlanOpen(false);
-          }}
           onRemove={(pair) => {
             if (
               safeChange(() =>
@@ -4281,6 +4277,7 @@ function PlayerContextPanel({
     value: ReactNode;
     emphasis?: "warm";
     wide?: boolean;
+    action?: ReactNode;
   }>;
 }) {
   return (
@@ -4292,17 +4289,36 @@ function PlayerContextPanel({
       <dl className="player-context-grid">
         {items.map((item) => (
           <div
-            className={`player-context-item ${item.wide ? "wide" : ""}`}
+            className={`player-context-item ${item.wide ? "wide" : ""} ${item.action ? "has-action" : ""}`}
             key={item.label}
           >
             <dt>{item.label}</dt>
             <dd className={item.emphasis === "warm" ? "warm" : undefined}>
               {item.value}
+              {item.action && (
+                <span className="player-context-item-action">
+                  {item.action}
+                </span>
+              )}
             </dd>
           </div>
         ))}
       </dl>
     </Card>
+  );
+}
+
+function RemoveFromPlanAction({ onRemove }: { onRemove: () => void }) {
+  return (
+    <IconButton
+      className="icon-button remove-from-plan-action"
+      variant="invisible"
+      size="medium"
+      icon={Trash2}
+      aria-label="Remove from plan"
+      tooltipDirection="nw"
+      onClick={onRemove}
+    />
   );
 }
 
@@ -4313,7 +4329,7 @@ function SingleSubstitutionActions({
   canPlan,
   onPlan,
   onSendImmediately,
-  onRemove,
+  editing,
 }: {
   game: ActiveGame;
   team: Team;
@@ -4321,7 +4337,7 @@ function SingleSubstitutionActions({
   canPlan: boolean;
   onPlan: () => void;
   onSendImmediately: () => void;
-  onRemove?: () => void;
+  editing: boolean;
 }) {
   const noticeId = useId();
   const notice = getKeeperChangeNotice(game, team, pair ? [pair] : [], "now", {
@@ -4330,18 +4346,7 @@ function SingleSubstitutionActions({
   return (
     <div className="single-substitution-actions">
       <KeeperChangeNotice notice={notice} id={noticeId} />
-      <div className={`bench-picker-actions ${onRemove ? "editing" : ""}`}>
-        {onRemove && (
-          <IconButton
-            className="icon-button remove-from-plan-action"
-            variant="invisible"
-            size="medium"
-            icon={Trash2}
-            aria-label="Remove from plan"
-            tooltipDirection="ne"
-            onClick={onRemove}
-          />
-        )}
+      <div className="bench-picker-actions">
         <Button
           className="secondary-action"
           variant="default"
@@ -4351,7 +4356,7 @@ function SingleSubstitutionActions({
           aria-describedby={notice ? noticeId : undefined}
           onClick={onSendImmediately}
         >
-          Send immediately
+          Sub now
         </Button>
         <Button
           className="primary-action"
@@ -4361,7 +4366,7 @@ function SingleSubstitutionActions({
           disabled={!canPlan}
           onClick={onPlan}
         >
-          {onRemove ? "Update plan" : "Add to plan"}
+          {editing ? "Update plan" : "Add to plan"}
         </Button>
       </div>
     </div>
@@ -4458,7 +4463,7 @@ function BenchSubstitutionPicker({
           )}
           onPlan={() => onSelect(selectedOutPlayerId)}
           onSendImmediately={() => onSendImmediately(selectedOutPlayerId)}
-          onRemove={currentPair ? onRemove : undefined}
+          editing={Boolean(currentPair)}
         />
       }
       footerClassName="bench-picker-footer"
@@ -4498,6 +4503,9 @@ function BenchSubstitutionPicker({
                   } for ${playerName(team, selectedOutPlayerId)}`,
                   emphasis: "warm" as const,
                   wide: true,
+                  action: currentPair ? (
+                    <RemoveFromPlanAction onRemove={onRemove} />
+                  ) : undefined,
                 },
               ]
             : []),
@@ -4676,7 +4684,7 @@ function FieldSubstitutionPicker({
           )}
           onPlan={() => onSelect(selectedInPlayerId)}
           onSendImmediately={() => onSendImmediately(selectedInPlayerId)}
-          onRemove={currentPair ? onRemove : undefined}
+          editing={Boolean(currentPair)}
         />
       }
       footerClassName="bench-picker-footer"
@@ -4714,6 +4722,9 @@ function FieldSubstitutionPicker({
                   value: `Coming out for ${playerName(team, selectedInPlayerId)}`,
                   emphasis: "warm" as const,
                   wide: true,
+                  action: currentPair ? (
+                    <RemoveFromPlanAction onRemove={onRemove} />
+                  ) : undefined,
                 },
               ]
             : []),
@@ -6191,7 +6202,6 @@ function QueuedSubstitutionSummary({
   errors,
   onClose,
   onEdit,
-  onCancel,
   onRemove,
   onExecute,
 }: {
@@ -6202,27 +6212,11 @@ function QueuedSubstitutionSummary({
   errors: string[];
   onClose: () => void;
   onEdit: () => void;
-  onCancel: () => void;
   onRemove: (pair: SubstitutionPair) => void;
   onExecute: () => void;
 }) {
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const keeperNoticeId = useId();
   const keeperNotice = getKeeperChangeNotice(game, team, pairs, "now");
-
-  if (deleteConfirm) {
-    return (
-      <ConfirmSheet
-        title="Delete substitution plan?"
-        body="This removes every ready swap. Players and playing time will not change."
-        cancelLabel="Keep plan"
-        confirmLabel="Delete plan"
-        confirmIcon={<Trash2 size={18} aria-hidden="true" />}
-        onCancel={() => setDeleteConfirm(false)}
-        onConfirm={onCancel}
-      />
-    );
-  }
 
   return (
     <SidelineDialog
@@ -6250,15 +6244,6 @@ function QueuedSubstitutionSummary({
             onClick={onEdit}
           >
             Edit plan
-          </Button>
-          <Button
-            className="danger-action delete-plan-action"
-            variant="danger"
-            size="large"
-            leadingVisual={Trash2}
-            onClick={() => setDeleteConfirm(true)}
-          >
-            Delete plan
           </Button>
           <Button
             className="primary-action"

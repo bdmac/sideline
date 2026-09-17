@@ -1539,7 +1539,11 @@ select:hover {
 }
 
 .starter-bench-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   padding: 0.5rem 0.7rem;
+  text-align: left;
   overflow-wrap: anywhere;
   touch-action: pan-y;
   cursor: grab;
@@ -2698,6 +2702,7 @@ select:hover {
 }
 
 .bench-row-grip {
+  flex: none;
   justify-self: center;
   color: var(--ink-soft);
   pointer-events: none;
@@ -4041,9 +4046,7 @@ select:hover {
 
 .queued-plan-actions {
   display: grid;
-  grid-template-columns:
-    minmax(0, 0.9fr) minmax(0, 1fr)
-    minmax(0, 1.3fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.6rem;
 }
 
@@ -4080,6 +4083,24 @@ select:hover {
 
 .player-context-item.wide {
   grid-column: 1 / -1;
+}
+
+.player-context-item.has-action {
+  position: relative;
+  min-height: 44px;
+  padding-inline-end: 3.25rem;
+}
+
+.player-context-item-action {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.player-context-item-action .remove-from-plan-action {
+  border-color: transparent;
+  color: var(--danger);
 }
 
 .player-context-panel dt {
@@ -4334,21 +4355,12 @@ select:hover {
 .bench-picker-actions {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--line);
-}
-
-.bench-picker-actions.editing {
-  grid-template-columns: 44px minmax(0, 1.3fr) minmax(0, 1fr);
-}
-
-.bench-picker-actions .remove-from-plan-action {
-  border-color: transparent;
-  color: var(--danger);
 }
 
 .bench-picker-actions button {
@@ -4364,10 +4376,6 @@ select:hover {
 
   .bench-picker-actions [data-component="text"] {
     font-size: 0.875rem;
-  }
-
-  .bench-picker-actions [data-component="leadingVisual"] {
-    display: none;
   }
 }
 
@@ -5181,7 +5189,7 @@ select:hover {
 
   .queued-plan-actions button {
     padding-inline: 0.4rem;
-    font-size: 0.72rem;
+    font-size: 0.875rem;
   }
 
   .queued-plan-actions .primary-action {

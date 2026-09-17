@@ -3976,7 +3976,7 @@ describe("Sideline app", () => {
     ]);
   });
 
-  it("keeps a ready plan accessible from the live game until cancelled", () => {
+  it("keeps a ready plan accessible until its final swap is removed", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
@@ -4005,17 +4005,33 @@ describe("Sideline app", () => {
         name: "Review plan",
       }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Delete plan" }));
-
-    const confirmation = screen.getByRole("alertdialog", {
-      name: "Delete substitution plan?",
-    });
-    expect(screen.getByText("3 substitutions ready")).toBeInTheDocument();
-    fireEvent.click(
-      within(confirmation).getByRole("button", { name: "Delete plan" }),
+    expect(
+      screen.queryByRole("button", { name: "Delete plan" }),
+    ).not.toBeInTheDocument();
+    const before = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+    for (const count of [3, 2, 1]) {
+      const review = screen.getByRole("dialog", {
+        name: `Review substitutions (${count})`,
+      });
+      fireEvent.click(
+        within(review).getAllByRole("button", {
+          name: /^Remove .* substitution$/,
+        })[0],
+      );
+    }
+    const after = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+    expect(after.activeGame?.queuedSubstitutions).toBeUndefined();
+    expect(after.activeGame?.assignments).toEqual(
+      before.activeGame?.assignments,
     );
-
-    expect(screen.queryByText("4 substitutions ready")).not.toBeInTheDocument();
+    expect(after.activeGame?.totals).toEqual(before.activeGame?.totals);
+    expect(after.activeGame?.history).toEqual(before.activeGame?.history);
+    expect(
+      screen.queryByRole("dialog", { name: /Review substitutions/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Ready substitutions"),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Plan subs" }),
     ).toBeInTheDocument();
@@ -4133,8 +4149,11 @@ describe("Sideline app", () => {
       );
       const picker = screen.getByRole("dialog", { name: /Plan (in|out)/ });
       const send = within(picker).getByRole("button", {
-        name: "Send immediately",
+        name: "Sub now",
       });
+      expect(
+        within(picker).queryByRole("button", { name: "Remove from plan" }),
+      ).not.toBeInTheDocument();
       expect(send).toBeDisabled();
       expect(send).toHaveAttribute("data-variant", "default");
       fireEvent.click(
@@ -4145,6 +4164,9 @@ describe("Sideline app", () => {
         }),
       );
       expect(send).toBeEnabled();
+      expect(
+        within(picker).queryByRole("button", { name: "Remove from plan" }),
+      ).not.toBeInTheDocument();
       fireEvent.click(send);
       const result = screen.getByRole("dialog", { name: "Players swapped" });
       expect(result).toHaveTextContent("No plan was created.");
@@ -4170,6 +4192,66 @@ describe("Sideline app", () => {
       const undone = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
       expect(undone.activeGame?.assignments).toEqual(game.assignments);
       expect(undone.activeGame?.queuedSubstitutions).toBeUndefined();
+    },
+  );
+
+  it.each(["bench", "field"] as const)(
+    "removes only the existing swap from the %s picker's next-rotation context",
+    (direction) => {
+      const state = structuredClone(INITIAL_STATE);
+      const team = state.teams.u8;
+      const game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((player) => player.id),
+        40,
+        1_000,
+      );
+      const pairs = suggestSubstitutions(game, 3, team);
+      state.activeGame = queueSubstitutions(game, pairs);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      const pair = pairs[0];
+      const player = team.roster.find(
+        (item) =>
+          item.id ===
+          (direction === "bench" ? pair.inPlayerId : pair.outPlayerId),
+      )!;
+      if (direction === "field") {
+        fireEvent.click(screen.getByRole("tab", { name: /On field/ }));
+      }
+      fireEvent.click(
+        screen.getByRole("button", {
+          name:
+            direction === "bench"
+              ? `Edit ${player.name} going in`
+              : `Edit planned substitution for ${player.name} out`,
+        }),
+      );
+      const picker = screen.getByRole("dialog", { name: /Plan (in|out)/ });
+      const remove = within(picker).getByRole("button", {
+        name: "Remove from plan",
+      });
+      expect(remove.closest(".player-context-item")).toHaveTextContent(
+        "Next rotation",
+      );
+      expect(remove.closest(".bench-picker-footer")).toBeNull();
+      expect(
+        within(picker)
+          .getByRole("button", { name: "Sub now" })
+          .querySelector(".lucide-arrow-right-left"),
+      ).toBeInTheDocument();
+      expect(
+        within(picker)
+          .getByRole("button", { name: "Update plan" })
+          .querySelector(".lucide-check"),
+      ).toBeInTheDocument();
+      fireEvent.click(remove);
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+      expect(saved.activeGame?.queuedSubstitutions).toEqual(pairs.slice(1));
+      expect(saved.activeGame?.assignments).toEqual(game.assignments);
+      expect(saved.activeGame?.history).toEqual(game.history);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     },
   );
 
@@ -4212,7 +4294,7 @@ describe("Sideline app", () => {
         within(picker).getByRole("button", { name: "Update plan" }),
       ).toBeDisabled();
       const send = within(picker).getByRole("button", {
-        name: "Send immediately",
+        name: "Sub now",
       });
       expect(send).toBeEnabled();
       fireEvent.click(send);
@@ -4241,7 +4323,7 @@ describe("Sideline app", () => {
   );
 
   it.each(["bench", "field"] as const)(
-    "shows current-time keeper cautions for Send immediately in the %s picker",
+    "shows current-time keeper cautions for Sub now in the %s picker",
     (direction) => {
       const state = structuredClone(INITIAL_STATE);
       const team = state.teams.u8;
@@ -4279,7 +4361,7 @@ describe("Sideline app", () => {
         }),
       );
       const send = within(picker).getByRole("button", {
-        name: "Send immediately",
+        name: "Sub now",
       });
       expect(send).toHaveAccessibleDescription(/Sending now would end/);
       expect(picker).not.toHaveTextContent("by the next rotation");
@@ -4364,7 +4446,7 @@ describe("Sideline app", () => {
       expect(picker).not.toHaveTextContent("Keeper needs more rest");
       expect(picker).not.toHaveTextContent("recommended 15:00 bench turn");
       expect(
-        within(picker).getByRole("button", { name: "Send immediately" }),
+        within(picker).getByRole("button", { name: "Sub now" }),
       ).toHaveAccessibleDescription(
         /Aaron does not typically play goalkeeper\./,
       );
