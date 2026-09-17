@@ -5887,6 +5887,71 @@ describe("Sideline app", () => {
     },
   );
 
+  it.each([
+    ["u8", "in"],
+    ["u8", "out"],
+    ["u12", "in"],
+    ["u12", "out"],
+  ] as const)(
+    "separates already scheduled choices without disabling them in %s Plan %s",
+    (teamId, direction) => {
+      const state = structuredClone(INITIAL_STATE);
+      const team = state.teams[teamId];
+      const game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+      );
+      const [positionId, outPlayerId] = Object.entries(game.assignments)[0];
+      const inPlayerId = game.benchIds[0];
+      game.queuedSubstitutions = [{ positionId, outPlayerId, inPlayerId }];
+      state.activeGame = game;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      const targetId =
+        direction === "in"
+          ? game.benchIds[1]
+          : Object.values(game.assignments)[1];
+      const target = team.roster.find((player) => player.id === targetId)!;
+      fireEvent.click(
+        screen.getByRole("button", {
+          name:
+            direction === "in"
+              ? `Plan ${target.name} in`
+              : `Plan substitution for ${target.name}`,
+        }),
+      );
+      const picker = screen.getByRole("dialog", {
+        name: `${target.name} #${target.number} Plan ${direction}`,
+      });
+      const heading = within(picker).getByRole("heading", {
+        name: direction === "in" ? "Already going out" : "Already going in",
+      });
+      const scheduledId = direction === "in" ? outPlayerId : inPlayerId;
+      const scheduled = team.roster.find(
+        (player) => player.id === scheduledId,
+      )!;
+      const choice = within(picker).getByRole("button", {
+        name: new RegExp(`^${scheduled.name} #`),
+      });
+      expect(heading.nextElementSibling).toBe(choice);
+      expect(heading.previousElementSibling?.tagName).toBe("BUTTON");
+      expect(choice).toBeEnabled();
+      expect(choice).toHaveTextContent(
+        direction === "in" ? "Scheduled out for" : "Scheduled in for",
+      );
+      const before = localStorage.getItem(STORAGE_KEY);
+      fireEvent.click(choice);
+      expect(choice).toHaveAttribute("aria-pressed", "true");
+      expect(
+        within(picker).getByRole("button", { name: "Add to plan" }),
+      ).toBeEnabled();
+      expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
+    },
+  );
+
   it("queues an on-field player out by choosing an incoming bench player", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
@@ -5899,6 +5964,9 @@ describe("Sideline app", () => {
     expect(simonButton.querySelector("button, svg")).not.toBeInTheDocument();
     fireEvent.click(within(simonButton).getByText("Simon"));
     const picker = screen.getByRole("dialog", { name: /Simon #10 Plan out/ });
+    expect(
+      within(picker).queryByRole("heading", { name: "Already going in" }),
+    ).not.toBeInTheDocument();
     const dylanChoice = within(picker).getByRole("button", { name: /Dylan/ });
     expect(dylanChoice).toHaveTextContent(
       "PrefersDEF · MIDBench0:00PlayedNot played yet",
@@ -5938,6 +6006,11 @@ describe("Sideline app", () => {
     const editPicker = screen.getByRole("dialog", {
       name: /Simon #10 Plan out/,
     });
+    expect(
+      within(editPicker).queryByRole("heading", {
+        name: "Already going in",
+      }),
+    ).not.toBeInTheDocument();
     expect(editPicker).toHaveTextContent(
       "Next rotationScheduled out for Dylan",
     );

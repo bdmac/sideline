@@ -6,6 +6,8 @@ Plan-in player details use the position scan label in **Next rotation** (for exa
 
 Focused planning cards align their facts: **Positions** (Plan in) or **Current Position** (Plan out) leads at the top left, with **Sitting now** or **Playing now** directly below. **Played** and **Goals** occupy the right column. DOM order follows that same row-by-row reading order.
 
+Focused planning lists separate players committed to another pairing with a centered **Already going in** heading for bench choices (Plan out), or **Already going out** for field choices (Plan in), on a neutral wash and a strong top rule. This makes the existing scheduled-last ordering visible before the coach scans preference badges. Pairing details stay in each row; rows retain full contrast, normal selection behavior, and keyboard access. The heading is absent when no choices are committed elsewhere, and the pairing currently being edited is not classified as another commitment.
+
 Sideline is a calm magnetic tactics board translated into an operational match sheet. It deliberately avoids the generic analytics dashboard: the primary hierarchy is team identity, game state, pitch, bench, and the next action.
 
 The physical scene is a coach using a phone outdoors in daylight or under field lights, often one-handed and under time pressure. The interface therefore uses high-contrast surfaces, explicit labels, large controls, and restrained color. Light mode remains the daylight-first default; a persistent header toggle switches to an intentionally inverted night palette on the local device.

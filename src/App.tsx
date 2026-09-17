@@ -46,6 +46,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  Fragment,
   type ElementType,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -4485,67 +4486,77 @@ function BenchSubstitutionPicker({
 
       <div className="bench-replacement-list">
         {choices.map(
-          ({ position, outPlayerId, preferenceIndex, plannedIncomingName }) => {
+          (
+            { position, outPlayerId, preferenceIndex, plannedIncomingName },
+            index,
+          ) => {
             const selected = selectedOutPlayerId === outPlayerId;
             return (
-              <button
-                className={`bench-position-choice ${
-                  selected ? "selected" : ""
-                }`}
-                type="button"
-                key={outPlayerId}
-                aria-pressed={selected}
-                onClick={() => setSelectedOutPlayerId(outPlayerId)}
-              >
-                <span className="replacement-player-summary">
-                  <GoalMarkedPlayerName
-                    label={playerName(team, outPlayerId)}
-                    number={
-                      team.roster.find((player) => player.id === outPlayerId)
-                        ?.number
-                    }
-                    goalCount={playerGoalCount(game, outPlayerId)}
-                  />
-                </span>
-                <span className={preferenceFitClassName(preferenceIndex)}>
-                  {selected && (
-                    <Check
-                      className="replacement-selected-icon"
-                      size={15}
-                      aria-hidden="true"
-                    />
+              <Fragment key={outPlayerId}>
+                {plannedIncomingName &&
+                  !choices[index - 1]?.plannedIncomingName && (
+                    <h3 className="scheduled-choices-heading">
+                      Already going out
+                    </h3>
                   )}
-                  <span>{preferenceFitLabel(preferenceIndex)}</span>
-                </span>
-                <span className="replacement-player-position">
-                  {position.label}
-                </span>
-                <span className="replacement-player-times">
-                  <span>
-                    <span>Playing</span>
-                    <strong>
-                      {formatPlayerDuration(
-                        getCurrentFieldSeconds(game, outPlayerId),
-                      )}
-                    </strong>
+                <button
+                  className={`bench-position-choice ${
+                    selected ? "selected" : ""
+                  }`}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setSelectedOutPlayerId(outPlayerId)}
+                >
+                  <span className="replacement-player-summary">
+                    <GoalMarkedPlayerName
+                      label={playerName(team, outPlayerId)}
+                      number={
+                        team.roster.find((player) => player.id === outPlayerId)
+                          ?.number
+                      }
+                      goalCount={playerGoalCount(game, outPlayerId)}
+                    />
                   </span>
-                  <span>
-                    <span>Total</span>
-                    <strong>
-                      {formatPlayerDuration(
-                        game.totals[outPlayerId]?.fieldSeconds ?? 0,
-                        "Not played yet",
-                      )}
-                    </strong>
+                  <span className={preferenceFitClassName(preferenceIndex)}>
+                    {selected && (
+                      <Check
+                        className="replacement-selected-icon"
+                        size={15}
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span>{preferenceFitLabel(preferenceIndex)}</span>
                   </span>
-                </span>
-                {plannedIncomingName && (
-                  <span className="replacement-player-status outgoing-status">
-                    <ArrowRightLeft size={13} aria-hidden="true" />
-                    Scheduled out for {plannedIncomingName}
+                  <span className="replacement-player-position">
+                    {position.label}
                   </span>
-                )}
-              </button>
+                  <span className="replacement-player-times">
+                    <span>
+                      <span>Playing</span>
+                      <strong>
+                        {formatPlayerDuration(
+                          getCurrentFieldSeconds(game, outPlayerId),
+                        )}
+                      </strong>
+                    </span>
+                    <span>
+                      <span>Total</span>
+                      <strong>
+                        {formatPlayerDuration(
+                          game.totals[outPlayerId]?.fieldSeconds ?? 0,
+                          "Not played yet",
+                        )}
+                      </strong>
+                    </span>
+                  </span>
+                  {plannedIncomingName && (
+                    <span className="replacement-player-status outgoing-status">
+                      <ArrowRightLeft size={13} aria-hidden="true" />
+                      Scheduled out for {plannedIncomingName}
+                    </span>
+                  )}
+                </button>
+              </Fragment>
             );
           },
         )}
@@ -4710,70 +4721,80 @@ function FieldSubstitutionPicker({
           </p>
         )}
         {choices.map(
-          ({ player: incoming, preferenceIndex, plannedOutgoingName }) => {
+          (
+            { player: incoming, preferenceIndex, plannedOutgoingName },
+            index,
+          ) => {
             const selected = selectedInPlayerId === incoming.id;
             return (
-              <button
-                className={selected ? "selected" : ""}
-                type="button"
-                key={incoming.id}
-                aria-pressed={selected}
-                onClick={() => setSelectedInPlayerId(incoming.id)}
-              >
-                <span className="replacement-player-summary">
-                  <GoalMarkedPlayerName
-                    label={incoming.name}
-                    number={incoming.number}
-                    goalCount={playerGoalCount(game, incoming.id)}
-                  />
-                </span>
-                <span className={preferenceFitClassName(preferenceIndex)}>
-                  {selected && (
-                    <Check
-                      className="replacement-selected-icon"
-                      size={15}
-                      aria-hidden="true"
-                    />
+              <Fragment key={incoming.id}>
+                {plannedOutgoingName &&
+                  !choices[index - 1]?.plannedOutgoingName && (
+                    <h3 className="scheduled-choices-heading">
+                      Already going in
+                    </h3>
                   )}
-                  <span>{preferenceFitLabel(preferenceIndex)}</span>
-                </span>
-                <span
-                  className="replacement-player-preferences"
-                  aria-label={`Preferred roles: ${incoming.preferredRoles
-                    .map(preferredRoleLabel)
-                    .join(" and ")}`}
+                <button
+                  className={selected ? "selected" : ""}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setSelectedInPlayerId(incoming.id)}
                 >
-                  <span>Prefers</span>
-                  <strong>
-                    {compactPreferredRolesLabel(incoming.preferredRoles)}
-                  </strong>
-                </span>
-                <span className="replacement-player-times">
-                  <span>
-                    <span>Bench</span>
+                  <span className="replacement-player-summary">
+                    <GoalMarkedPlayerName
+                      label={incoming.name}
+                      number={incoming.number}
+                      goalCount={playerGoalCount(game, incoming.id)}
+                    />
+                  </span>
+                  <span className={preferenceFitClassName(preferenceIndex)}>
+                    {selected && (
+                      <Check
+                        className="replacement-selected-icon"
+                        size={15}
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span>{preferenceFitLabel(preferenceIndex)}</span>
+                  </span>
+                  <span
+                    className="replacement-player-preferences"
+                    aria-label={`Preferred roles: ${incoming.preferredRoles
+                      .map(preferredRoleLabel)
+                      .join(" and ")}`}
+                  >
+                    <span>Prefers</span>
                     <strong>
-                      {formatPlayerDuration(
-                        getCurrentBenchSeconds(game, incoming.id),
-                      )}
+                      {compactPreferredRolesLabel(incoming.preferredRoles)}
                     </strong>
                   </span>
-                  <span>
-                    <span>Played</span>
-                    <strong>
-                      {formatPlayerDuration(
-                        game.totals[incoming.id]?.fieldSeconds ?? 0,
-                        "Not played yet",
-                      )}
-                    </strong>
+                  <span className="replacement-player-times">
+                    <span>
+                      <span>Bench</span>
+                      <strong>
+                        {formatPlayerDuration(
+                          getCurrentBenchSeconds(game, incoming.id),
+                        )}
+                      </strong>
+                    </span>
+                    <span>
+                      <span>Played</span>
+                      <strong>
+                        {formatPlayerDuration(
+                          game.totals[incoming.id]?.fieldSeconds ?? 0,
+                          "Not played yet",
+                        )}
+                      </strong>
+                    </span>
                   </span>
-                </span>
-                {plannedOutgoingName && (
-                  <span className="replacement-player-status incoming-status">
-                    <ArrowRightLeft size={13} aria-hidden="true" />
-                    Scheduled in for {plannedOutgoingName}
-                  </span>
-                )}
-              </button>
+                  {plannedOutgoingName && (
+                    <span className="replacement-player-status incoming-status">
+                      <ArrowRightLeft size={13} aria-hidden="true" />
+                      Scheduled in for {plannedOutgoingName}
+                    </span>
+                  )}
+                </button>
+              </Fragment>
             );
           },
         )}

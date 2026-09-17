@@ -4127,6 +4127,18 @@ select:hover {
   border-bottom: 1px solid var(--line);
 }
 
+.scheduled-choices-heading {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border-top: 2px solid var(--rule-strong);
+  border-bottom: 1px solid var(--line);
+  background: var(--wash);
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 850;
+  text-align: center;
+}
+
 .bench-replacement-list button {
   width: 100%;
   min-height: 62px;
