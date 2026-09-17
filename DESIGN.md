@@ -2,6 +2,10 @@
 
 ## Direction
 
+Plan-in player details use the position scan label in **Next rotation** (for example, **Center Back** or **Left Mid**) rather than the shortcode. This applies to both existing pairings and selection previews; compact live bench statuses retain their shortcodes.
+
+Focused planning cards align their facts: **Positions** (Plan in) or **Current Position** (Plan out) leads at the top left, with **Sitting now** or **Playing now** directly below. **Played** and **Goals** occupy the right column. DOM order follows that same row-by-row reading order.
+
 Sideline is a calm magnetic tactics board translated into an operational match sheet. It deliberately avoids the generic analytics dashboard: the primary hierarchy is team identity, game state, pitch, bench, and the next action.
 
 The physical scene is a coach using a phone outdoors in daylight or under field lights, often one-handed and under time pressure. The interface therefore uses high-contrast surfaces, explicit labels, large controls, and restrained color. Light mode remains the daylight-first default; a persistent header toggle switches to an intentionally inverted night palette on the local device.

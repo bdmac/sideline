@@ -2477,6 +2477,11 @@ describe("Sideline app", () => {
       expect(screen.getAllByRole("dialog")).toHaveLength(1);
       expect(picker).not.toHaveClass("sideline-dialog-bodyless");
       expect(
+        Array.from(picker.querySelectorAll(".player-context-grid dt")).map(
+          (label) => label.textContent,
+        ),
+      ).toEqual(["Current Position", "Played", "Playing now", "Goals"]);
+      expect(
         within(picker)
           .getByRole("heading", { name: title })
           .querySelector(".soccer-ball-icon"),
@@ -4582,8 +4587,13 @@ describe("Sideline app", () => {
     ).not.toBeInTheDocument();
     expect(firstPicker).toHaveTextContent("Sitting now0:00");
     expect(firstPicker).toHaveTextContent(
-      "PlayedNot played yetPositionsDefense · Midfield",
+      "PositionsDefense · MidfieldPlayedNot played yetSitting now0:00",
     );
+    expect(
+      Array.from(firstPicker.querySelectorAll(".player-context-grid dt")).map(
+        (label) => label.textContent,
+      ),
+    ).toEqual(["Positions", "Played", "Sitting now", "Goals"]);
     expect(firstPicker).toHaveTextContent("GoalsNo goals… yet!");
     expect(
       within(firstPicker).getByRole("button", {
@@ -4674,7 +4684,7 @@ describe("Sideline app", () => {
       name: "Dylan #4 Plan in",
     });
     expect(editPicker).toHaveTextContent(
-      "Next rotationScheduled in at CB for Simon",
+      "Next rotationScheduled in at Center Back for Simon",
     );
     const selectedOutgoing = within(editPicker).getByRole("button", {
       name: /Simon #10.*Center Back/,
@@ -4689,7 +4699,7 @@ describe("Sideline app", () => {
       }),
     );
     expect(editPicker).toHaveTextContent(
-      "Next rotationScheduled in at LM for Ollie",
+      "Next rotationScheduled in at Left Mid for Ollie",
     );
     expect(
       screen.getByText("Scheduled in at CB for Simon"),

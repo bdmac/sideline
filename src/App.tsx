@@ -4442,8 +4442,8 @@ function BenchSubstitutionPicker({
       <PlayerContextPanel
         items={[
           {
-            label: "Sitting now",
-            value: formatPlayerDuration(getCurrentBenchSeconds(game, playerId)),
+            label: "Positions",
+            value: player.preferredRoles.map(preferredRoleLabel).join(" · "),
           },
           {
             label: "Played",
@@ -4453,8 +4453,8 @@ function BenchSubstitutionPicker({
             ),
           },
           {
-            label: "Positions",
-            value: player.preferredRoles.map(preferredRoleLabel).join(" · "),
+            label: "Sitting now",
+            value: formatPlayerDuration(getCurrentBenchSeconds(game, playerId)),
           },
           {
             label: "Goals",
@@ -4470,7 +4470,7 @@ function BenchSubstitutionPicker({
                 {
                   label: "Next rotation",
                   value: `Scheduled in at ${
-                    selectedPosition?.shortLabel ?? selectedPositionEntry?.[0]
+                    selectedPosition?.mediumLabel ?? selectedPositionEntry?.[0]
                   } for ${playerName(team, selectedOutPlayerId)}`,
                   emphasis: "warm" as const,
                   wide: true,
@@ -4663,7 +4663,7 @@ function FieldSubstitutionPicker({
       <PlayerContextPanel
         items={[
           {
-            label: "Position",
+            label: "Current Position",
             value: position.label,
           },
           {
