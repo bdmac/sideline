@@ -4233,6 +4233,14 @@ describe("Sideline app", () => {
         }),
       );
       const picker = screen.getByRole("dialog", { name: /Plan (in|out)/ });
+      const position = getFormation(game.formationId).positions.find(
+        (item) => item.id === positionId,
+      )!;
+      expect(picker).toHaveAccessibleDescription(
+        direction === "bench"
+          ? `Who's ${incoming.name} going in for?`
+          : `Who's coming on from the bench at ${position.label}?`,
+      );
       const send = within(picker).getByRole("button", {
         name: "Sub now",
       });

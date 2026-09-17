@@ -4412,7 +4412,7 @@ function BenchSubstitutionPicker({
   return (
     <SidelineDialog
       title={playerDialogTitle(team, playerId, "Plan in")}
-      description="Choose the player they will replace."
+      description={`Who's ${player.name} going in for?`}
       className="compact-sheet bench-substitution-sheet"
       onClose={onClose}
       footer={
@@ -4633,7 +4633,7 @@ function FieldSubstitutionPicker({
   return (
     <SidelineDialog
       title={playerDialogTitle(team, playerId, "Plan out")}
-      description={`Choose who will enter at ${position.label}.`}
+      description={`Who's coming on from the bench at ${position.label}?`}
       className="compact-sheet bench-substitution-sheet"
       onClose={onClose}
       footer={
