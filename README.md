@@ -42,7 +42,7 @@ npm run build
 3. Select a formation, assign starters, and confirm the bench. U8 games can use quarters or halves; U12 uses its fixed two-half format.
 4. Start or pause the clock from the sticky game controls.
 5. Open **Plan subs**, choose the number of swaps, review or override the fair suggestions, and confirm the OUT/IN checklist.
-6. Use **Positions** to swap field positions without recording a substitution, or mark a player unavailable.
+6. Tap a live pitch card or an **On field** player row to open that player's **Plan out** picker directly. Use the **On field** row's **Change positions** or **Take out of game** controls for other actions; dragging between pitch positions still changes positions without recording a substitution.
 7. Undo the latest confirmed substitution/unavailable event when needed.
 8. End the game only after confirming the destructive action.
 
@@ -55,6 +55,8 @@ U8 also remembers one game's kickoff lineup on this device. Automatic starter se
 The header settings menu can keep the screen awake during an active visible game and play a chime plus supported vibration when a substitution reminder becomes due. Both features are optional and depend on browser/device capabilities.
 
 Drag a live bench player onto a field player to send that substitution immediately. On touchscreens, hold briefly (125ms) before dragging; phones show a temporary pitch so you do not have to scroll while holding a player. Release away from a player to cancel. Tapping a row still opens the keyboard-accessible planner, and Bench / On field tabs use taps rather than swipes.
+
+With no bench players available, tapping a pitch card explains that a player must be added or returned before making a substitution. Position changes and player removal remain available in **On field**, and pitch dragging still works.
 
 Immediate swaps and taking a player out leave the team rotation timer running toward its existing deadline. Only sending a planned rotation, including a partial batch, restarts that interval. Each player's playing and bench times still update for every change.
 

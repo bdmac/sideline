@@ -2122,10 +2122,6 @@ function LiveGameScreen({
   const [fieldQueuePlayerId, setFieldQueuePlayerId] = useState<string | null>(
     null,
   );
-  const [fieldActions, setFieldActions] = useState<{
-    playerId: string;
-    includeQueue: boolean;
-  } | null>(null);
   const [rosterView, setRosterView] = useState<"field" | "bench">("bench");
   const [confirmedPairs, setConfirmedPairs] = useState<
     SubstitutionPair[] | null
@@ -2976,7 +2972,8 @@ function LiveGameScreen({
             <div>
               <h1>On the field</h1>
               <small className="section-hint">
-                Tap a player for actions, or drag them onto another position.
+                Tap a player to plan a substitution, or drag them onto another
+                position.
               </small>
             </div>
             <span>
@@ -3000,12 +2997,7 @@ function LiveGameScreen({
               team={team}
               game={displayed}
               showPlayerTimes={showFieldPlayerTimes}
-              onEditPlayer={(playerId) =>
-                setFieldActions({
-                  playerId,
-                  includeQueue: game.benchIds.length > 0,
-                })
-              }
+              onPlanSubstitution={setFieldQueuePlayerId}
               onAddGuestAtPosition={setGuestPositionId}
               onMovePlayer={(playerId, positionId) =>
                 safeChange(() =>
@@ -3484,27 +3476,6 @@ function LiveGameScreen({
           }}
         />
       )}
-      {fieldActions && (
-        <FieldPlayerActionsSheet
-          playerId={fieldActions.playerId}
-          game={displayed}
-          team={team}
-          includeQueue={fieldActions.includeQueue}
-          onClose={() => setFieldActions(null)}
-          onQueue={() => {
-            setFieldQueuePlayerId(fieldActions.playerId);
-            setFieldActions(null);
-          }}
-          onChangePosition={() => {
-            setPositionEditorPlayerId(fieldActions.playerId);
-            setFieldActions(null);
-          }}
-          onUnavailable={() => {
-            setUnavailableConfirmPlayerId(fieldActions.playerId);
-            setFieldActions(null);
-          }}
-        />
-      )}
       {unavailableConfirmPlayerId && (
         <ConfirmSheet
           title={`Take ${playerName(team, unavailableConfirmPlayerId)} out of game?`}
@@ -3600,7 +3571,7 @@ function Pitch({
   team,
   game,
   showPlayerTimes,
-  onEditPlayer,
+  onPlanSubstitution,
   onAddGuestAtPosition,
   onMovePlayer,
 }: {
@@ -3611,7 +3582,7 @@ function Pitch({
   team: Team;
   game: ActiveGame;
   showPlayerTimes: boolean;
-  onEditPlayer: (playerId: string) => void;
+  onPlanSubstitution: (playerId: string) => void;
   onAddGuestAtPosition: (positionId: string) => void;
   onMovePlayer: (playerId: string, positionId: string) => void;
 }) {
@@ -3900,15 +3871,15 @@ function Pitch({
             key={position.id}
             style={style}
             data-position-id={position.id}
-            aria-label={`Open actions for ${player.name}${
+            aria-label={`Plan substitution for ${player.name}${
               plannedIncomingName
                 ? `. Coming out for ${plannedIncomingName}`
                 : ""
             }`}
             title={
               plannedIncomingName
-                ? `Coming out for ${plannedIncomingName}. Tap for actions or drag to another position`
-                : "Tap for actions or drag to another position"
+                ? `Coming out for ${plannedIncomingName}. Tap to edit the substitution or drag to another position`
+                : "Tap to plan a substitution or drag to another position"
             }
             onPointerDown={(event) => {
               if (
@@ -3957,7 +3928,7 @@ function Pitch({
                 suppressClickRef.current = false;
                 return;
               }
-              onEditPlayer(player.id);
+              onPlanSubstitution(player.id);
             }}
           >
             {content}
@@ -4732,6 +4703,12 @@ function FieldSubstitutionPicker({
       />
 
       <div className="bench-replacement-list">
+        {choices.length === 0 && (
+          <p className="empty-copy">
+            No bench players available. Add or return a player to make a
+            substitution.
+          </p>
+        )}
         {choices.map(
           ({ player: incoming, preferenceIndex, plannedOutgoingName }) => {
             const selected = selectedInPlayerId === incoming.id;
@@ -4800,130 +4777,6 @@ function FieldSubstitutionPicker({
             );
           },
         )}
-      </div>
-    </SidelineDialog>
-  );
-}
-
-function FieldPlayerActionsSheet({
-  playerId,
-  game,
-  team,
-  includeQueue,
-  onClose,
-  onQueue,
-  onChangePosition,
-  onUnavailable,
-}: {
-  playerId: string;
-  game: ActiveGame;
-  team: Team;
-  includeQueue: boolean;
-  onClose: () => void;
-  onQueue: () => void;
-  onChangePosition: () => void;
-  onUnavailable: () => void;
-}) {
-  const label = playerName(team, playerId);
-  const formation = getFormation(game.formationId);
-  const positionEntry = Object.entries(game.assignments).find(
-    ([, assignedPlayerId]) => assignedPlayerId === playerId,
-  );
-  const position = formation.positions.find(
-    (item) => item.id === positionEntry?.[0],
-  );
-  const currentPair = game.queuedSubstitutions?.find(
-    (pair) => pair.outPlayerId === playerId,
-  );
-  const incomingName = currentPair
-    ? playerName(team, currentPair.inPlayerId)
-    : null;
-  return (
-    <SidelineDialog
-      title={playerDialogTitle(team, playerId)}
-      description="Choose an on-field action."
-      className="compact-sheet field-player-actions-sheet"
-      onClose={onClose}
-    >
-      <PlayerContextPanel
-        items={[
-          {
-            label: "Position",
-            value: position?.label ?? "Open",
-          },
-          {
-            label: "Played",
-            value: formatPlayerDuration(
-              game.totals[playerId]?.fieldSeconds ?? 0,
-              "Not played yet",
-            ),
-          },
-          {
-            label: "Playing now",
-            value: formatPlayerDuration(getCurrentFieldSeconds(game, playerId)),
-          },
-          {
-            label: "Goals",
-            value: (
-              <PlayerGoalSummary
-                label={label}
-                goalCount={playerGoalCount(game, playerId)}
-              />
-            ),
-          },
-          ...(incomingName
-            ? [
-                {
-                  label: "Next rotation",
-                  value: `Coming out for ${incomingName}`,
-                  emphasis: "warm" as const,
-                  wide: true,
-                },
-              ]
-            : []),
-        ]}
-      />
-      <div className="field-player-action-list">
-        <div
-          className={`player-action-toolbar ${
-            includeQueue ? "" : "two-actions"
-          }`}
-          role="toolbar"
-          aria-label={`Actions for ${label}`}
-        >
-          <Button
-            className="danger-action remove-field-player-action"
-            variant="danger"
-            size="large"
-            leadingVisual={UserRoundX}
-            aria-label={`Take ${label} out of game`}
-            onClick={onUnavailable}
-          >
-            Take out
-          </Button>
-          <Button
-            className="secondary-action"
-            variant="default"
-            size="large"
-            leadingVisual={Move}
-            aria-label="Change positions"
-            onClick={onChangePosition}
-          >
-            Positions
-          </Button>
-          {includeQueue && (
-            <Button
-              className="primary-action queue-field-player-action"
-              variant="primary"
-              size="large"
-              leadingVisual={ArrowRightLeft}
-              aria-label={`Plan ${label} out`}
-              onClick={onQueue}
-            >
-              Plan out
-            </Button>
-          )}
-        </div>
       </div>
     </SidelineDialog>
   );

@@ -43,12 +43,12 @@ const startGame = () => {
 };
 
 const openPositionEditor = (playerName: string) => {
+  fireEvent.click(screen.getByRole("tab", { name: /On field/ }));
   fireEvent.click(
     screen.getByRole("button", {
-      name: new RegExp(`^Open actions for ${playerName}(?:\\.|$)`),
+      name: `Change positions for ${playerName}`,
     }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Change positions" }));
 };
 
 const prepareUpcomingRotation = (queued: boolean, alertsEnabled = true) => {
@@ -1159,9 +1159,7 @@ describe("Sideline app", () => {
       const name = saved.teams.u8.roster.find(
         (player) => player.id === outgoingId,
       )!.name;
-      fireEvent.click(
-        screen.getByRole("button", { name: `Open actions for ${name}` }),
-      );
+      fireEvent.click(screen.getByRole("tab", { name: /On field/ }));
       fireEvent.click(
         screen.getByRole("button", { name: `Take ${name} out of game` }),
       );
@@ -1661,7 +1659,7 @@ describe("Sideline app", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Open actions for Late Guest" }),
+      screen.getByRole("button", { name: "Plan substitution for Late Guest" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "On the field" }).parentElement
@@ -1691,18 +1689,22 @@ describe("Sideline app", () => {
       ),
     ).toBeInTheDocument();
 
-    fireEvent.click(document.querySelector(".pitch-player") as HTMLElement);
-    const playerActions = screen.getByRole("dialog");
+    const pitchPlayer = document.querySelector(".pitch-player") as HTMLElement;
+    expect(pitchPlayer).toBeEnabled();
+    const before = localStorage.getItem(STORAGE_KEY);
+    fireEvent.click(pitchPlayer);
+    const picker = screen.getByRole("dialog", { name: / Plan out$/ });
+    expect(picker).toHaveTextContent(
+      "No bench players available. Add or return a player to make a substitution.",
+    );
     expect(
-      within(playerActions).queryByRole("button", {
-        name: /Plan .* out/,
-      }),
-    ).not.toBeInTheDocument();
+      within(picker).getByRole("button", { name: "Sub now" }),
+    ).toBeDisabled();
     expect(
-      within(playerActions).getByRole("button", {
-        name: "Change positions",
-      }),
-    ).toBeInTheDocument();
+      within(picker).getByRole("button", { name: "Add to plan" }),
+    ).toBeDisabled();
+    fireEvent.click(within(picker).getByRole("button", { name: "Close" }));
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
   });
 
   it("replaces a starter from the bench, undoes it, and starts with the edited lineup", () => {
@@ -2421,7 +2423,9 @@ describe("Sideline app", () => {
 
     expect(screen.queryByLabelText("Player")).not.toBeInTheDocument();
     expect(screen.getByText("Position")).toBeInTheDocument();
-    expect(screen.getByText("Center Back")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("dialog")).getByText("Center Back"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Played")).toBeInTheDocument();
     expect(screen.getByText("Playing now")).toBeInTheDocument();
     const maddoxTarget = screen.getByRole("button", {
@@ -2434,43 +2438,95 @@ describe("Sideline app", () => {
       screen.queryByRole("button", { name: "Plan substitution" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Take Simon out of game" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("opens all three on-field actions from a pitch player", () => {
-    render(<App />);
-    fireEvent.click(screen.getByText("Golden Dragons"));
-    startGame();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open actions for Simon" }),
-    );
-    const actions = screen.getByRole("dialog", { name: "Simon #10" });
-    expect(actions).not.toHaveClass("sideline-dialog-bodyless");
-    expect(
-      within(actions)
-        .getByRole("heading", { name: "Simon #10" })
-        .querySelector(".soccer-ball-icon"),
-    ).not.toBeInTheDocument();
-    expect(
-      within(actions).getByRole("button", { name: "Plan Simon out" }),
-    ).toBeInTheDocument();
-    expect(
-      within(actions).getByRole("button", { name: "Change positions" }),
-    ).toBeInTheDocument();
-    expect(
-      within(actions).getByRole("button", {
+      within(screen.getByRole("dialog")).queryByRole("button", {
         name: "Take Simon out of game",
       }),
-    ).toHaveAttribute("data-variant", "danger");
-
-    fireEvent.mouseDown(actions.parentElement!);
-    fireEvent.click(actions.parentElement!);
-    expect(
-      screen.queryByRole("dialog", { name: "Simon #10" }),
     ).not.toBeInTheDocument();
   });
+
+  it.each(["u8", "u12"] as const)(
+    "opens the Plan out picker directly from a $teamId pitch card without persisting a draft",
+    (teamId) => {
+      const state = structuredClone(INITIAL_STATE);
+      const team = state.teams[teamId];
+      const game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+      );
+      state.activeGame = game;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      const outgoing = team.roster.find(
+        (player) => player.id === Object.values(game.assignments)[1],
+      )!;
+      const title = `${outgoing.name} #${outgoing.number} Plan out`;
+      const before = localStorage.getItem(STORAGE_KEY);
+      const card = screen.getByRole("button", {
+        name: `Plan substitution for ${outgoing.name}`,
+      });
+      expect(card).toHaveAttribute("type", "button");
+      expect(card).toHaveAttribute(
+        "title",
+        "Tap to plan a substitution or drag to another position",
+      );
+      fireEvent.click(card);
+      const picker = screen.getByRole("dialog", { name: title });
+      expect(screen.getAllByRole("dialog")).toHaveLength(1);
+      expect(picker).not.toHaveClass("sideline-dialog-bodyless");
+      expect(
+        within(picker)
+          .getByRole("heading", { name: title })
+          .querySelector(".soccer-ball-icon"),
+      ).not.toBeInTheDocument();
+      expect(
+        within(picker).queryByRole("button", {
+          name: /Change positions|Take .* out of game/,
+        }),
+      ).not.toBeInTheDocument();
+      expect(
+        within(picker).getByRole("button", { name: "Sub now" }),
+      ).toBeDisabled();
+      expect(
+        within(picker).getByRole("button", { name: "Add to plan" }),
+      ).toBeDisabled();
+      expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
+      const incoming = team.roster.find(
+        (player) => player.id === game.benchIds[0],
+      )!;
+      fireEvent.click(
+        within(picker).getByRole("button", {
+          name: new RegExp(`^${incoming.name} #`),
+        }),
+      );
+      expect(
+        within(picker).getByRole("button", { name: "Add to plan" }),
+      ).toBeEnabled();
+      expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
+      fireEvent.mouseDown(picker.parentElement!);
+      fireEvent.click(picker.parentElement!);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
+
+      for (const key of ["Enter", " "]) {
+        const code = key === " " ? "Space" : "Enter";
+        card.focus();
+        fireEvent.keyDown(card, { key, code });
+        fireEvent.keyUp(card, { key, code });
+        fireEvent.click(card, { detail: 0 });
+        const reopened = screen.getByRole("dialog", { name: title });
+        expect(
+          within(reopened).getByRole("button", { name: "Add to plan" }),
+        ).toBeDisabled();
+        fireEvent.click(
+          within(reopened).getByRole("button", { name: "Close" }),
+        );
+        expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
+      }
+    },
+  );
 
   it("treats a confirmation backdrop click as cancel", () => {
     render(<App />);
@@ -2548,7 +2604,7 @@ describe("Sideline app", () => {
     ).toHaveTextContent("Simon");
   });
 
-  it("opens position editing with the tapped pitch player selected", () => {
+  it("opens position editing with the on-field row player selected", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
@@ -2611,11 +2667,11 @@ describe("Sideline app", () => {
       startGame();
 
       const ollie = screen.getByRole("button", {
-        name: "Open actions for Ollie",
+        name: "Plan substitution for Ollie",
       });
       const originalStyle = ollie.getAttribute("style");
       const haru = screen.getByRole("button", {
-        name: "Open actions for Haru",
+        name: "Plan substitution for Haru",
       });
       vi.spyOn(haru, "getBoundingClientRect").mockReturnValue({
         left: 640,
@@ -2675,6 +2731,8 @@ describe("Sideline app", () => {
       expect(document.querySelector(".player-drag-preview")).toBeNull();
       expect(ollie.getAttribute("style")).toBe(originalStyle);
       expect(screen.queryByText("Ollie ↔ Haru")).not.toBeInTheDocument();
+      fireEvent.click(ollie, { detail: 1 });
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     },
   );
 
@@ -2684,10 +2742,10 @@ describe("Sideline app", () => {
     startGame();
 
     const ollie = screen.getByRole("button", {
-      name: "Open actions for Ollie",
+      name: "Plan substitution for Ollie",
     });
     const haru = screen.getByRole("button", {
-      name: "Open actions for Haru",
+      name: "Plan substitution for Haru",
     });
     vi.spyOn(haru, "getBoundingClientRect").mockReturnValue({
       left: 640,
@@ -2746,6 +2804,8 @@ describe("Sideline app", () => {
     expect(
       container.querySelectorAll(".pitch-swap-confirmation-mark"),
     ).toHaveLength(2);
+    fireEvent.click(ollie, { detail: 1 });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it.each(["hold", "swipe", "tap", "cancel", "blur", "escape"])(
@@ -2756,10 +2816,10 @@ describe("Sideline app", () => {
       startGame();
       vi.useFakeTimers();
       const source = screen.getByRole("button", {
-        name: "Open actions for Ollie",
+        name: "Plan substitution for Ollie",
       });
       const target = screen.getByRole("button", {
-        name: "Open actions for Haru",
+        name: "Plan substitution for Haru",
       });
       vi.spyOn(target, "getBoundingClientRect").mockReturnValue({
         left: 640,
@@ -2808,6 +2868,7 @@ describe("Sideline app", () => {
         expect(target).toHaveClass("drop-target");
       } else expect(document.querySelector(".player-drag-preview")).toBeNull();
       touchPointer("pointerup", 700, 420);
+      if (gesture === "hold") fireEvent.click(source, { detail: 1 });
       const after = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
       if (gesture === "hold") {
         expect(screen.getByText("Ollie ↔ Haru")).toBeInTheDocument();
@@ -2817,9 +2878,15 @@ describe("Sideline app", () => {
           before.activeGame?.assignments,
         );
         expect(after.activeGame?.history).toEqual(before.activeGame?.history);
-        if (gesture === "tap")
-          expect(screen.getByRole("dialog")).toBeInTheDocument();
+        if (gesture === "tap") {
+          expect(
+            screen.getByRole("dialog", { name: "Ollie #23 Plan out" }),
+          ).toBeInTheDocument();
+          expect(after).toEqual(before);
+        }
       }
+      if (gesture !== "tap")
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     },
   );
 
@@ -2951,7 +3018,7 @@ describe("Sideline app", () => {
     ).toHaveLength(3);
     expect(
       screen.getByRole("button", {
-        name: /Open actions for Simon\. Coming out for/,
+        name: /Plan substitution for Simon\. Coming out for/,
       }),
     ).toBeInTheDocument();
     expect(document.querySelectorAll(".pitch-plan-icon")).toHaveLength(3);
@@ -2963,7 +3030,7 @@ describe("Sideline app", () => {
       within(summary).getByRole("button", { name: "Send 'em now" }),
     );
     expect(
-      screen.getByRole("button", { name: "Open actions for Dylan" }),
+      screen.getByRole("button", { name: "Plan substitution for Dylan" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("dialog", { name: /^[0-9]+ Substitutions?$/ }),
@@ -4133,7 +4200,7 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
-  it.each(["bench", "field"] as const)(
+  it.each(["bench", "field", "pitch"] as const)(
     "sends a selected swap immediately from the %s picker without creating a plan",
     (direction) => {
       const state = structuredClone(INITIAL_STATE);
@@ -4160,7 +4227,9 @@ describe("Sideline app", () => {
           name:
             direction === "bench"
               ? `Plan ${incoming.name} in`
-              : `Plan ${outgoing.name} out`,
+              : direction === "pitch"
+                ? `Plan substitution for ${outgoing.name}`
+                : `Plan ${outgoing.name} out`,
         }),
       );
       const picker = screen.getByRole("dialog", { name: /Plan (in|out)/ });
@@ -4211,7 +4280,7 @@ describe("Sideline app", () => {
     },
   );
 
-  it.each(["bench", "field"] as const)(
+  it.each(["bench", "field", "pitch"] as const)(
     "removes only the existing swap from the %s picker's next-rotation context",
     (direction) => {
       const state = structuredClone(INITIAL_STATE);
@@ -4241,7 +4310,9 @@ describe("Sideline app", () => {
           name:
             direction === "bench"
               ? `Edit ${player.name} going in`
-              : `Edit planned substitution for ${player.name} out`,
+              : direction === "pitch"
+                ? `Plan substitution for ${player.name}. Coming out for ${team.roster.find((item) => item.id === pair.inPlayerId)!.name}`
+                : `Edit planned substitution for ${player.name} out`,
         }),
       );
       const picker = screen.getByRole("dialog", { name: /Plan (in|out)/ });
@@ -4271,7 +4342,7 @@ describe("Sideline app", () => {
     },
   );
 
-  it.each(["bench", "field"] as const)(
+  it.each(["bench", "field", "pitch"] as const)(
     "sends an unchanged planned pair from the %s picker and refreshes a smaller remaining plan",
     (direction) => {
       const state = structuredClone(INITIAL_STATE);
@@ -4302,7 +4373,9 @@ describe("Sideline app", () => {
           name:
             direction === "bench"
               ? `Edit ${incoming.name} going in`
-              : `Edit planned substitution for ${outgoing.name} out`,
+              : direction === "pitch"
+                ? `Plan substitution for ${outgoing.name}. Coming out for ${incoming.name}`
+                : `Edit planned substitution for ${outgoing.name} out`,
         }),
       );
       const picker = screen.getByRole("dialog", { name: /Plan (in|out)/ });
@@ -4338,7 +4411,7 @@ describe("Sideline app", () => {
     },
   );
 
-  it.each(["bench", "field"] as const)(
+  it.each(["bench", "field", "pitch"] as const)(
     "shows current-time keeper cautions for Sub now in the %s picker",
     (direction) => {
       const state = structuredClone(INITIAL_STATE);
@@ -4367,7 +4440,9 @@ describe("Sideline app", () => {
           name:
             direction === "bench"
               ? `Plan ${incoming.name} in`
-              : `Plan ${keeper.name} out`,
+              : direction === "pitch"
+                ? `Plan substitution for ${keeper.name}`
+                : `Plan ${keeper.name} out`,
         }),
       );
       const picker = screen.getByRole("dialog", { name: /Plan (in|out)/ });
@@ -4385,7 +4460,7 @@ describe("Sideline app", () => {
     },
   );
 
-  it.each(["bench", "field"] as const)(
+  it.each(["bench", "field", "pitch"] as const)(
     "keeps only a compact preference warning for Aaron replacing Jackson in the %s picker",
     (direction) => {
       const state = structuredClone(INITIAL_STATE);
@@ -4441,7 +4516,12 @@ describe("Sideline app", () => {
       }
       fireEvent.click(
         screen.getByRole("button", {
-          name: direction === "bench" ? "Plan Aaron in" : "Plan Jackson out",
+          name:
+            direction === "bench"
+              ? "Plan Aaron in"
+              : direction === "pitch"
+                ? "Plan substitution for Jackson"
+                : "Plan Jackson out",
         }),
       );
       const picker = screen.getByRole("dialog", { name: /Plan (in|out)/ });
@@ -4732,9 +4812,11 @@ describe("Sideline app", () => {
     fireEvent.click(within(goalSummary).getByRole("button", { name: "Close" }));
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Open actions for Simon" }),
+      screen.getByRole("button", { name: "Plan substitution for Simon" }),
     );
-    const scorerActions = screen.getByRole("dialog", { name: "Simon #10" });
+    const scorerActions = screen.getByRole("dialog", {
+      name: "Simon #10 Plan out",
+    });
     expect(
       within(scorerActions).getByText("Goals", { selector: "dt" }),
     ).toBeInTheDocument();
@@ -5231,13 +5313,13 @@ describe("Sideline app", () => {
     expect(
       within(
         screen.getByRole("button", {
-          name: `Open actions for ${incomingName}`,
+          name: `Plan substitution for ${incomingName}`,
         }),
       ).getByText("0:37"),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: `Open actions for ${incomingName}`,
+        name: `Plan substitution for ${incomingName}`,
       }),
     ).toHaveTextContent("0:37 playing");
     expect(document.querySelectorAll(".pitch-time")).toHaveLength(
@@ -5261,12 +5343,12 @@ describe("Sideline app", () => {
       ? `${fullGamePlayerName} #${fullGamePlayer.number}`
       : fullGamePlayerName;
     const fullGamePitchPlayer = screen.getByRole("button", {
-      name: `Open actions for ${fullGamePlayerName}`,
+      name: `Plan substitution for ${fullGamePlayerName}`,
     });
     expect(fullGamePitchPlayer).toHaveTextContent("11 min");
     fireEvent.click(fullGamePitchPlayer);
     const playerActions = screen.getByRole("dialog", {
-      name: fullGamePlayerLabel,
+      name: `${fullGamePlayerLabel} Plan out`,
     });
     expect(playerActions).toHaveTextContent("Played11 min");
     expect(playerActions).toHaveTextContent("Playing now11 min");
@@ -5494,7 +5576,7 @@ describe("Sideline app", () => {
       (player) => player.id === scorerId,
     )!.name;
     const pitchCard = screen.getByRole("button", {
-      name: `Open actions for ${scorerName}`,
+      name: `Plan substitution for ${scorerName}`,
     });
     expect(
       within(pitchCard)
@@ -5536,7 +5618,7 @@ describe("Sideline app", () => {
       (player) => player.id === leadingScorerId,
     )!.name;
     const pitchCard = screen.getByRole("button", {
-      name: `Open actions for ${scorerName}`,
+      name: `Plan substitution for ${scorerName}`,
     });
     const goalTotal = within(pitchCard).getByLabelText(
       `${scorerName} scored 3 goals`,
@@ -5611,7 +5693,7 @@ describe("Sideline app", () => {
       (player) => player.id === scorerId,
     )!.name;
     const pitchCard = screen.getByRole("button", {
-      name: `Open actions for ${scorerName}`,
+      name: `Plan substitution for ${scorerName}`,
     });
     const goalTotal = within(pitchCard).getByLabelText(
       `${scorerName} scored 4 goals`,
@@ -5667,6 +5749,119 @@ describe("Sideline app", () => {
     fireEvent.click(benchTab);
     expect(benchTab).toHaveAttribute("aria-selected", "true");
   });
+
+  it.each(["u8", "u12"] as const)(
+    "adds and edits a $teamId pitch substitution with the planned pair preselected",
+    (teamId) => {
+      const state = structuredClone(INITIAL_STATE);
+      const team = state.teams[teamId];
+      const game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+      );
+      state.activeGame = game;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      const [positionId, outPlayerId] = Object.entries(game.assignments)[1];
+      const outgoing = team.roster.find((player) => player.id === outPlayerId)!;
+      const incoming = team.roster.find(
+        (player) => player.id === game.benchIds[0],
+      )!;
+      const replacement = team.roster.find(
+        (player) => player.id === game.benchIds[1],
+      )!;
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: `Plan substitution for ${outgoing.name}`,
+        }),
+      );
+      let picker = screen.getByRole("dialog", {
+        name: `${outgoing.name} #${outgoing.number} Plan out`,
+      });
+      fireEvent.click(
+        within(picker).getByRole("button", {
+          name: new RegExp(`^${incoming.name} #`),
+        }),
+      );
+      fireEvent.click(
+        within(picker).getByRole("button", { name: "Add to plan" }),
+      );
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      const queued = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+      expect(queued.activeGame!.queuedSubstitutions).toEqual([
+        { positionId, outPlayerId, inPlayerId: incoming.id },
+      ]);
+      expect(queued.activeGame!.assignments).toEqual(game.assignments);
+      expect(queued.activeGame!.history).toEqual(game.history);
+
+      const openPlanned = () =>
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: `Plan substitution for ${outgoing.name}. Coming out for ${incoming.name}`,
+          }),
+        );
+      openPlanned();
+      picker = screen.getByRole("dialog", {
+        name: `${outgoing.name} #${outgoing.number} Plan out`,
+      });
+      expect(picker).toHaveTextContent(
+        `Next rotationComing out for ${incoming.name}`,
+      );
+      expect(
+        within(picker).getByRole("button", {
+          name: new RegExp(`^${incoming.name} #`),
+        }),
+      ).toHaveAttribute("aria-pressed", "true");
+      expect(
+        within(picker).getByRole("button", { name: "Update plan" }),
+      ).toBeDisabled();
+      fireEvent.click(
+        within(picker).getByRole("button", {
+          name: new RegExp(`^${replacement.name} #`),
+        }),
+      );
+      expect(picker).toHaveTextContent(
+        `Next rotationComing out for ${replacement.name}`,
+      );
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual(queued);
+      fireEvent.click(within(picker).getByRole("button", { name: "Close" }));
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual(queued);
+
+      openPlanned();
+      picker = screen.getByRole("dialog", {
+        name: `${outgoing.name} #${outgoing.number} Plan out`,
+      });
+      expect(
+        within(picker).getByRole("button", {
+          name: new RegExp(`^${incoming.name} #`),
+        }),
+      ).toHaveAttribute("aria-pressed", "true");
+      fireEvent.click(
+        within(picker).getByRole("button", {
+          name: new RegExp(`^${replacement.name} #`),
+        }),
+      );
+      fireEvent.click(
+        within(picker).getByRole("button", { name: "Update plan" }),
+      );
+      const updated = JSON.parse(
+        localStorage.getItem(STORAGE_KEY)!,
+      ) as AppState;
+      expect(updated.activeGame!.queuedSubstitutions).toEqual([
+        { positionId, outPlayerId, inPlayerId: replacement.id },
+      ]);
+      expect(updated.activeGame!.assignments).toEqual(game.assignments);
+      expect(updated.activeGame!.history).toEqual(game.history);
+      expect(
+        screen.getByRole("button", {
+          name: `Plan substitution for ${outgoing.name}. Coming out for ${replacement.name}`,
+        }),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("queues an on-field player out by choosing an incoming bench player", () => {
     render(<App />);
@@ -5811,9 +6006,7 @@ describe("Sideline app", () => {
     startGame();
 
     expect(
-      screen.getByText(
-        "Tap a player for actions, or drag them onto another position.",
-      ),
+      screen.getByText(/Tap a player to plan a substitution.*drag.*position/),
     ).toBeInTheDocument();
     openPositionEditor("Simon");
     expect(
@@ -6166,9 +6359,7 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open actions for Simon" }),
-    );
+    fireEvent.click(screen.getByRole("tab", { name: /On field/ }));
     fireEvent.click(
       screen.getByRole("button", { name: "Take Simon out of game" }),
     );
@@ -6206,9 +6397,7 @@ describe("Sideline app", () => {
       );
     });
     startGame();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open actions for Simon" }),
-    );
+    fireEvent.click(screen.getByRole("tab", { name: /On field/ }));
     fireEvent.click(
       screen.getByRole("button", { name: "Take Simon out of game" }),
     );

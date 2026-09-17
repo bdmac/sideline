@@ -84,7 +84,7 @@ function setup(width = 1024, planned = false) {
     '[data-live-bench-player-id="u12-p12"]',
   )!;
   const target = screen.getByRole("button", {
-    name: /^Open actions for Lazar/,
+    name: /^Plan substitution for Lazar/,
   });
   bounds(target);
   return { ...result, game, source, target, team };
@@ -217,7 +217,7 @@ describe("live bench dragging", () => {
       ).toBeInTheDocument();
       fireEvent.click(source, { detail: 1 });
       expect(
-        screen.queryByRole("dialog", { name: /Plan in/ }),
+        screen.queryByRole("dialog", { name: /Plan (in|out)/ }),
       ).not.toBeInTheDocument();
     },
   );
@@ -409,6 +409,69 @@ describe("live bench dragging", () => {
     );
     expect(player.querySelector(".bench-row-grip, .player-number")).toBeNull();
   });
+
+  it.each(["u8", "u12"] as const)(
+    "keeps $teamId pitch cards draggable with no bench and never opens a picker after a swap",
+    (teamId) => {
+      const state = structuredClone(INITIAL_STATE);
+      const team = state.teams[teamId];
+      const game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.slice(0, team.sideSize).map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+      );
+      state.activeGame = game;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      const [[sourcePosition, sourceId], [targetPosition, targetId]] =
+        Object.entries(game.assignments).slice(1, 3);
+      const sourceName = team.roster.find(
+        (player) => player.id === sourceId,
+      )!.name;
+      const targetName = team.roster.find(
+        (player) => player.id === targetId,
+      )!.name;
+      const source = screen.getByRole("button", {
+        name: `Plan substitution for ${sourceName}`,
+      });
+      const target = screen.getByRole("button", {
+        name: `Plan substitution for ${targetName}`,
+      });
+      expect(source).toBeEnabled();
+      fireEvent.click(source);
+      const picker = screen.getByRole("dialog", { name: / Plan out$/ });
+      expect(picker).toHaveTextContent(
+        "No bench players available. Add or return a player to make a substitution.",
+      );
+      expect(
+        within(picker).getByRole("button", { name: "Sub now" }),
+      ).toBeDisabled();
+      expect(
+        within(picker).getByRole("button", { name: "Add to plan" }),
+      ).toBeDisabled();
+      fireEvent.click(within(picker).getByRole("button", { name: "Close" }));
+      expect(savedGame()).toEqual(game);
+
+      bounds(target);
+      pointer(source, "pointerdown", 500, 500);
+      pointer(source, "pointermove", 250, 240);
+      expect(target).toHaveClass("drop-target");
+      pointer(source, "pointerup", 250, 240);
+      fireEvent.click(source, { detail: 1 });
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      const swapped = savedGame();
+      expect(swapped.assignments).toEqual({
+        ...game.assignments,
+        [sourcePosition]: targetId,
+        [targetPosition]: sourceId,
+      });
+      expect(swapped.benchIds).toEqual([]);
+      expect(swapped.queuedSubstitutions).toBeUndefined();
+      expect(validateGame(swapped, team.sideSize)).toEqual([]);
+    },
+  );
 });
 
 describe("compact drop-pitch formation geometry", () => {
