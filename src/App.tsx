@@ -25,7 +25,6 @@ import {
   Download,
   FastForward,
   Flag,
-  MoreHorizontal,
   Move,
   MoveHorizontal,
   Moon,
@@ -70,6 +69,7 @@ import {
 import {
   addGuestPlayer,
   addGuestPlayerToBench,
+  applyImmediateSubstitution,
   applySubstitutions,
   assignPlayerToPosition,
   assignStartingPlayersByPreference,
@@ -2392,6 +2392,31 @@ function LiveGameScreen({
     }
   };
 
+  const sendSingleSubstitution = (inPlayerId: string, outPlayerId: string) => {
+    let executedPairs: SubstitutionPair[] = [];
+    if (
+      safeChange(() => {
+        const next = applyImmediateSubstitution(
+          game,
+          inPlayerId,
+          outPlayerId,
+          team,
+          Date.now(),
+        );
+        const event = next.history.at(-1);
+        if (event?.type !== "substitution") {
+          throw new Error("The immediate substitution could not be verified.");
+        }
+        executedPairs = event.pairs;
+        return next;
+      })
+    ) {
+      setBenchQueuePlayerId(null);
+      setFieldQueuePlayerId(null);
+      setConfirmedPairs(executedPairs);
+    }
+  };
+
   const moveRosterTabFocus = (view: "field" | "bench") => {
     setRosterView(view);
     window.requestAnimationFrame(() =>
@@ -3050,12 +3075,8 @@ function LiveGameScreen({
                         queuedIncomingName={queuedIncoming}
                         canQueue={game.benchIds.length > 0}
                         onQueue={() => setFieldQueuePlayerId(id)}
-                        onMore={() =>
-                          setFieldActions({
-                            playerId: id,
-                            includeQueue: false,
-                          })
-                        }
+                        onChangePosition={() => setPositionEditorPlayerId(id)}
+                        onUnavailable={() => setUnavailableConfirmPlayerId(id)}
                       />
                     );
                   })}
@@ -3361,6 +3382,9 @@ function LiveGameScreen({
           game={displayed}
           team={team}
           onClose={() => setBenchQueuePlayerId(null)}
+          onSendImmediately={(outPlayerId) =>
+            sendSingleSubstitution(benchQueuePlayerId, outPlayerId)
+          }
           onSelect={(outPlayerId) => {
             if (
               safeChange(() =>
@@ -3387,6 +3411,9 @@ function LiveGameScreen({
           game={displayed}
           team={team}
           onClose={() => setFieldQueuePlayerId(null)}
+          onSendImmediately={(inPlayerId) =>
+            sendSingleSubstitution(inPlayerId, fieldQueuePlayerId)
+          }
           onSelect={(inPlayerId) => {
             if (
               safeChange(() =>
@@ -3453,6 +3480,11 @@ function LiveGameScreen({
           formation={formation}
           team={team}
           game={displayed}
+          description={
+            game.history.at(-1)?.type === "substitution"
+              ? game.history.at(-1)?.note
+              : undefined
+          }
           onClose={() => setConfirmedPairs(null)}
         />
       )}
@@ -4211,12 +4243,75 @@ function PlayerContextPanel({
   );
 }
 
+function SingleSubstitutionActions({
+  game,
+  team,
+  pair,
+  canPlan,
+  onPlan,
+  onSendImmediately,
+  onRemove,
+}: {
+  game: ActiveGame;
+  team: Team;
+  pair?: SubstitutionPair;
+  canPlan: boolean;
+  onPlan: () => void;
+  onSendImmediately: () => void;
+  onRemove?: () => void;
+}) {
+  const noticeId = useId();
+  const notice = getKeeperChangeNotice(game, team, pair ? [pair] : [], "now", {
+    warnAboutRest: false,
+  });
+  return (
+    <div className="single-substitution-actions">
+      <KeeperChangeNotice notice={notice} id={noticeId} />
+      <div className={`bench-picker-actions ${onRemove ? "editing" : ""}`}>
+        {onRemove && (
+          <IconButton
+            className="icon-button remove-from-plan-action"
+            variant="invisible"
+            size="medium"
+            icon={Trash2}
+            aria-label="Remove from plan"
+            tooltipDirection="ne"
+            onClick={onRemove}
+          />
+        )}
+        <Button
+          className="secondary-action"
+          variant="default"
+          size="large"
+          leadingVisual={ArrowRightLeft}
+          disabled={!pair}
+          aria-describedby={notice ? noticeId : undefined}
+          onClick={onSendImmediately}
+        >
+          Send immediately
+        </Button>
+        <Button
+          className="primary-action"
+          variant="primary"
+          size="large"
+          leadingVisual={Check}
+          disabled={!canPlan}
+          onClick={onPlan}
+        >
+          {onRemove ? "Update plan" : "Add to plan"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function BenchSubstitutionPicker({
   playerId,
   game,
   team,
   onClose,
   onSelect,
+  onSendImmediately,
   onRemove,
 }: {
   playerId: string;
@@ -4224,6 +4319,7 @@ function BenchSubstitutionPicker({
   team: Team;
   onClose: () => void;
   onSelect: (outPlayerId: string) => void;
+  onSendImmediately: (outPlayerId: string) => void;
   onRemove: () => void;
 }) {
   const currentPair = game.queuedSubstitutions?.find(
@@ -4277,36 +4373,30 @@ function BenchSubstitutionPicker({
   return (
     <SidelineDialog
       title={`${playerLabel(team, playerId)} - Plan in`}
-      description="Choose the position they will enter."
+      description="Choose the player they will replace."
       className="compact-sheet bench-substitution-sheet"
       onClose={onClose}
       footer={
-        <div className={`bench-picker-actions ${currentPair ? "editing" : ""}`}>
-          {currentPair && (
-            <Button
-              className="danger-action remove-from-plan-action"
-              variant="danger"
-              size="large"
-              leadingVisual={Trash2}
-              onClick={onRemove}
-            >
-              Remove from plan
-            </Button>
+        <SingleSubstitutionActions
+          game={game}
+          team={team}
+          pair={
+            selectedPosition
+              ? {
+                  inPlayerId: playerId,
+                  outPlayerId: selectedOutPlayerId,
+                  positionId: selectedPosition.id,
+                }
+              : undefined
+          }
+          canPlan={Boolean(
+            selectedOutPlayerId &&
+            selectedOutPlayerId !== currentPair?.outPlayerId,
           )}
-          <Button
-            className="primary-action"
-            variant="primary"
-            size="large"
-            leadingVisual={Check}
-            disabled={
-              !selectedOutPlayerId ||
-              selectedOutPlayerId === currentPair?.outPlayerId
-            }
-            onClick={() => onSelect(selectedOutPlayerId)}
-          >
-            {currentPair ? "Update plan" : "Add to plan"}
-          </Button>
-        </div>
+          onPlan={() => onSelect(selectedOutPlayerId)}
+          onSendImmediately={() => onSendImmediately(selectedOutPlayerId)}
+          onRemove={currentPair ? onRemove : undefined}
+        />
       }
       footerClassName="bench-picker-footer"
     >
@@ -4324,7 +4414,7 @@ function BenchSubstitutionPicker({
             ),
           },
           {
-            label: "Preferred roles",
+            label: "Positions",
             value: player.preferredRoles.map(preferredRoleLabel).join(" · "),
           },
           {
@@ -4365,9 +4455,12 @@ function BenchSubstitutionPicker({
                 aria-pressed={selected}
                 onClick={() => setSelectedOutPlayerId(outPlayerId)}
               >
-                <strong className="replacement-position-primary">
-                  {position.label}
-                </strong>
+                <span className="replacement-player-summary">
+                  <GoalMarkedPlayerName
+                    label={playerLabel(team, outPlayerId)}
+                    goalCount={playerGoalCount(game, outPlayerId)}
+                  />
+                </span>
                 <span className={preferenceFitClassName(preferenceIndex)}>
                   {selected && (
                     <Check
@@ -4378,11 +4471,8 @@ function BenchSubstitutionPicker({
                   )}
                   <span>{preferenceFitLabel(preferenceIndex)}</span>
                 </span>
-                <span className="replacement-player-secondary replacement-player-summary">
-                  <GoalMarkedPlayerName
-                    label={playerLabel(team, outPlayerId)}
-                    goalCount={playerGoalCount(game, outPlayerId)}
-                  />
+                <span className="replacement-player-position">
+                  {position.label}
                 </span>
                 <span className="replacement-player-times">
                   <span>
@@ -4424,6 +4514,7 @@ function FieldSubstitutionPicker({
   team,
   onClose,
   onSelect,
+  onSendImmediately,
   onRemove,
 }: {
   playerId: string;
@@ -4431,6 +4522,7 @@ function FieldSubstitutionPicker({
   team: Team;
   onClose: () => void;
   onSelect: (inPlayerId: string) => void;
+  onSendImmediately: (inPlayerId: string) => void;
   onRemove: () => void;
 }) {
   const currentPair = game.queuedSubstitutions?.find(
@@ -4499,32 +4591,26 @@ function FieldSubstitutionPicker({
       className="compact-sheet bench-substitution-sheet"
       onClose={onClose}
       footer={
-        <div className={`bench-picker-actions ${currentPair ? "editing" : ""}`}>
-          {currentPair && (
-            <Button
-              className="danger-action remove-from-plan-action"
-              variant="danger"
-              size="large"
-              leadingVisual={Trash2}
-              onClick={onRemove}
-            >
-              Remove from plan
-            </Button>
+        <SingleSubstitutionActions
+          game={game}
+          team={team}
+          pair={
+            selectedInPlayerId
+              ? {
+                  inPlayerId: selectedInPlayerId,
+                  outPlayerId: playerId,
+                  positionId: position.id,
+                }
+              : undefined
+          }
+          canPlan={Boolean(
+            selectedInPlayerId &&
+            selectedInPlayerId !== currentPair?.inPlayerId,
           )}
-          <Button
-            className="primary-action"
-            variant="primary"
-            size="large"
-            leadingVisual={Check}
-            disabled={
-              !selectedInPlayerId ||
-              selectedInPlayerId === currentPair?.inPlayerId
-            }
-            onClick={() => onSelect(selectedInPlayerId)}
-          >
-            {currentPair ? "Update plan" : "Add to plan"}
-          </Button>
-        </div>
+          onPlan={() => onSelect(selectedInPlayerId)}
+          onSendImmediately={() => onSendImmediately(selectedInPlayerId)}
+          onRemove={currentPair ? onRemove : undefined}
+        />
       }
       footerClassName="bench-picker-footer"
     >
@@ -4796,7 +4882,8 @@ function FieldPlayerTimeRow({
   queuedIncomingName,
   canQueue,
   onQueue,
-  onMore,
+  onChangePosition,
+  onUnavailable,
 }: {
   player: Player;
   goalCount: number;
@@ -4807,7 +4894,8 @@ function FieldPlayerTimeRow({
   queuedIncomingName?: string;
   canQueue: boolean;
   onQueue: () => void;
-  onMore: () => void;
+  onChangePosition: () => void;
+  onUnavailable: () => void;
 }) {
   const queued = Boolean(queuedIncomingName);
   const hasEarlierFieldTime = aggregateFieldTime > currentFieldTime;
@@ -4817,46 +4905,57 @@ function FieldPlayerTimeRow({
         showCurrentFieldTime ? "" : "time-suppressed"
       }`}
     >
-      <span className="player-number">{player.number ?? "–"}</span>
-      <span className="player-time-name">
-        <GoalMarkedPlayerName label={player.name} goalCount={goalCount} />
-        <small>{positionLabel}</small>
-        {queued ? (
-          <span className="bench-queue-status">
-            <ArrowRightLeft size={12} aria-hidden="true" />
-            Coming out for {queuedIncomingName}
-          </span>
-        ) : (
-          hasEarlierFieldTime && (
-            <span className="bench-total-status">
-              {formatPlayerDuration(aggregateFieldTime)} played
+      <button
+        type="button"
+        className="player-time-main"
+        disabled={!queued && !canQueue}
+        onClick={onQueue}
+        aria-label={`${queued ? "Edit planned substitution for" : "Plan"} ${player.name} out`}
+        aria-describedby={`field-player-details-${player.id}${showCurrentFieldTime ? ` field-player-time-${player.id}` : ""}`}
+      >
+        <span className="player-number">{player.number ?? "–"}</span>
+        <span
+          className="player-time-name"
+          id={`field-player-details-${player.id}`}
+        >
+          <GoalMarkedPlayerName label={player.name} goalCount={goalCount} />
+          <small>{positionLabel}</small>
+          {queued ? (
+            <span className="bench-queue-status">
+              <ArrowRightLeft size={12} aria-hidden="true" />
+              Coming out for {queuedIncomingName}
             </span>
-          )
-        )}
-      </span>
-      {showCurrentFieldTime && (
-        <span className="primary-time">
-          <small>Playing</small>
-          <strong>{formatPlayerDuration(currentFieldTime)}</strong>
+          ) : (
+            hasEarlierFieldTime && (
+              <span className="bench-total-status">
+                {formatPlayerDuration(aggregateFieldTime)} played
+              </span>
+            )
+          )}
         </span>
-      )}
+        {showCurrentFieldTime && (
+          <span className="primary-time" id={`field-player-time-${player.id}`}>
+            <small>Playing</small>
+            <strong>{formatPlayerDuration(currentFieldTime)}</strong>
+          </span>
+        )}
+      </button>
       <span className="player-row-actions">
-        <IconButton
-          className="queue-player-button primary-action"
-          variant="primary"
-          size="medium"
-          icon={queued ? Pencil : ArrowRightLeft}
-          disabled={!queued && !canQueue}
-          onClick={onQueue}
-          aria-label={`${queued ? "Edit planned substitution for" : "Plan"} ${player.name} out`}
-        />
         <IconButton
           className="icon-button"
           variant="default"
           size="medium"
-          icon={MoreHorizontal}
-          onClick={onMore}
-          aria-label={`More actions for ${player.name}`}
+          icon={Move}
+          onClick={onChangePosition}
+          aria-label={`Change positions for ${player.name}`}
+        />
+        <IconButton
+          className="icon-button"
+          variant="danger"
+          size="medium"
+          icon={UserRoundX}
+          onClick={onUnavailable}
+          aria-label={`Take ${player.name} out of game`}
         />
       </span>
     </div>
@@ -4896,59 +4995,62 @@ function PlayerTimeRow({
         showCurrentBenchTime ? "" : "time-suppressed"
       }`}
     >
-      <span className="player-number">{player.number ?? "–"}</span>
-      <span className="player-time-name">
-        <GoalMarkedPlayerName label={player.name} goalCount={goalCount} />
-        <small>
-          {playedTime > 0
-            ? `${formatPlayerDuration(playedTime)} played`
-            : "Not played yet"}
-        </small>
-        {queued ? (
-          <span className="bench-queue-status">
-            <ArrowRightLeft size={12} aria-hidden="true" />
-            Going in at {queuedPositionLabel}
-            {queuedOutgoingPlayerName ? ` for ${queuedOutgoingPlayerName}` : ""}
-          </span>
-        ) : paceWarning !== null ? (
-          <span className="minimum-play-warning">
-            <CircleAlert size={13} aria-hidden="true" />
-            Below {Math.round(paceWarning * 1000) / 10}% pace
-          </span>
-        ) : (
-          hasEarlierBenchTime && (
-            <span className="bench-total-status">
-              {formatPlayerDuration(aggregateBenchTime)} bench
+      <button
+        type="button"
+        className="player-time-main"
+        onClick={onQueue}
+        aria-label={
+          queued ? `Edit ${player.name} going in` : `Plan ${player.name} in`
+        }
+        aria-describedby={`bench-player-details-${player.id}${showCurrentBenchTime ? ` bench-player-time-${player.id}` : ""}`}
+      >
+        <span className="player-number">{player.number ?? "–"}</span>
+        <span
+          className="player-time-name"
+          id={`bench-player-details-${player.id}`}
+        >
+          <GoalMarkedPlayerName label={player.name} goalCount={goalCount} />
+          <small>
+            {playedTime > 0
+              ? `${formatPlayerDuration(playedTime)} played`
+              : "Not played yet"}
+          </small>
+          {queued ? (
+            <span className="bench-queue-status">
+              <ArrowRightLeft size={12} aria-hidden="true" />
+              Going in at {queuedPositionLabel}
+              {queuedOutgoingPlayerName
+                ? ` for ${queuedOutgoingPlayerName}`
+                : ""}
             </span>
-          )
-        )}
-      </span>
-      {showCurrentBenchTime && (
-        <span className="primary-time">
-          <small>Sitting</small>
-          <strong>{formatPlayerDuration(currentBenchTime)}</strong>
+          ) : paceWarning !== null ? (
+            <span className="minimum-play-warning">
+              <CircleAlert size={13} aria-hidden="true" />
+              Below {Math.round(paceWarning * 1000) / 10}% pace
+            </span>
+          ) : (
+            hasEarlierBenchTime && (
+              <span className="bench-total-status">
+                {formatPlayerDuration(aggregateBenchTime)} bench
+              </span>
+            )
+          )}
         </span>
-      )}
-      <span className="player-row-actions">
-        <IconButton
-          className="queue-player-button primary-action"
-          variant="primary"
-          size="medium"
-          icon={queued ? Pencil : ArrowRightLeft}
-          onClick={onQueue}
-          aria-label={
-            queued ? `Edit ${player.name} going in` : `Plan ${player.name} in`
-          }
-        />
-        <IconButton
-          className="icon-button"
-          variant="danger"
-          size="medium"
-          icon={UserRoundX}
-          onClick={onUnavailable}
-          aria-label={`Take ${player.name} out of game`}
-        />
-      </span>
+        {showCurrentBenchTime && (
+          <span className="primary-time" id={`bench-player-time-${player.id}`}>
+            <small>Sitting</small>
+            <strong>{formatPlayerDuration(currentBenchTime)}</strong>
+          </span>
+        )}
+      </button>
+      <IconButton
+        className="icon-button"
+        variant="danger"
+        size="medium"
+        icon={UserRoundX}
+        onClick={onUnavailable}
+        aria-label={`Take ${player.name} out of game`}
+      />
     </div>
   );
 }
@@ -4993,7 +5095,6 @@ function PlayerActionMenu({
   options,
   align,
   menuTitle,
-  positionFirst = false,
   showPreferenceFit = true,
   activeMenuId,
   onActiveMenuChange,
@@ -5005,7 +5106,6 @@ function PlayerActionMenu({
   options: PlayerActionMenuOption[];
   align: "start" | "end";
   menuTitle: string;
-  positionFirst?: boolean;
   showPreferenceFit?: boolean;
   activeMenuId: string | null;
   onActiveMenuChange: (menuId: string | null) => void;
@@ -5060,29 +5160,21 @@ function PlayerActionMenu({
                 onSelect={() => onChange(option.id)}
               >
                 <span
-                  className={`player-action-menu-row ${
-                    positionFirst ? "position-first" : ""
-                  } ${showPreferenceFit ? "" : "preference-fit-hidden"}`}
+                  className={`player-action-menu-row ${showPreferenceFit ? "" : "preference-fit-hidden"}`}
                 >
-                  {positionFirst && option.positionLabel ? (
-                    <strong className="replacement-position-primary">
-                      {option.positionLabel}
-                    </strong>
-                  ) : (
-                    <span className="replacement-player-summary">
-                      <GoalMarkedPlayerName
-                        label={option.displayLabel}
-                        goalCount={option.goalCount}
+                  <span className="replacement-player-summary">
+                    <GoalMarkedPlayerName
+                      label={option.displayLabel}
+                      goalCount={option.goalCount}
+                    />
+                    {!showPreferenceFit && selected && (
+                      <Check
+                        className="replacement-selected-icon"
+                        size={15}
+                        aria-label="Selected"
                       />
-                      {!showPreferenceFit && selected && (
-                        <Check
-                          className="replacement-selected-icon"
-                          size={15}
-                          aria-label="Selected"
-                        />
-                      )}
-                    </span>
-                  )}
+                    )}
+                  </span>
                   {showPreferenceFit &&
                     option.preferenceIndex !== undefined && (
                       <span
@@ -5102,17 +5194,9 @@ function PlayerActionMenu({
                         </span>
                       </span>
                     )}
-                  {!positionFirst && option.positionLabel && (
+                  {option.positionLabel && (
                     <span className="replacement-player-position">
                       {option.positionLabel}
-                    </span>
-                  )}
-                  {positionFirst && (
-                    <span className="replacement-player-secondary replacement-player-summary">
-                      <GoalMarkedPlayerName
-                        label={option.displayLabel}
-                        goalCount={option.goalCount}
-                      />
                     </span>
                   )}
                   {option.preferredRoles && (
@@ -5163,6 +5247,7 @@ function getKeeperChangeNotice(
   team: Team,
   pairs: SubstitutionPair[],
   timing: "next-rotation" | "now",
+  { warnAboutRest = true }: { warnAboutRest?: boolean } = {},
 ) {
   const status = getGoalkeeperChangeStatus(
     game,
@@ -5172,6 +5257,7 @@ function getKeeperChangeNotice(
       : game.clock.elapsedSeconds,
   );
   if (!status) return null;
+  const needsRest = warnAboutRest && status.needsRest;
   const messages: string[] = [];
   const outgoingName = playerName(team, status.outgoingPlayerId);
   const incomingName = playerName(team, status.incomingPlayerId);
@@ -5183,7 +5269,7 @@ function getKeeperChangeNotice(
         : `Sending now would end ${outgoingName}'s turn before the recommended ${target}.`,
     );
   }
-  if (status.needsRest) {
+  if (needsRest) {
     const interval = formatDuration(status.intervalSeconds);
     messages.push(
       timing === "next-rotation"
@@ -5203,7 +5289,7 @@ function getKeeperChangeNotice(
       ? timing === "next-rotation"
         ? "Early keeper change"
         : "Wait on this rotation"
-      : status.needsRest
+      : needsRest
         ? "Keeper needs more rest"
         : null,
     message: messages.join(" "),
@@ -5218,21 +5304,19 @@ function KeeperChangeNotice({
   id: string;
 }) {
   if (!notice) return null;
-  return notice.title ? (
+  return (
     <Banner
       id={id}
       className="keeper-change-warning"
+      title={notice.title ? undefined : "Position preference"}
+      hideTitle={!notice.title}
       variant="warning"
       layout="compact"
       role="status"
     >
-      <Banner.Title as="h3">{notice.title}</Banner.Title>
+      {notice.title && <Banner.Title as="h3">{notice.title}</Banner.Title>}
       <Banner.Description>{notice.message}</Banner.Description>
     </Banner>
-  ) : (
-    <p id={id} className="sub-count-explanation" role="status">
-      {notice.message}
-    </p>
   );
 }
 
@@ -5779,11 +5863,10 @@ function SubstitutionPlanner({
                         value={pair.outPlayerId}
                         options={outgoingOptions}
                         align="end"
-                        menuTitle={`Where should ${playerName(
+                        menuTitle={`Who should ${playerName(
                           team,
                           pair.inPlayerId,
-                        )} play?`}
-                        positionFirst
+                        )} replace?`}
                         activeMenuId={activePlayerMenuId}
                         onActiveMenuChange={setActivePlayerMenuId}
                         onChange={(playerId) =>
@@ -6139,18 +6222,20 @@ function SubstitutionSummary({
   formation,
   team,
   game,
+  description = "The lineup and timers are updated.",
   onClose,
 }: {
   pairs: SubstitutionPair[];
   formation: ReturnType<typeof getFormation>;
   team: Team;
   game: ActiveGame;
+  description?: string;
   onClose: () => void;
 }) {
   return (
     <SidelineDialog
       title="Players are in"
-      description="The lineup and timers are updated."
+      description={description}
       className="substitution-ready-sheet"
       width="620px"
       onClose={onClose}

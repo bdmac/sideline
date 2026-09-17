@@ -2154,11 +2154,11 @@ export const queueSubstitutions = (
   };
 };
 
-export const queueBenchSubstitution = (
+const getBenchSubstitution = (
   game: ActiveGame,
   inPlayerId: string,
   outPlayerId: string,
-): ActiveGame => {
+): SubstitutionPair => {
   if (!game.benchIds.includes(inPlayerId)) {
     throw new Error("Incoming player is no longer available on the bench");
   }
@@ -2168,14 +2168,23 @@ export const queueBenchSubstitution = (
   if (!positionId) {
     throw new Error("Outgoing player is no longer on the field");
   }
+  return { inPlayerId, outPlayerId, positionId };
+};
+
+export const queueBenchSubstitution = (
+  game: ActiveGame,
+  inPlayerId: string,
+  outPlayerId: string,
+): ActiveGame => {
+  const pair = getBenchSubstitution(game, inPlayerId, outPlayerId);
   const existingPairs = game.queuedSubstitutions ?? [];
   const nextPairs = existingPairs.filter(
-    (pair) =>
-      pair.inPlayerId !== inPlayerId &&
-      pair.outPlayerId !== outPlayerId &&
-      pair.positionId !== positionId,
+    (existing) =>
+      existing.inPlayerId !== inPlayerId &&
+      existing.outPlayerId !== outPlayerId &&
+      existing.positionId !== pair.positionId,
   );
-  nextPairs.push({ inPlayerId, outPlayerId, positionId });
+  nextPairs.push(pair);
   return queueSubstitutions(game, nextPairs);
 };
 
@@ -2264,6 +2273,57 @@ export const applySubstitutions = (
   return next;
 };
 
+export const applyImmediateSubstitution = (
+  game: ActiveGame,
+  inPlayerId: string,
+  outPlayerId: string,
+  team: Team,
+  now = Date.now(),
+): ActiveGame => {
+  if (game.teamId !== team.id) {
+    throw new Error("The substitution must use the active game's team");
+  }
+  const pair = getBenchSubstitution(game, inPlayerId, outPlayerId);
+  const next = applySubstitutions(game, [pair], team.sideSize, now);
+  const previousPlan = game.queuedSubstitutions ?? [];
+  const remainingCount = Math.max(0, previousPlan.length - 1);
+  const planningGame = {
+    ...next,
+    benchIds: next.benchIds.filter((id) => id !== outPlayerId),
+  };
+  const count = remainingCount
+    ? Math.min(
+        remainingCount,
+        getRecommendedSubstitutionCount(planningGame, team),
+      )
+    : 0;
+  const refreshedPairs = count
+    ? suggestSubstitutions(planningGame, count, team)
+    : [];
+  const refreshed = refreshedPairs.length
+    ? queueSubstitutions(next, refreshedPairs)
+    : next;
+  const note = previousPlan.length
+    ? refreshedPairs.length
+      ? `Sent immediately. Refreshed the remaining plan with ${refreshedPairs.length} ${
+          refreshedPairs.length === 1 ? "substitution" : "substitutions"
+        }.`
+      : "Sent immediately. No substitutions remain in the plan."
+    : "Sent immediately. No plan was created.";
+  return {
+    ...refreshed,
+    history: next.history.map((event, index) =>
+      index === next.history.length - 1
+        ? {
+            ...event,
+            note,
+            beforeQueuedSubstitutions: structuredClone(previousPlan),
+          }
+        : event,
+    ),
+  };
+};
+
 export const undoLastEvent = (
   game: ActiveGame,
   now = Date.now(),
@@ -2277,8 +2337,11 @@ export const undoLastEvent = (
     benchIds: event.beforeBenchIds,
     unavailableIds: event.beforeUnavailableIds,
     presentIds: event.beforePresentIds ?? current.presentIds,
-    queuedSubstitutions:
-      event.beforeQueuedSubstitutions ?? current.queuedSubstitutions,
+    queuedSubstitutions: event.beforeQueuedSubstitutions
+      ? event.beforeQueuedSubstitutions.length
+        ? event.beforeQueuedSubstitutions
+        : undefined
+      : current.queuedSubstitutions,
     guestPlayers: event.beforeGuestPlayers ?? current.guestPlayers,
     history: current.history.slice(0, -1),
   };

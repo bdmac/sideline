@@ -2671,14 +2671,41 @@ select:hover {
 .player-time-row {
   min-height: 76px;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.6rem;
   align-items: center;
   border-bottom: 1px solid var(--line);
 }
 
-.player-time-row.time-suppressed {
+.player-time-main {
+  min-width: 0;
+  min-height: 76px;
+  height: 100%;
+  display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.6rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.player-time-row.time-suppressed .player-time-main {
+  grid-template-columns: 34px minmax(0, 1fr);
+}
+
+.player-time-row:hover {
+  background: var(--wash);
+}
+
+.player-time-main:focus-visible {
+  outline-offset: -3px;
+}
+
+.player-time-main:disabled {
+  opacity: 1;
 }
 
 .player-time-row.queued {
@@ -2776,13 +2803,6 @@ select:hover {
 
 .player-action-toolbar [data-component="text"] {
   font-size: 0.76rem;
-}
-
-.queue-player-button.primary-action {
-  width: 44px;
-  height: 44px;
-  min-height: 44px;
-  padding: 0;
 }
 
 .icon-button {
@@ -3407,8 +3427,7 @@ select:hover {
 }
 
 .player-action-menu-row .replacement-player-summary,
-.player-action-menu-row .player-name-with-goals,
-.player-action-menu-row .replacement-player-secondary {
+.player-action-menu-row .player-name-with-goals {
   min-width: 0;
   overflow: hidden;
 }
@@ -4030,10 +4049,16 @@ select:hover {
   stroke-width: 3;
 }
 
+.single-substitution-actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
 .bench-picker-actions {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  align-items: center;
   gap: 0.5rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
@@ -4041,7 +4066,12 @@ select:hover {
 }
 
 .bench-picker-actions.editing {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 44px minmax(0, 1.3fr) minmax(0, 1fr);
+}
+
+.bench-picker-actions .remove-from-plan-action {
+  border-color: transparent;
+  color: var(--danger);
 }
 
 .bench-picker-actions button {
@@ -4050,9 +4080,17 @@ select:hover {
   white-space: nowrap;
 }
 
-@media (max-width: 420px) {
-  .bench-picker-actions.editing {
-    grid-template-columns: minmax(0, 1fr);
+@media (max-width: 520px) {
+  .bench-picker-actions button {
+    padding-inline: 0.35rem;
+  }
+
+  .bench-picker-actions [data-component="text"] {
+    font-size: 0.875rem;
+  }
+
+  .bench-picker-actions [data-component="leadingVisual"] {
+    display: none;
   }
 }
 
