@@ -2197,10 +2197,14 @@ describe("Sideline app", () => {
     expect(goalkeeperSlot).toBeInTheDocument();
     expect(goalkeeperSlot).toHaveTextContent("GKOpen");
     expect(goalkeeperSlot).not.toHaveTextContent("Goalkeeper");
+    expect(goalkeeperSlot.querySelector(".starter-player-warning")).toBeNull();
     expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Auto-fill" })).toBeEnabled();
 
     fireEvent.click(goalkeeperSlot);
+    expect(
+      screen.queryByRole("status", { name: "Current starter concerns" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", {
         name: /Henry.*Currently on starting bench/,

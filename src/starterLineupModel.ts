@@ -50,8 +50,6 @@ export const getStarterLineupAdvice = (
   for (const position of formation.positions) {
     const player = players.find((p) => p.id === assignments[position.id]);
     const issues: string[] = [];
-    if (!player && position.role === "goalkeeper")
-      issues.push("Choose a starting goalkeeper.");
     if (
       player &&
       player.preferredRoles.length > 0 &&

@@ -329,23 +329,25 @@ describe("starter lineup advice", () => {
     },
   );
 
-  it("only warns about a missing starting goalkeeper, not a missing reserve", () => {
-    const formation = FORMATIONS[0];
-    const keeper = formation.positions.find((p) => p.role === "goalkeeper")!;
-    const advice = getStarterLineupAdvice(
-      formation,
-      { [keeper.id]: "keeper" },
-      lineupPlayers.slice(0, 2),
-    );
-    expect(advice.concerns).toEqual([]);
-    expect(
-      getStarterLineupAdvice(formation, {}, lineupPlayers).concerns,
-    ).toEqual(["Choose a starting goalkeeper."]);
-    expect(() =>
-      previewStarterMove(formation, {}, lineupPlayers, "absent", keeper.id),
-    ).toThrow(/present player/);
-    expect(() =>
-      previewStarterMove(formation, {}, lineupPlayers, "keeper", "invalid"),
-    ).toThrow(/valid starting position/);
-  });
+  it.each(FORMATIONS)(
+    "does not warn about an empty goalkeeper or missing reserve in $name",
+    (formation) => {
+      const keeper = formation.positions.find((p) => p.role === "goalkeeper")!;
+      const advice = getStarterLineupAdvice(
+        formation,
+        { [keeper.id]: "keeper" },
+        lineupPlayers.slice(0, 2),
+      );
+      expect(advice.concerns).toEqual([]);
+      expect(
+        getStarterLineupAdvice(formation, {}, lineupPlayers).concerns,
+      ).toEqual([]);
+      expect(() =>
+        previewStarterMove(formation, {}, lineupPlayers, "absent", keeper.id),
+      ).toThrow(/present player/);
+      expect(() =>
+        previewStarterMove(formation, {}, lineupPlayers, "keeper", "invalid"),
+      ).toThrow(/valid starting position/);
+    },
+  );
 });

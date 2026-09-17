@@ -121,27 +121,30 @@ describe("starter lineup interactions", () => {
     },
   );
 
-  it("still marks a missing starting goalkeeper without a reserve banner", () => {
+  it("treats an empty goalkeeper slot as unfinished setup without a warning", () => {
+    const choose = vi.fn();
     render(
       <StarterLineup
         formation={formation}
         assignments={{}}
         players={players.slice(1, 2)}
-        onChoosePosition={vi.fn()}
+        onChoosePosition={choose}
         onMove={vi.fn()}
       />,
     );
     const position = screen.getByRole("button", {
       name: `Assign player at ${keeper.label}`,
     });
-    expect(position).toHaveAccessibleDescription(/Lineup warning/);
-    expect(
-      position.querySelector(".starter-player-warning"),
-    ).toBeInTheDocument();
+    expect(position).not.toHaveAccessibleDescription(/Lineup warning/);
+    expect(position).toHaveClass("empty");
+    expect(position).toHaveTextContent("Open");
+    expect(position.querySelector(".starter-player-warning")).toBeNull();
     expect(document.querySelectorAll(".starter-player-warning")).toHaveLength(
-      1,
+      0,
     );
     expect(screen.queryByText(/No backup goalkeeper/)).not.toBeInTheDocument();
+    fireEvent.click(position);
+    expect(choose).toHaveBeenCalledExactlyOnceWith(keeper.id);
   });
 
   it("shows feedback inside the pitch only while hovering a valid drag destination", () => {
