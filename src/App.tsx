@@ -108,6 +108,7 @@ import {
   markUnavailable,
   materializeGame,
   movePlayer,
+  previewBenchSubstitution,
   queueBenchSubstitution,
   queueSubstitutions,
   reassignIncomingSubstitution,
@@ -502,7 +503,7 @@ function SettingsMenu({
                 Substitution alerts
               </strong>
               <small id="substitution-alerts-description">
-                Notify me when a bench rotation is due.
+                Remind me when to consider substitutions.
               </small>
               {!substitutionAlertSupported && (
                 <small id="substitution-alerts-status">
@@ -2745,7 +2746,7 @@ function LiveGameScreen({
                 leadingVisual={ArrowRightLeft}
                 onClick={() => setPlannerOpen(true)}
               >
-                Plan subs
+                Create plan
               </Button>
             ) : null}
             <Button
@@ -2831,7 +2832,7 @@ function LiveGameScreen({
                   leadingVisual={ArrowRightLeft}
                   onClick={() => setPlannerOpen(true)}
                 >
-                  Plan subs
+                  Create plan
                 </Button>
               ) : null)}
             <Button
@@ -2880,7 +2881,7 @@ function LiveGameScreen({
           <span>
             <strong>Time to consider substitutions</strong>
             <small>
-              Rotation timer:{" "}
+              Reminder timer:{" "}
               {formatDuration(
                 substitutionReminder.secondsSinceLastSubstitution,
               )}
@@ -2894,7 +2895,7 @@ function LiveGameScreen({
             leadingVisual={ArrowRightLeft}
             onClick={() => setPlannerOpen(true)}
           >
-            Plan subs
+            Create plan
           </Button>
         </section>
       )}
@@ -2938,8 +2939,8 @@ function LiveGameScreen({
             className="queued-substitution-timer"
             aria-label={
               !routineRotation.recommended
-                ? "No further scheduled rotation; manual plan is still available"
-                : `Next rotation ${
+                ? "No further reminders scheduled; you can still create a plan"
+                : `Next reminder ${
                     substitutionReminder.due
                       ? "due now"
                       : `due in ${formatDuration(
@@ -3011,8 +3012,8 @@ function LiveGameScreen({
 
         <aside className="bench-section">
           {game.benchIds.length > 0 && (
-            <div className="rotation-status" aria-label="Rotation timer">
-              <span>Rotation</span>
+            <div className="rotation-status" aria-label="Next reminder">
+              <span>Next reminder</span>
               <strong>{rotationTimingLabel}</strong>
             </div>
           )}
@@ -3260,7 +3261,7 @@ function LiveGameScreen({
             queuedPairs.length ? setQueuedPlanOpen(true) : setPlannerOpen(true)
           }
         >
-          {queuedPairs.length ? "Review" : "Plan subs"}
+          {queuedPairs.length ? "Review" : "Create plan"}
         </Button>
         <Button
           className="score-button"
@@ -4345,6 +4346,62 @@ function SingleSubstitutionActions({
   );
 }
 
+function ScheduledChoicesHeader({ direction }: { direction: "in" | "out" }) {
+  return (
+    <div className="scheduled-choices-header">
+      <h3 className="scheduled-choices-heading">
+        {direction === "in" ? "Already going in" : "Already going out"}
+      </h3>
+      <p className="scheduled-choices-description">
+        Replaces existing pairings.
+      </p>
+    </div>
+  );
+}
+
+function PlannedPairingImpact({
+  game,
+  team,
+  inPlayerId,
+  outPlayerId,
+}: {
+  game: ActiveGame;
+  team: Team;
+  inPlayerId: string;
+  outPlayerId: string;
+}) {
+  const { removedPlayerIds } = previewBenchSubstitution(
+    game,
+    inPlayerId,
+    outPlayerId,
+  );
+  if (!removedPlayerIds.length) return null;
+  const listFormatter = new Intl.ListFormat("en", {
+    style: "long",
+    type: "conjunction",
+  });
+  const fieldIds = new Set(Object.values(game.assignments));
+  const fieldNames = removedPlayerIds
+    .filter((id) => fieldIds.has(id))
+    .map((id) => playerName(team, id));
+  const benchNames = removedPlayerIds
+    .filter((id) => game.benchIds.includes(id))
+    .map((id) => playerName(team, id));
+  const outcomes = [
+    ...(fieldNames.length
+      ? [`${listFormatter.format(fieldNames)} on the field`]
+      : []),
+    ...(benchNames.length
+      ? [`${listFormatter.format(benchNames)} on the bench`]
+      : []),
+  ];
+  return (
+    <span className="planned-pairing-impact" role="status">
+      This leaves {outcomes.join(" and ")}.
+    </span>
+  );
+}
+
 function BenchSubstitutionPicker({
   playerId,
   game,
@@ -4469,11 +4526,23 @@ function BenchSubstitutionPicker({
           ...(selectedOutPlayerId
             ? [
                 {
-                  label: "Next rotation",
-                  value: `Scheduled in at ${
-                    selectedPosition?.mediumLabel ?? selectedPositionEntry?.[0]
-                  } for ${playerName(team, selectedOutPlayerId)}`,
-                  emphasis: "warm" as const,
+                  label: "In this plan",
+                  value: (
+                    <>
+                      Scheduled in at{" "}
+                      {selectedPosition?.mediumLabel ??
+                        selectedPositionEntry?.[0]}{" "}
+                      for {playerName(team, selectedOutPlayerId)}
+                      {selectedPosition && (
+                        <PlannedPairingImpact
+                          game={game}
+                          team={team}
+                          inPlayerId={playerId}
+                          outPlayerId={selectedOutPlayerId}
+                        />
+                      )}
+                    </>
+                  ),
                   wide: true,
                   action: currentPair ? (
                     <RemoveFromPlanAction onRemove={onRemove} />
@@ -4495,9 +4564,7 @@ function BenchSubstitutionPicker({
               <Fragment key={outPlayerId}>
                 {plannedIncomingName &&
                   !choices[index - 1]?.plannedIncomingName && (
-                    <h3 className="scheduled-choices-heading">
-                      Already going out
-                    </h3>
+                    <ScheduledChoicesHeader direction="out" />
                   )}
                 <button
                   className={`bench-position-choice ${
@@ -4700,9 +4767,18 @@ function FieldSubstitutionPicker({
           ...(selectedInPlayerId
             ? [
                 {
-                  label: "Next rotation",
-                  value: `Scheduled out for ${playerName(team, selectedInPlayerId)}`,
-                  emphasis: "warm" as const,
+                  label: "In this plan",
+                  value: (
+                    <>
+                      Scheduled out for {playerName(team, selectedInPlayerId)}
+                      <PlannedPairingImpact
+                        game={game}
+                        team={team}
+                        inPlayerId={selectedInPlayerId}
+                        outPlayerId={playerId}
+                      />
+                    </>
+                  ),
                   wide: true,
                   action: currentPair ? (
                     <RemoveFromPlanAction onRemove={onRemove} />
@@ -4730,9 +4806,7 @@ function FieldSubstitutionPicker({
               <Fragment key={incoming.id}>
                 {plannedOutgoingName &&
                   !choices[index - 1]?.plannedOutgoingName && (
-                    <h3 className="scheduled-choices-heading">
-                      Already going in
-                    </h3>
+                    <ScheduledChoicesHeader direction="in" />
                   )}
                 <button
                   className={selected ? "selected" : ""}
@@ -5581,11 +5655,11 @@ function SubstitutionPlanner({
 
   return (
     <SidelineDialog
-      title="Plan substitutions"
+      title="Substitution plan"
       description={
         routineRotation.recommended
           ? "Suggested for fairness. Ready the plan now, then send the players in when the change happens."
-          : "No further routine rotation is scheduled. Manual changes are still available if needed."
+          : "No further reminders are scheduled. You can still create a substitution plan."
       }
       onClose={onClose}
       width="720px"
@@ -6094,7 +6168,7 @@ function QueuedSubstitutionSummary({
 
   return (
     <SidelineDialog
-      title={`${pairs.length} ${pairs.length === 1 ? "Substitution" : "Substitutions"}`}
+      title={`Substitution plan (${pairs.length})`}
       description={
         <>
           Send 'em in now or you can send them in later. Your call coach.
@@ -6128,7 +6202,7 @@ function QueuedSubstitutionSummary({
             aria-describedby={keeperNotice ? keeperNoticeId : undefined}
             onClick={onExecute}
           >
-            Send 'em now
+            Send players in
           </Button>
         </>
       }
@@ -6847,7 +6921,7 @@ function PositionEditor({
           ...(currentPair
             ? [
                 {
-                  label: "Next rotation",
+                  label: "In this plan",
                   value: `Scheduled out for ${playerName(
                     team,
                     currentPair.inPlayerId,

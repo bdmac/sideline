@@ -4086,7 +4086,7 @@ select:hover {
   margin: 0;
   color: var(--ink);
   font-size: 0.86rem;
-  font-weight: 850;
+  font-weight: 500;
 }
 
 .player-context-panel dd.warm {
@@ -4094,8 +4094,8 @@ select:hover {
 }
 
 .player-goals-empty {
-  color: var(--ink-soft);
-  font-weight: 750;
+  color: inherit;
+  font-weight: inherit;
 }
 
 .position-change-preview {
@@ -4127,16 +4127,32 @@ select:hover {
   border-bottom: 1px solid var(--line);
 }
 
-.scheduled-choices-heading {
-  margin: 0;
+.scheduled-choices-header {
   padding: 0.65rem 0.75rem;
   border-top: 2px solid var(--rule-strong);
   border-bottom: 1px solid var(--line);
   background: var(--wash);
   color: var(--ink);
+  text-align: center;
+}
+
+.scheduled-choices-heading {
+  margin: 0;
   font-size: 0.86rem;
   font-weight: 850;
-  text-align: center;
+}
+
+.scheduled-choices-description {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.planned-pairing-impact {
+  display: block;
+  margin-top: 0.25rem;
+  color: inherit;
+  font: inherit;
 }
 
 .bench-replacement-list button {
@@ -5175,7 +5191,16 @@ select:hover {
   }
 
   .queued-plan-actions .primary-action {
-    padding-inline: 0.6rem;
+    padding-inline: 0.35rem;
+  }
+
+  .queued-plan-actions [data-component="buttonContent"] {
+    column-gap: 0.25rem;
+  }
+
+  .queued-plan-actions [data-component="leadingVisual"] svg {
+    width: 16px;
+    height: 16px;
   }
 
   .clock-state {

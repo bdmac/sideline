@@ -41,7 +41,7 @@ npm run build
 2. Start a game and mark attendance from the fixed team roster.
 3. Select a formation, assign starters, and confirm the bench. U8 games can use quarters or halves; U12 uses its fixed two-half format.
 4. Start or pause the clock from the sticky game controls.
-5. Open **Plan subs**, choose the number of swaps, review or override the fair suggestions, and confirm the OUT/IN checklist.
+5. Open **Create plan**, choose the number of swaps, review or override the fair suggestions, and confirm the OUT/IN checklist.
 6. Tap a live pitch card or an **On field** player row to open that player's **Plan out** picker directly. Use the **On field** row's **Change positions** or **Take out of game** controls for other actions; dragging between pitch positions still changes positions without recording a substitution.
 7. Undo the latest confirmed substitution/unavailable event when needed.
 8. End the game only after confirming the destructive action.

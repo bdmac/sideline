@@ -35,6 +35,7 @@ import {
   markUnavailable,
   materializeGame,
   movePlayer,
+  previewBenchSubstitution,
   queueBenchSubstitution,
   queueSubstitutions,
   reassignIncomingSubstitution,
@@ -1538,6 +1539,59 @@ describe("substitutions", () => {
       positionId: initialPairs[0].positionId,
     });
   });
+
+  it.each(["u8", "u12"] as const)(
+    "replaces conflicting %s pairings without swapping their previous partners",
+    (teamId) => {
+      const team = INITIAL_TEAMS[teamId];
+      const game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+      );
+      const pairs = Object.entries(game.assignments)
+        .slice(0, 3)
+        .map(([positionId, outPlayerId], index) => ({
+          positionId,
+          outPlayerId,
+          inPlayerId: game.benchIds[index],
+        }));
+      const queued = queueSubstitutions(game, pairs);
+      const before = structuredClone(queued);
+      const preview = previewBenchSubstitution(
+        queued,
+        pairs[0].inPlayerId,
+        pairs[1].outPlayerId,
+      );
+      const updated = queueBenchSubstitution(
+        queued,
+        pairs[0].inPlayerId,
+        pairs[1].outPlayerId,
+      );
+      expect(updated.queuedSubstitutions).toEqual([
+        pairs[2],
+        { ...pairs[1], inPlayerId: pairs[0].inPlayerId },
+      ]);
+      expect(preview.pairs).toEqual(updated.queuedSubstitutions);
+      expect(preview.removedPlayerIds).toEqual([
+        pairs[0].outPlayerId,
+        pairs[1].inPlayerId,
+      ]);
+      expect(
+        previewBenchSubstitution(
+          queued,
+          pairs[0].inPlayerId,
+          pairs[0].outPlayerId,
+        ).removedPlayerIds,
+      ).toEqual([]);
+      expect(updated.assignments).toEqual(game.assignments);
+      expect(updated.benchIds).toEqual(game.benchIds);
+      expect(updated.history).toEqual(game.history);
+      expect(queued).toEqual(before);
+    },
+  );
 
   it("removes one bench player without clearing the rest of the queued batch", () => {
     const team = INITIAL_TEAMS.u8;

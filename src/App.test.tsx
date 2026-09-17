@@ -558,7 +558,7 @@ describe("Sideline app", () => {
     expect(alertSwitch).toHaveAttribute("aria-pressed", "false");
     const awakeDescription =
       /^\s*Prevents auto-lock while Sideline is visible during an active game\.$/;
-    const alertsDescription = /^\s*Notify me when a bench rotation is due\.$/;
+    const alertsDescription = /^\s*Remind me when to consider substitutions\.$/;
     expect(wakeLockSwitch).toHaveAccessibleDescription(awakeDescription);
     expect(alertSwitch).toHaveAccessibleDescription(alertsDescription);
 
@@ -1019,7 +1019,7 @@ describe("Sideline app", () => {
         JSON.stringify({ substitutionAlerts: true }),
       );
       render(<App />);
-      expect(screen.getByLabelText("Rotation timer")).toHaveTextContent(
+      expect(screen.getByLabelText("Next reminder")).toHaveTextContent(
         "No more scheduled",
       );
       act(() => vi.advanceTimersByTime(1_000));
@@ -1036,9 +1036,9 @@ describe("Sideline app", () => {
           screen.getByRole("button", { name: "Review substitutions" }),
         );
       } else {
-        fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+        fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
         const planner = screen.getByRole("dialog", {
-          name: "Plan substitutions",
+          name: "Substitution plan",
         });
         expect(
           within(planner).getByRole("button", { name: "Choose a swap count" }),
@@ -1050,10 +1050,10 @@ describe("Sideline app", () => {
         );
       }
       const review = screen.getByRole("dialog", {
-        name: "1 Substitution",
+        name: "Substitution plan (1)",
       });
       fireEvent.click(
-        within(review).getByRole("button", { name: "Send 'em now" }),
+        within(review).getByRole("button", { name: "Send players in" }),
       );
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
       expect(saved.activeGame?.history).toHaveLength(game.history.length + 1);
@@ -1077,7 +1077,7 @@ describe("Sideline app", () => {
       act(() => vi.advanceTimersByTime(1_000));
 
       const review = screen.getByRole("dialog", {
-        name: queued ? /^[0-9]+ Substitutions?$/ : "Plan substitutions",
+        name: queued ? /^Substitution plan \([0-9]+\)$/ : "Substitution plan",
       });
       expect(vibrate).toHaveBeenCalledTimes(alertsEnabled ? 1 : 0);
       const persisted = JSON.parse(
@@ -1116,7 +1116,9 @@ describe("Sideline app", () => {
 
       expect(vibrate).toHaveBeenCalledOnce();
       expect(
-        screen.queryByRole("dialog", { name: /^[0-9]+ Substitutions?$/ }),
+        screen.queryByRole("dialog", {
+          name: /^Substitution plan \([0-9]+\)$/,
+        }),
       ).not.toBeInTheDocument();
       if (interaction === "settings") {
         expect(screen.getByText("Game-day settings")).toBeInTheDocument();
@@ -1133,7 +1135,9 @@ describe("Sideline app", () => {
       }
       act(() => vi.advanceTimersByTime(2_000));
       expect(
-        screen.queryByRole("dialog", { name: /^[0-9]+ Substitutions?$/ }),
+        screen.queryByRole("dialog", {
+          name: /^Substitution plan \([0-9]+\)$/,
+        }),
       ).not.toBeInTheDocument();
       expect(vibrate).toHaveBeenCalledOnce();
     },
@@ -1184,13 +1188,13 @@ describe("Sideline app", () => {
       act(() => vi.advanceTimersByTime(1_000));
       expect(vibrate).toHaveBeenCalledOnce();
       expect(screen.getByLabelText("Substitution reminder")).toHaveTextContent(
-        "Rotation timer:",
+        "Reminder timer:",
       );
       if (alreadyDue) {
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       } else {
         expect(
-          screen.getByRole("dialog", { name: "Plan substitutions" }),
+          screen.getByRole("dialog", { name: "Substitution plan" }),
         ).toBeInTheDocument();
         fireEvent.click(
           within(screen.getByRole("dialog")).getByRole("button", {
@@ -1211,10 +1215,10 @@ describe("Sideline app", () => {
       screen.getByRole("button", { name: "Review substitutions" }),
     );
     const review = screen.getByRole("dialog", {
-      name: /^[0-9]+ Substitutions?$/,
+      name: /^Substitution plan \([0-9]+\)$/,
     });
     fireEvent.click(
-      within(review).getByRole("button", { name: "Send 'em now" }),
+      within(review).getByRole("button", { name: "Send players in" }),
     );
     const confirmation = screen.queryByRole("dialog");
     if (confirmation) {
@@ -1228,7 +1232,7 @@ describe("Sideline app", () => {
     act(() => vi.advanceTimersByTime(1_000));
     expect(vibrate).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("dialog", { name: "Plan substitutions" }),
+      screen.getByRole("dialog", { name: "Substitution plan" }),
     ).toBeInTheDocument();
   });
 
@@ -1993,10 +1997,10 @@ describe("Sideline app", () => {
         fireEvent.click(
           within(
             screen.getByRole("status", { name: "Substitution reminder" }),
-          ).getByRole("button", { name: "Plan subs" }),
+          ).getByRole("button", { name: "Create plan" }),
         );
         const planner = screen.getByRole("dialog", {
-          name: "Plan substitutions",
+          name: "Substitution plan",
         });
         const outgoing = [
           ...planner.querySelectorAll('[data-player-menu-id^="out-"]'),
@@ -2899,9 +2903,9 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
     const planner = screen.getByRole("dialog", {
-      name: "Plan substitutions",
+      name: "Substitution plan",
     });
     fireEvent.click(within(planner).getByRole("button", { name: "3" }));
     expect(planner.querySelector(".swap-column-headings")).toHaveTextContent(
@@ -2998,10 +3002,10 @@ describe("Sideline app", () => {
     fireEvent.click(queueButton);
 
     const summary = screen.getByRole("dialog", {
-      name: "3 Substitutions",
+      name: "Substitution plan (3)",
     });
     expect(
-      within(summary).getByRole("button", { name: "Send 'em now" }),
+      within(summary).getByRole("button", { name: "Send players in" }),
     ).toHaveClass("primary-action");
 
     expect(summary).toHaveTextContent("OUT");
@@ -3032,13 +3036,13 @@ describe("Sideline app", () => {
     });
 
     fireEvent.click(
-      within(summary).getByRole("button", { name: "Send 'em now" }),
+      within(summary).getByRole("button", { name: "Send players in" }),
     );
     expect(
       screen.getByRole("button", { name: "Plan substitution for Dylan" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("dialog", { name: /^[0-9]+ Substitutions?$/ }),
+      screen.queryByRole("dialog", { name: /^Substitution plan \([0-9]+\)$/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -3046,10 +3050,10 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
 
     const planner = screen.getByRole("dialog", {
-      name: "Plan substitutions",
+      name: "Substitution plan",
     });
     fireEvent.click(within(planner).getByRole("button", { name: "3" }));
     const originalIncoming = within(planner)
@@ -3128,14 +3132,14 @@ describe("Sideline app", () => {
     );
 
     const review = screen.getByRole("dialog", {
-      name: "1 Substitution",
+      name: "Substitution plan (1)",
     });
     expect(within(review).getByText(targetPosition.mediumLabel)).toBeVisible();
     expect(
       within(review).queryByText(targetPosition.shortLabel),
     ).not.toBeInTheDocument();
     expect(
-      within(review).getByRole("button", { name: "Send 'em now" }),
+      within(review).getByRole("button", { name: "Send players in" }),
     ).toBeEnabled();
     expect(
       within(review).queryByText("Plan needs attention"),
@@ -3146,10 +3150,10 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Fireballers"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
 
     const planner = screen.getByRole("dialog", {
-      name: "Plan substitutions",
+      name: "Substitution plan",
     });
     fireEvent.click(within(planner).getByRole("button", { name: "6" }));
 
@@ -3196,16 +3200,16 @@ describe("Sideline app", () => {
     render(<App />);
 
     const reminder = screen.getByLabelText("Substitution reminder");
-    expect(reminder).toHaveTextContent("Rotation timer: 6:40");
+    expect(reminder).toHaveTextContent("Reminder timer: 6:40");
     expect(screen.getByRole("tab", { name: "Bench 5" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Rotation timer")).toHaveTextContent(
-      "RotationDue now",
+    expect(screen.getByLabelText("Next reminder")).toHaveTextContent(
+      "Next reminderDue now",
     );
     fireEvent.click(
-      within(reminder).getByRole("button", { name: "Plan subs" }),
+      within(reminder).getByRole("button", { name: "Create plan" }),
     );
     expect(
-      screen.getByRole("dialog", { name: "Plan substitutions" }),
+      screen.getByRole("dialog", { name: "Substitution plan" }),
     ).toBeInTheDocument();
   });
 
@@ -3226,8 +3230,8 @@ describe("Sideline app", () => {
 
     render(<App />);
 
-    expect(screen.getByLabelText("Rotation timer")).toHaveTextContent(
-      "RotationDue in 4:40",
+    expect(screen.getByLabelText("Next reminder")).toHaveTextContent(
+      "Next reminderDue in 4:40",
     );
   });
 
@@ -3253,11 +3257,11 @@ describe("Sideline app", () => {
         );
       } else {
         fireEvent.click(
-          screen.getAllByRole("button", { name: "Plan subs" })[0],
+          screen.getAllByRole("button", { name: "Create plan" })[0],
         );
       }
       const planner = screen.getByRole("dialog", {
-        name: "Plan substitutions",
+        name: "Substitution plan",
       });
       const count = savedPlan ? 3 : 6;
       expect(
@@ -3275,7 +3279,7 @@ describe("Sideline app", () => {
           within(planner).getByRole("button", { name: "Ready 6 swaps" }),
         );
         const review = screen.getByRole("dialog", {
-          name: "6 Substitutions",
+          name: "Substitution plan (6)",
         });
         fireEvent.click(within(review).getByRole("button", { name: "Close" }));
         expect(screen.getByLabelText("Ready substitutions")).toHaveTextContent(
@@ -3337,9 +3341,11 @@ describe("Sideline app", () => {
       state.activeGame = setClockRunning(game, true, Date.now());
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       render(<App />);
-      fireEvent.click(screen.getAllByRole("button", { name: "Plan subs" })[0]);
+      fireEvent.click(
+        screen.getAllByRole("button", { name: "Create plan" })[0],
+      );
       const planner = screen.getByRole("dialog", {
-        name: "Plan substitutions",
+        name: "Substitution plan",
       });
       expect(planner.querySelector(".keeper-change-warning")).toBeNull();
       expect(
@@ -3349,7 +3355,7 @@ describe("Sideline app", () => {
         within(planner).getByRole("button", { name: /Ready \d swaps?/ }),
       );
       const review = screen.getByRole("dialog", {
-        name: /^[0-9]+ Substitutions?$/,
+        name: /^Substitution plan \([0-9]+\)$/,
       });
       const warning = within(review).getByRole("status", {
         name: "Wait on this rotation",
@@ -3360,7 +3366,9 @@ describe("Sideline app", () => {
       expect(warning).toHaveTextContent(
         "Lazar has not had their recommended 15:00 bench turn before taking over.",
       );
-      const send = within(review).getByRole("button", { name: "Send 'em now" });
+      const send = within(review).getByRole("button", {
+        name: "Send players in",
+      });
       expect(send).toBeEnabled();
       expect(send).toHaveAccessibleDescription(/Wait on this rotation/);
       const queued = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
@@ -3413,9 +3421,11 @@ describe("Sideline app", () => {
       state.activeGame = game;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       render(<App />);
-      fireEvent.click(screen.getAllByRole("button", { name: "Plan subs" })[0]);
+      fireEvent.click(
+        screen.getAllByRole("button", { name: "Create plan" })[0],
+      );
       const planner = screen.getByRole("dialog", {
-        name: "Plan substitutions",
+        name: "Substitution plan",
       });
       const maximum = elapsedSeconds === 120 ? 4 : 5;
       expect(planner.querySelectorAll(".stepper button")).toHaveLength(5);
@@ -3547,11 +3557,11 @@ describe("Sideline app", () => {
         );
         fireEvent.click(screen.getByRole("button", { name: "Edit plan" }));
       } else {
-        fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+        fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
         fireEvent.click(screen.getByRole("button", { name: "4" }));
       }
       const planner = screen.getByRole("dialog", {
-        name: "Plan substitutions",
+        name: "Substitution plan",
       });
       if (mode === "edited") {
         const [first, second] = originalPairs;
@@ -3694,8 +3704,8 @@ describe("Sideline app", () => {
     state.activeGame = game;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
-    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
     fireEvent.click(within(planner).getByRole("button", { name: "5" }));
     expect(within(planner).getByRole("alert")).toHaveTextContent(
       "A full-team swap needs a replacement keeper from the bench.",
@@ -3728,8 +3738,8 @@ describe("Sideline app", () => {
     state.activeGame = game;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
-    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
     expect(
       within(planner).queryByText("Choose at least one substitution"),
     ).not.toBeInTheDocument();
@@ -3765,7 +3775,7 @@ describe("Sideline app", () => {
       screen.getByRole("button", { name: "Review substitutions" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Edit plan" }));
-    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
     for (const count of [4, 5]) {
       fireEvent.click(
         within(planner).getByRole("button", { name: String(count) }),
@@ -3786,8 +3796,8 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
-    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
     const five = within(planner).getByRole("button", { name: "5" });
     expect(five).toBeEnabled();
     fireEvent.click(five);
@@ -3819,7 +3829,7 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
 
     fireEvent.click(screen.getByRole("button", { name: "1" }));
 
@@ -3832,9 +3842,9 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
 
-    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
     fireEvent.click(within(planner).getByRole("button", { name: "1" }));
     const outgoingTrigger = within(planner).getByLabelText(
       "Swap 1 outgoing player",
@@ -3871,9 +3881,9 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
 
-    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
     fireEvent.click(within(planner).getByRole("button", { name: "1" }));
     const outgoingTrigger = within(planner).getByLabelText(
       "Swap 1 outgoing player",
@@ -3896,12 +3906,12 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    const planButton = screen.getByRole("button", { name: "Plan subs" });
+    const planButton = screen.getByRole("button", { name: "Create plan" });
     expect(planButton).not.toHaveAttribute("data-label-wrap");
     planButton.focus();
     fireEvent.click(planButton);
 
-    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
     expect(
       planner.querySelector('[data-component="Dialog.Header"]'),
     ).toBeInTheDocument();
@@ -3914,7 +3924,7 @@ describe("Sideline app", () => {
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(
-      screen.queryByRole("dialog", { name: "Plan substitutions" }),
+      screen.queryByRole("dialog", { name: "Substitution plan" }),
     ).not.toBeInTheDocument();
     await waitFor(() => expect(planButton).toHaveFocus());
   });
@@ -3943,8 +3953,8 @@ describe("Sideline app", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
-    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
     fireEvent.click(within(planner).getByRole("button", { name: "2" }));
 
     const playerName = (playerId: string) =>
@@ -4058,10 +4068,12 @@ describe("Sideline app", () => {
       render(<App />);
       fireEvent.click(screen.getByText("Golden Dragons"));
       startGame();
-      fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+      fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
       fireEvent.click(screen.getByRole("button", { name: "3" }));
       fireEvent.click(screen.getByRole("button", { name: "Ready 3 swaps" }));
-      const review = screen.getByRole("dialog", { name: "3 Substitutions" });
+      const review = screen.getByRole("dialog", {
+        name: "Substitution plan (3)",
+      });
       expect(
         within(review).queryByRole("button", { name: "Send later" }),
       ).not.toBeInTheDocument();
@@ -4079,10 +4091,10 @@ describe("Sideline app", () => {
       ).toBeVisible();
       expect(within(readyBanner).getByText("Due in 10:00")).toBeVisible();
       expect(
-        within(readyBanner).getByLabelText("Next rotation due in 10:00"),
+        within(readyBanner).getByLabelText("Next reminder due in 10:00"),
       ).toBeVisible();
       expect(
-        within(readyBanner).queryByRole("button", { name: "Send 'em now" }),
+        within(readyBanner).queryByRole("button", { name: "Send players in" }),
       ).not.toBeInTheDocument();
       fireEvent.click(
         within(readyBanner).getByRole("button", {
@@ -4095,7 +4107,7 @@ describe("Sideline app", () => {
       const before = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
       for (const count of [3, 2, 1]) {
         const review = screen.getByRole("dialog", {
-          name: `${count} ${count === 1 ? "Substitution" : "Substitutions"}`,
+          name: `Substitution plan (${count})`,
         });
         expect(review).toHaveAccessibleDescription(
           /Send 'em in now or you can send them in later\. Your call coach\./,
@@ -4114,13 +4126,15 @@ describe("Sideline app", () => {
       expect(after.activeGame?.totals).toEqual(before.activeGame?.totals);
       expect(after.activeGame?.history).toEqual(before.activeGame?.history);
       expect(
-        screen.queryByRole("dialog", { name: /^[0-9]+ Substitutions?$/ }),
+        screen.queryByRole("dialog", {
+          name: /^Substitution plan \([0-9]+\)$/,
+        }),
       ).not.toBeInTheDocument();
       expect(
         screen.queryByLabelText("Ready substitutions"),
       ).not.toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "Plan subs" }),
+        screen.getByRole("button", { name: "Create plan" }),
       ).toBeInTheDocument();
     },
   );
@@ -4129,12 +4143,12 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
     fireEvent.click(screen.getByRole("button", { name: "3" }));
     fireEvent.click(screen.getByRole("button", { name: "Ready 3 swaps" }));
 
     const summary = screen.getByRole("dialog", {
-      name: "3 Substitutions",
+      name: "Substitution plan (3)",
     });
     const firstSwap = summary.querySelector(".ready-swap");
     const firstShell = firstSwap?.closest(".ready-swap-shell");
@@ -4153,7 +4167,7 @@ describe("Sideline app", () => {
     );
 
     const reducedSummary = screen.getByRole("dialog", {
-      name: "2 Substitutions",
+      name: "Substitution plan (2)",
     });
     const removeActions = within(reducedSummary).getAllByRole("button", {
       name: /^Remove .* substitution$/,
@@ -4169,7 +4183,7 @@ describe("Sideline app", () => {
       within(reducedSummary).getByRole("button", { name: "Edit plan" }),
     );
     const planner = screen.getByRole("dialog", {
-      name: "Plan substitutions",
+      name: "Substitution plan",
     });
     expect(within(planner).getByRole("button", { name: "2" })).toHaveClass(
       "active",
@@ -4183,12 +4197,12 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     startGame();
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
     fireEvent.click(screen.getByRole("button", { name: "1" }));
     fireEvent.click(screen.getByRole("button", { name: "Ready 1 swap" }));
 
     const summary = screen.getByRole("dialog", {
-      name: "1 Substitution",
+      name: "Substitution plan (1)",
     });
     fireEvent.click(
       within(summary).getByRole("button", {
@@ -4197,11 +4211,11 @@ describe("Sideline app", () => {
     );
 
     expect(
-      screen.queryByRole("dialog", { name: /^[0-9]+ Substitutions?$/ }),
+      screen.queryByRole("dialog", { name: /^Substitution plan \([0-9]+\)$/ }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("1 substitution ready")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Plan subs" }),
+      screen.getByRole("button", { name: "Create plan" }),
     ).toBeInTheDocument();
   });
 
@@ -4333,7 +4347,7 @@ describe("Sideline app", () => {
         name: "Remove from plan",
       });
       expect(remove.closest(".player-context-item")).toHaveTextContent(
-        "Next rotation",
+        "In this plan",
       );
       expect(remove.closest(".bench-picker-footer")).toBeNull();
       expect(
@@ -4642,20 +4656,20 @@ describe("Sideline app", () => {
       benchPlanStatus.querySelector(".lucide-arrow-right-left"),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("dialog", { name: /^[0-9]+ Substitutions?$/ }),
+      screen.queryByRole("dialog", { name: /^Substitution plan \([0-9]+\)$/ }),
     ).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Review substitutions" }),
     );
 
     let queued = screen.getByRole("dialog", {
-      name: "1 Substitution",
+      name: "Substitution plan (1)",
     });
     expect(queued).toHaveTextContent("Simon #10");
     expect(queued).toHaveTextContent("Dylan #4");
     fireEvent.click(within(queued).getByRole("button", { name: "Edit plan" }));
 
-    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
     expect(
       within(planner).getByLabelText("Swap 1 outgoing player"),
     ).toHaveTextContent("Simon");
@@ -4684,7 +4698,7 @@ describe("Sideline app", () => {
       name: "Dylan #4 Plan in",
     });
     expect(editPicker).toHaveTextContent(
-      "Next rotationScheduled in at Center Back for Simon",
+      "In this planScheduled in at Center Back for Simon",
     );
     const selectedOutgoing = within(editPicker).getByRole("button", {
       name: /Simon #10.*Center Back/,
@@ -4699,7 +4713,7 @@ describe("Sideline app", () => {
       }),
     );
     expect(editPicker).toHaveTextContent(
-      "Next rotationScheduled in at Left Mid for Ollie",
+      "In this planScheduled in at Left Mid for Ollie",
     );
     expect(
       screen.getByText("Scheduled in at CB for Simon"),
@@ -4709,7 +4723,7 @@ describe("Sideline app", () => {
     );
 
     expect(
-      screen.queryByRole("dialog", { name: /^[0-9]+ Substitutions?$/ }),
+      screen.queryByRole("dialog", { name: /^Substitution plan \([0-9]+\)$/ }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByText("Scheduled in at LM for Ollie"),
@@ -4718,7 +4732,7 @@ describe("Sideline app", () => {
       screen.getByRole("button", { name: "Review substitutions" }),
     );
     queued = screen.getByRole("dialog", {
-      name: "1 Substitution",
+      name: "Substitution plan (1)",
     });
     expect(queued).toHaveTextContent("Ollie #23");
     expect(queued).toHaveTextContent("Dylan #4");
@@ -4893,7 +4907,9 @@ describe("Sideline app", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Review substitutions" }),
     );
-    const review = screen.getByRole("dialog", { name: "1 Substitution" });
+    const review = screen.getByRole("dialog", {
+      name: "Substitution plan (1)",
+    });
     const edit = within(review).getByRole("button", { name: "Edit plan" });
     expect(edit).toHaveAttribute("data-variant", "default");
     expect(edit.closest(".queued-plan-actions")).not.toBeNull();
@@ -4998,7 +5014,7 @@ describe("Sideline app", () => {
     ).getAllByRole("button");
     expect(dockButtons.map((button) => button.textContent?.trim())).toEqual([
       "Undo",
-      "Plan subs",
+      "Create plan",
       "Goal",
     ]);
     expect(
@@ -5480,7 +5496,7 @@ describe("Sideline app", () => {
       screen.getByRole("button", { name: "Review substitutions" }),
     );
     const review = screen.getByRole("dialog", {
-      name: "1 Substitution",
+      name: "Substitution plan (1)",
     });
 
     expect(review.querySelector(".soccer-ball-icon")).not.toBeInTheDocument();
@@ -5529,7 +5545,7 @@ describe("Sideline app", () => {
       screen.getByRole("button", { name: "Review substitutions" }),
     );
     const review = screen.getByRole("dialog", {
-      name: "2 Substitutions",
+      name: "Substitution plan (2)",
     });
     const rows = review.querySelectorAll(".ready-swap");
 
@@ -5551,7 +5567,7 @@ describe("Sideline app", () => {
       team.roster.find((player) => player.id === incomingPlayerId)?.name ?? "",
     );
     fireEvent.click(within(review).getByRole("button", { name: "Edit plan" }));
-    const planner = screen.getByRole("dialog", { name: "Plan substitutions" });
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
     expect(within(planner).getByRole("button", { name: "5" })).toBeDisabled();
     expect(
       within(planner).getByRole("group", { name: "Players to swap" }),
@@ -5832,7 +5848,7 @@ describe("Sideline app", () => {
         name: `${outgoing.name} #${outgoing.number} Plan out`,
       });
       expect(picker).toHaveTextContent(
-        `Next rotationScheduled out for ${incoming.name}`,
+        `In this planScheduled out for ${incoming.name}`,
       );
       expect(
         within(picker).getByRole("button", {
@@ -5848,7 +5864,7 @@ describe("Sideline app", () => {
         }),
       );
       expect(picker).toHaveTextContent(
-        `Next rotationScheduled out for ${replacement.name}`,
+        `In this planScheduled out for ${replacement.name}`,
       );
       expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual(queued);
       fireEvent.click(within(picker).getByRole("button", { name: "Close" }));
@@ -5888,13 +5904,17 @@ describe("Sideline app", () => {
   );
 
   it.each([
-    ["u8", "in"],
-    ["u8", "out"],
-    ["u12", "in"],
-    ["u12", "out"],
+    ["u8", "in", false],
+    ["u8", "out", false],
+    ["u12", "in", false],
+    ["u12", "out", false],
+    ["u8", "in", true],
+    ["u8", "out", true],
+    ["u12", "in", true],
+    ["u12", "out", true],
   ] as const)(
-    "separates already scheduled choices without disabling them in %s Plan %s",
-    (teamId, direction) => {
+    "previews and saves scheduled-player replacement in %s Plan %s (editing: %s)",
+    (teamId, direction, editing) => {
       const state = structuredClone(INITIAL_STATE);
       const team = state.teams[teamId];
       const game = createGame(
@@ -5907,6 +5927,17 @@ describe("Sideline app", () => {
       const [positionId, outPlayerId] = Object.entries(game.assignments)[0];
       const inPlayerId = game.benchIds[0];
       game.queuedSubstitutions = [{ positionId, outPlayerId, inPlayerId }];
+      const [otherPositionId, otherOutPlayerId] = Object.entries(
+        game.assignments,
+      )[1];
+      const otherInPlayerId = game.benchIds[1];
+      if (editing) {
+        game.queuedSubstitutions.push({
+          positionId: otherPositionId,
+          outPlayerId: otherOutPlayerId,
+          inPlayerId: otherInPlayerId,
+        });
+      }
       state.activeGame = game;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       render(<App />);
@@ -5919,8 +5950,10 @@ describe("Sideline app", () => {
         screen.getByRole("button", {
           name:
             direction === "in"
-              ? `Plan ${target.name} in`
-              : `Plan substitution for ${target.name}`,
+              ? editing
+                ? `Edit ${target.name} going in`
+                : `Plan ${target.name} in`
+              : new RegExp(`^Plan substitution for ${target.name}(\\.|$)`),
         }),
       );
       const picker = screen.getByRole("dialog", {
@@ -5936,19 +5969,64 @@ describe("Sideline app", () => {
       const choice = within(picker).getByRole("button", {
         name: new RegExp(`^${scheduled.name} #`),
       });
-      expect(heading.nextElementSibling).toBe(choice);
-      expect(heading.previousElementSibling?.tagName).toBe("BUTTON");
+      const groupHeader = heading.closest(".scheduled-choices-header")!;
+      expect(groupHeader.nextElementSibling).toBe(choice);
+      expect(groupHeader.previousElementSibling?.tagName).toBe("BUTTON");
+      expect(groupHeader).toHaveTextContent("Replaces existing pairings.");
       expect(choice).toBeEnabled();
       expect(choice).toHaveTextContent(
         direction === "in" ? "Scheduled out for" : "Scheduled in for",
       );
       const before = localStorage.getItem(STORAGE_KEY);
+      expect(
+        within(picker).queryByText(/^This leaves/),
+      ).not.toBeInTheDocument();
       fireEvent.click(choice);
       expect(choice).toHaveAttribute("aria-pressed", "true");
+      const fieldId =
+        direction === "out" ? outPlayerId : editing ? otherOutPlayerId : null;
+      const benchId =
+        direction === "in" ? inPlayerId : editing ? otherInPlayerId : null;
+      const outcomes = [
+        ...(fieldId
+          ? [
+              `${team.roster.find((player) => player.id === fieldId)!.name} on the field`,
+            ]
+          : []),
+        ...(benchId
+          ? [
+              `${team.roster.find((player) => player.id === benchId)!.name} on the bench`,
+            ]
+          : []),
+      ];
+      const impactText = `This leaves ${outcomes.join(" and ")}.`;
+      expect(within(picker).getByText(impactText)).toHaveAttribute(
+        "role",
+        "status",
+      );
       expect(
-        within(picker).getByRole("button", { name: "Add to plan" }),
+        within(picker).getByText(impactText).closest("dd"),
+      ).not.toHaveClass("warm");
+      const saveLabel = editing ? "Update plan" : "Add to plan";
+      expect(
+        within(picker).getByRole("button", { name: saveLabel }),
       ).toBeEnabled();
       expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
+      fireEvent.click(within(picker).getByRole("button", { name: saveLabel }));
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+      const replacementOutId = direction === "in" ? outPlayerId : targetId;
+      const replacementPositionId = Object.entries(game.assignments).find(
+        ([, id]) => id === replacementOutId,
+      )![0];
+      expect(saved.activeGame!.queuedSubstitutions).toEqual([
+        {
+          positionId: replacementPositionId,
+          outPlayerId: replacementOutId,
+          inPlayerId: direction === "in" ? targetId : inPlayerId,
+        },
+      ]);
+      expect(saved.activeGame!.assignments).toEqual(game.assignments);
+      expect(saved.activeGame!.benchIds).toEqual(game.benchIds);
     },
   );
 
@@ -6011,9 +6089,7 @@ describe("Sideline app", () => {
         name: "Already going in",
       }),
     ).not.toBeInTheDocument();
-    expect(editPicker).toHaveTextContent(
-      "Next rotationScheduled out for Dylan",
-    );
+    expect(editPicker).toHaveTextContent("In this planScheduled out for Dylan");
     const selectedIncoming = within(editPicker).getByRole("button", {
       name: /Dylan/,
     });
@@ -6176,7 +6252,7 @@ describe("Sideline app", () => {
     expect(breakBanner).toHaveTextContent("Quarter 1 ended");
     expect(breakBanner).toHaveTextContent("Ended at 10:00");
     expect(
-      within(breakBanner).getByRole("button", { name: "Plan subs" }),
+      within(breakBanner).getByRole("button", { name: "Create plan" }),
     ).toBeInTheDocument();
     expect(
       document.querySelector(".match-header .match-clock-button"),
@@ -6258,7 +6334,7 @@ describe("Sideline app", () => {
       "+0:04 added time · Clock running",
     );
     expect(
-      within(addedTimeBanner).getByRole("button", { name: "Plan subs" }),
+      within(addedTimeBanner).getByRole("button", { name: "Create plan" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByLabelText("Substitution reminder"),
@@ -6525,10 +6601,10 @@ describe("Sideline app", () => {
       container.querySelector(".mobile-control-dock .swap-transfer"),
     ).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Plan subs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
     expect(
       screen
-        .getByRole("dialog", { name: "Plan substitutions" })
+        .getByRole("dialog", { name: "Substitution plan" })
         .querySelector(".swap-row .swap-transfer svg"),
     ).toBeInTheDocument();
   });

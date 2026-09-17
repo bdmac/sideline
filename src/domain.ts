@@ -2182,11 +2182,11 @@ const getBenchSubstitution = (
   return { inPlayerId, outPlayerId, positionId };
 };
 
-export const queueBenchSubstitution = (
+export const previewBenchSubstitution = (
   game: ActiveGame,
   inPlayerId: string,
   outPlayerId: string,
-): ActiveGame => {
+): { pairs: SubstitutionPair[]; removedPlayerIds: string[] } => {
   const pair = getBenchSubstitution(game, inPlayerId, outPlayerId);
   const existingPairs = game.queuedSubstitutions ?? [];
   const nextPairs = existingPairs.filter(
@@ -2196,8 +2196,30 @@ export const queueBenchSubstitution = (
       existing.positionId !== pair.positionId,
   );
   nextPairs.push(pair);
-  return queueSubstitutions(game, nextPairs);
+  const playerIds = (pairs: SubstitutionPair[]) =>
+    pairs.flatMap((item) => [
+      item.inPlayerId,
+      item.outPlayerId,
+      ...(item.keeperHandoff ? [item.keeperHandoff.playerId] : []),
+    ]);
+  const retainedIds = new Set(playerIds(nextPairs));
+  return {
+    pairs: nextPairs,
+    removedPlayerIds: [...new Set(playerIds(existingPairs))].filter(
+      (id) => !retainedIds.has(id),
+    ),
+  };
 };
+
+export const queueBenchSubstitution = (
+  game: ActiveGame,
+  inPlayerId: string,
+  outPlayerId: string,
+): ActiveGame =>
+  queueSubstitutions(
+    game,
+    previewBenchSubstitution(game, inPlayerId, outPlayerId).pairs,
+  );
 
 export const removeQueuedSubstitution = (
   game: ActiveGame,
