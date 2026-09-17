@@ -1,4 +1,9 @@
-import type { PositionRole } from "./types";
+import type { Player, PositionRole } from "./types";
+
+export const formatPlayerLabel = (player: Pick<Player, "name" | "number">) =>
+  player.number === undefined
+    ? player.name
+    : `${player.name} #${player.number}`;
 
 export const preferredRoleLabel = (role: PositionRole) =>
   role === "goalkeeper"

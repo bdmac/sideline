@@ -140,6 +140,7 @@ describe("live bench dragging", () => {
         <LiveBenchDropPitch {...props} targetPositionId={null} />,
       );
       const board = screen.getByLabelText("Temporary substitution pitch");
+      expect(board.firstElementChild).toHaveClass("bench-drop-summary");
       const previewSlot = board.querySelector(".bench-drop-preview");
       const positionsSlot = board.querySelector(".bench-drop-positions");
       const noticeSlot = board.querySelector(".bench-drop-notice");
@@ -186,7 +187,7 @@ describe("live bench dragging", () => {
       expect(source).toHaveClass("bench-source-dragging");
       expect(
         screen.getByLabelText("Immediate substitution preview"),
-      ).toHaveTextContent("IN · Left Back#21 AaronOUT#15 Lazar");
+      ).toHaveTextContent("IN · Left BackAaron #21OUTLazar #15");
       expect(
         screen.queryByLabelText("Temporary substitution pitch"),
       ).not.toBeInTheDocument();
@@ -212,7 +213,7 @@ describe("live bench dragging", () => {
         expect(next.queuedSubstitutions).toBeUndefined();
       }
       expect(
-        screen.getByRole("dialog", { name: "Players are in" }),
+        screen.getByRole("dialog", { name: "Players swapped" }),
       ).toBeInTheDocument();
       fireEvent.click(source, { detail: 1 });
       expect(
@@ -249,13 +250,15 @@ describe("live bench dragging", () => {
     expect(touchMove.defaultPrevented).toBe(true);
     pointer(source, "pointermove", 80, 240, "touch");
     expect(target).toHaveClass("selected");
-    expect(target.querySelector("strong > span")).toHaveTextContent(/^#15$/);
+    expect(target.querySelector(".player-identity-number")).toHaveTextContent(
+      /^#15$/,
+    );
     expect(target.querySelector("small")).toHaveTextContent(/^Left Back$/);
     expect(board.querySelector(".bench-drop-positions")).toHaveTextContent(
       "Positions: Forward · Midfield",
     );
     expect(within(board).getByRole("status")).toHaveTextContent(
-      "IN · Left Back#21 AaronOUT#15 Lazar",
+      "IN · Left BackAaron #21OUTLazar #15",
     );
     expect(savedGame()).toEqual(game);
     act(() => vi.advanceTimersByTime(300));
@@ -371,13 +374,18 @@ describe("live bench dragging", () => {
   it("keeps a quick tap, keyboard activation, and the separate removal control independent of dragging", () => {
     vi.useFakeTimers();
     const { source } = setup(390);
+    expect(source.querySelector(".bench-row-grip")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+    expect(source.querySelector(".player-number")).not.toBeInTheDocument();
     pointer(source, "pointerdown", 90, 620, "touch");
     pointer(source, "pointerup", 90, 620, "touch");
     fireEvent.click(source, { detail: 1 });
-    let picker = screen.getByRole("dialog", { name: /Aaron - Plan in/ });
+    let picker = screen.getByRole("dialog", { name: /Aaron #21 Plan in/ });
     fireEvent.click(within(picker).getByRole("button", { name: "Close" }));
     fireEvent.click(source, { detail: 0 });
-    picker = screen.getByRole("dialog", { name: /Aaron - Plan in/ });
+    picker = screen.getByRole("dialog", { name: /Aaron #21 Plan in/ });
     fireEvent.click(within(picker).getByRole("button", { name: "Close" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Take Aaron out of game" }),
@@ -389,6 +397,17 @@ describe("live bench dragging", () => {
     expect(
       screen.queryByLabelText("Temporary substitution pitch"),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps field rows name-first without a drag marker or a leading number box", () => {
+    setup(390);
+    fireEvent.click(screen.getByRole("tab", { name: /On field/ }));
+    const player = screen.getByRole("button", { name: "Plan Lazar out" });
+    expect(player.firstElementChild).toHaveClass("player-time-name");
+    expect(player.querySelector(".player-identity")).toHaveTextContent(
+      "Lazar #15",
+    );
+    expect(player.querySelector(".bench-row-grip, .player-number")).toBeNull();
   });
 });
 

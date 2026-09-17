@@ -25,6 +25,7 @@ import {
   Download,
   FastForward,
   Flag,
+  GripVertical,
   Move,
   MoveHorizontal,
   Moon,
@@ -101,6 +102,7 @@ import {
   getSubstitutionPlanningSnapshot,
   getSubstitutionReminderStatus,
   getSubstitutionTimeBandSize,
+  isImmediateSubstitution,
   markAvailable,
   markUnavailable,
   materializeGame,
@@ -141,7 +143,8 @@ import {
   compareStarterPlayersByPreference,
   getStarterLineupAdvice,
 } from "./starterLineupModel";
-import { preferredRoleLabel } from "./playerLabels";
+import { formatPlayerLabel, preferredRoleLabel } from "./playerLabels";
+import { PlayerIdentity } from "./PlayerIdentity";
 import type {
   ActiveGame,
   AppState,
@@ -189,8 +192,25 @@ const playerName = (team: Team, id: string) =>
 const playerLabel = (team: Team, id: string) => {
   const player = team.roster.find((item) => item.id === id);
   if (!player) return "Unknown player";
-  return player.number ? `#${player.number} ${player.name}` : player.name;
+  return formatPlayerLabel(player);
 };
+
+const playerDialogTitle = (team: Team, id: string, action?: string) => (
+  <span className="player-dialog-title">
+    <PlayerIdentity
+      name={playerName(team, id)}
+      number={team.roster.find((player) => player.id === id)?.number}
+    />
+    {action && (
+      <>
+        {" "}
+        <span className="player-dialog-action">
+          <span aria-hidden="true">·</span> {action}
+        </span>
+      </>
+    )}
+  </span>
+);
 
 const playerGoalCount = (game: ActiveGame, playerId: string) =>
   game.history.filter(
@@ -1695,6 +1715,7 @@ function SetupScreen({
         type="button"
         key={player.id}
         aria-pressed={present}
+        aria-label={`${player.name} ${player.guest ? "Guest · " : ""}${present ? "Present" : "Absent"}`}
         onClick={() => toggleAttendance(player.id)}
       >
         <span className="attendance-check" aria-hidden="true">
@@ -1702,16 +1723,9 @@ function SetupScreen({
         </span>
         <span>
           <span className="attendance-player-heading">
-            <strong>{player.name}</strong>
-            {player.number && (
-              <Label
-                className="attendance-player-number"
-                variant={present ? "success" : "danger"}
-                aria-hidden="true"
-              >
-                #{player.number}
-              </Label>
-            )}
+            <strong>
+              <PlayerIdentity name={player.name} number={player.number} />
+            </strong>
           </span>
           <small>
             {player.guest ? "Guest · " : ""}
@@ -1848,16 +1862,12 @@ function SetupScreen({
                       </span>
                       <span>
                         <span className="attendance-player-heading">
-                          <strong>{player.name}</strong>
-                          {player.number && (
-                            <Label
-                              className="attendance-player-number"
-                              variant="success"
-                              aria-hidden="true"
-                            >
-                              #{player.number}
-                            </Label>
-                          )}
+                          <strong>
+                            <PlayerIdentity
+                              name={player.name}
+                              number={player.number}
+                            />
+                          </strong>
                         </span>
                         <small>Guest · Present</small>
                       </span>
@@ -2966,8 +2976,7 @@ function LiveGameScreen({
             <div>
               <h1>On the field</h1>
               <small className="section-hint">
-                Tap a player for actions, or drag them onto another position. On
-                phones, hold first.
+                Tap a player for actions, or drag them onto another position.
               </small>
             </div>
             <span>
@@ -4201,7 +4210,10 @@ function GoalScorerPicker({
               onClick={() => onSelect(playerId)}
             >
               <GoalMarkedPlayerName
-                label={playerLabel(team, playerId)}
+                label={playerName(team, playerId)}
+                number={
+                  team.roster.find((player) => player.id === playerId)?.number
+                }
                 goalCount={playerGoalCount(game, playerId)}
                 emphasized={false}
                 compact
@@ -4423,7 +4435,7 @@ function BenchSubstitutionPicker({
 
   return (
     <SidelineDialog
-      title={`${playerLabel(team, playerId)} - Plan in`}
+      title={playerDialogTitle(team, playerId, "Plan in")}
       description="Choose the player they will replace."
       className="compact-sheet bench-substitution-sheet"
       onClose={onClose}
@@ -4508,7 +4520,11 @@ function BenchSubstitutionPicker({
               >
                 <span className="replacement-player-summary">
                   <GoalMarkedPlayerName
-                    label={playerLabel(team, outPlayerId)}
+                    label={playerName(team, outPlayerId)}
+                    number={
+                      team.roster.find((player) => player.id === outPlayerId)
+                        ?.number
+                    }
                     goalCount={playerGoalCount(game, outPlayerId)}
                   />
                 </span>
@@ -4637,7 +4653,7 @@ function FieldSubstitutionPicker({
 
   return (
     <SidelineDialog
-      title={`${playerLabel(team, playerId)} - Plan out`}
+      title={playerDialogTitle(team, playerId, "Plan out")}
       description={`Choose who will enter at ${position.label}.`}
       className="compact-sheet bench-substitution-sheet"
       onClose={onClose}
@@ -4718,7 +4734,8 @@ function FieldSubstitutionPicker({
               >
                 <span className="replacement-player-summary">
                   <GoalMarkedPlayerName
-                    label={playerLabel(team, incoming.id)}
+                    label={incoming.name}
+                    number={incoming.number}
                     goalCount={playerGoalCount(game, incoming.id)}
                   />
                 </span>
@@ -4797,7 +4814,6 @@ function FieldPlayerActionsSheet({
   onUnavailable: () => void;
 }) {
   const label = playerName(team, playerId);
-  const displayLabel = playerLabel(team, playerId);
   const formation = getFormation(game.formationId);
   const positionEntry = Object.entries(game.assignments).find(
     ([, assignedPlayerId]) => assignedPlayerId === playerId,
@@ -4813,7 +4829,7 @@ function FieldPlayerActionsSheet({
     : null;
   return (
     <SidelineDialog
-      title={displayLabel}
+      title={playerDialogTitle(team, playerId)}
       description="Choose an on-field action."
       className="compact-sheet field-player-actions-sheet"
       onClose={onClose}
@@ -4964,12 +4980,15 @@ function FieldPlayerTimeRow({
         aria-label={`${queued ? "Edit planned substitution for" : "Plan"} ${player.name} out`}
         aria-describedby={`field-player-details-${player.id}${showCurrentFieldTime ? ` field-player-time-${player.id}` : ""}`}
       >
-        <span className="player-number">{player.number ?? "–"}</span>
         <span
           className="player-time-name"
           id={`field-player-details-${player.id}`}
         >
-          <GoalMarkedPlayerName label={player.name} goalCount={goalCount} />
+          <GoalMarkedPlayerName
+            label={player.name}
+            number={player.number}
+            goalCount={goalCount}
+          />
           <small>{positionLabel}</small>
           {queued ? (
             <span className="bench-queue-status">
@@ -5061,12 +5080,21 @@ function PlayerTimeRow({
         }
         aria-describedby={`bench-player-details-${player.id}${showCurrentBenchTime ? ` bench-player-time-${player.id}` : ""}`}
       >
-        <span className="player-number">{player.number ?? "–"}</span>
+        <GripVertical
+          className="bench-row-grip"
+          size={18}
+          aria-hidden="true"
+          focusable="false"
+        />
         <span
           className="player-time-name"
           id={`bench-player-details-${player.id}`}
         >
-          <GoalMarkedPlayerName label={player.name} goalCount={goalCount} />
+          <GoalMarkedPlayerName
+            label={player.name}
+            number={player.number}
+            goalCount={goalCount}
+          />
           <small>
             {playedTime > 0
               ? `${formatPlayerDuration(playedTime)} played`
@@ -5115,7 +5143,7 @@ function PlayerTimeRow({
 type PlayerActionMenuOption = {
   id: string;
   label: string;
-  displayLabel: string;
+  number?: number;
   goalCount: number;
   preferenceIndex?: number;
   positionLabel?: string;
@@ -5221,7 +5249,8 @@ function PlayerActionMenu({
                 >
                   <span className="replacement-player-summary">
                     <GoalMarkedPlayerName
-                      label={option.displayLabel}
+                      label={option.label}
+                      number={option.number}
                       goalCount={option.goalCount}
                     />
                     {!showPreferenceFit && selected && (
@@ -5791,7 +5820,8 @@ function SubstitutionPlanner({
                   return {
                     id: playerId,
                     label: playerName(team, playerId),
-                    displayLabel: playerLabel(team, playerId),
+                    number: team.roster.find((player) => player.id === playerId)
+                      ?.number,
                     goalCount: playerGoalCount(game, playerId),
                     alreadyPlanned: usedInSwap >= 0,
                     preferenceIndex:
@@ -5846,7 +5876,7 @@ function SubstitutionPlanner({
                   return {
                     id: playerId,
                     label: playerName(team, playerId),
-                    displayLabel: playerLabel(team, playerId),
+                    number: player?.number,
                     goalCount: playerGoalCount(game, playerId),
                     preferredRoles: player?.preferredRoles,
                     times: [
@@ -5871,7 +5901,6 @@ function SubstitutionPlanner({
                             pairs[usedInSwap].outPlayerId,
                           )}`
                         : undefined,
-                    trailing: player?.number ? `#${player.number}` : undefined,
                   };
                 }),
               );
@@ -6078,7 +6107,6 @@ function ReadySwapList({
                   goalCount={
                     showGoalMarkers ? playerGoalCount(game, pair.inPlayerId) : 0
                   }
-                  direction="in"
                 />
               </span>
               <span className="ready-direction">
@@ -6094,7 +6122,6 @@ function ReadySwapList({
                       ? playerGoalCount(game, pair.outPlayerId)
                       : 0
                   }
-                  direction="out"
                 />
               </span>
               {pair.keeperHandoff && (
@@ -6138,12 +6165,10 @@ function ReadyPlayerIdentity({
   team,
   playerId,
   goalCount,
-  direction,
 }: {
   team: Team;
   playerId: string;
   goalCount: number;
-  direction: "out" | "in";
 }) {
   const player = team.roster.find((item) => item.id === playerId);
 
@@ -6151,16 +6176,9 @@ function ReadyPlayerIdentity({
     <span className="ready-player-identity">
       <GoalMarkedPlayerName
         label={player?.name ?? "Unknown player"}
+        number={player?.number}
         goalCount={goalCount}
-      />{" "}
-      {player?.number && (
-        <Label
-          className="ready-player-number"
-          variant={direction === "out" ? "danger" : "success"}
-        >
-          #{player.number}
-        </Label>
-      )}
+      />
     </span>
   );
 }
@@ -6294,9 +6312,14 @@ function SubstitutionSummary({
   description?: string;
   onClose: () => void;
 }) {
+  const event = game.history.at(-1);
   return (
     <SidelineDialog
-      title="Players are in"
+      title={
+        event && isImmediateSubstitution(event)
+          ? "Players swapped"
+          : "Players are in"
+      }
       description={description}
       className="substitution-ready-sheet"
       width="620px"
@@ -6363,7 +6386,10 @@ function PlayerEntrySummary({
         <span className="ready-player in">
           <small>IN</small>
           <GoalMarkedPlayerName
-            label={playerLabel(team, entry.playerId)}
+            label={playerName(team, entry.playerId)}
+            number={
+              team.roster.find((player) => player.id === entry.playerId)?.number
+            }
             goalCount={playerGoalCount(game, entry.playerId)}
           />
         </span>
@@ -6498,18 +6524,26 @@ function GameSummary({
 
 function GoalMarkedPlayerName({
   label,
+  number,
   goalCount,
   emphasized = true,
   compact = false,
 }: {
   label: string;
+  number?: number;
   goalCount: number;
   emphasized?: boolean;
   compact?: boolean;
 }) {
+  const identity =
+    number === undefined ? (
+      label
+    ) : (
+      <PlayerIdentity name={label} number={number} />
+    );
   return (
     <span className="player-name-with-goals">
-      {emphasized ? <strong>{label}</strong> : <span>{label}</span>}
+      {emphasized ? <strong>{identity}</strong> : <span>{identity}</span>}
       {goalCount > 0 && (
         <PlayerGoalMarkers
           label={label}
@@ -6892,7 +6926,7 @@ function PositionEditor({
 
   return (
     <SidelineDialog
-      title={`${playerLabel(team, playerId)} - Change position`}
+      title={playerDialogTitle(team, playerId, "Change position")}
       description="Position changes do not count as substitutions. You can also drag players directly on the field."
       className="compact-sheet"
       onClose={onClose}
@@ -6997,7 +7031,11 @@ function PositionEditor({
               <span className="replacement-player-secondary position-destination-player">
                 {occupant ? (
                   <GoalMarkedPlayerName
-                    label={playerLabel(team, occupant)}
+                    label={playerName(team, occupant)}
+                    number={
+                      team.roster.find((player) => player.id === occupant)
+                        ?.number
+                    }
                     goalCount={playerGoalCount(game, occupant)}
                   />
                 ) : (

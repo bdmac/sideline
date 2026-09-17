@@ -5,10 +5,7 @@ import { createPortal } from "react-dom";
 import type { Formation, Player } from "./types";
 import { getCompactDropPositions } from "./benchDropModel";
 import { preferredRoleLabel } from "./playerLabels";
-
-function formatJerseyNumber(number: number | undefined) {
-  return number === undefined ? "–" : `#${number}`;
-}
+import { PlayerIdentity } from "./PlayerIdentity";
 
 export function LiveBenchDropPitch({
   compact,
@@ -73,16 +70,14 @@ export function LiveBenchDropPitch({
             <span>
               <small>IN · {position?.mediumLabel}</small>
               <strong>
-                <span>{formatJerseyNumber(incoming.number)}</span>{" "}
-                {incoming.name}
+                <PlayerIdentity name={incoming.name} number={incoming.number} />
               </strong>
             </span>
             <ArrowRightLeft size={20} aria-hidden="true" />
             <span>
               <small>OUT</small>
               <strong>
-                <span>{formatJerseyNumber(outgoing.number)}</span>{" "}
-                {outgoing.name}
+                <PlayerIdentity name={outgoing.name} number={outgoing.number} />
               </strong>
             </span>
           </div>
@@ -122,6 +117,7 @@ export function LiveBenchDropPitch({
         className="bench-drop-board"
         aria-label="Temporary substitution pitch"
       >
+        {summary}
         <div
           className="bench-drop-pitch"
           ref={pitchRef}
@@ -144,15 +140,16 @@ export function LiveBenchDropPitch({
                 style={{ left: `${item.x}%`, top: `${item.y}%` }}
               >
                 <strong>
-                  <span>{formatJerseyNumber(player?.number)}</span>
-                  {player?.name ?? "Open"}
+                  <PlayerIdentity
+                    name={player?.name ?? "Open"}
+                    number={player?.number}
+                  />
                 </strong>
                 <small>{positionLabel}</small>
               </div>
             );
           })}
         </div>
-        {summary}
       </section>
     </div>,
     document.body,
