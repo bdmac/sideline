@@ -2685,6 +2685,10 @@ select:hover {
   text-align: left;
 }
 
+.field-player-list .player-time-main {
+  padding-inline-start: 0.6rem;
+}
+
 .player-time-row.time-suppressed .player-time-main {
   grid-template-columns: minmax(0, 1fr);
 }
