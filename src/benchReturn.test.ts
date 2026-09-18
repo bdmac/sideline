@@ -125,7 +125,7 @@ describe("rested bench return priority", () => {
       })),
     );
     expect(getGoalkeeperPreparationWarning(queued, team)).toMatch(
-      /Jackson is lined up outfield/,
+      /William is lined up outfield/,
     );
   });
 

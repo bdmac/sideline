@@ -719,7 +719,7 @@ describe("team rosters", () => {
       INITIAL_TEAMS.u8.roster
         .filter((player) => player.preferredRoles.includes("goalkeeper"))
         .map((player) => player.name),
-    ).toEqual(["Maddox", "Ollie", "Henry", "Evan"]);
+    ).toEqual(["Maddox", "Henry", "Evan"]);
     expect(
       INITIAL_TEAMS.u12.roster
         .filter((player) => player.preferredRoles.includes("goalkeeper"))
@@ -1326,10 +1326,27 @@ describe("scorekeeping", () => {
 });
 
 describe("substitutions", () => {
-  it.each([2, 4] as const)(
-    "preserves keeper targets, accounting and pace warnings through five-minute U8 reminders with %i periods",
-    (periodCount) => {
-      const team = INITIAL_TEAMS.u8;
+  it.each([
+    [2, false, false],
+    [4, false, false],
+    [2, true, false],
+    [4, true, false],
+    [2, false, true],
+    [4, false, true],
+    [2, true, true],
+    [4, true, true],
+  ] as const)(
+    "honors keeper ranks and preserves outfield time with %i periods (Ollie out=%s, Henry outfield-first=%s)",
+    (periodCount, removeOllie, henryOutfieldFirst) => {
+      const team = structuredClone(INITIAL_TEAMS.u8);
+      const henry = team.roster.find((player) => player.name === "Henry")!;
+      henry.preferredRoles = henryOutfieldFirst
+        ? ["forward", "midfielder", "goalkeeper"]
+        : ["goalkeeper", "forward", "midfielder"];
+      const ollie = team.roster.find((player) => player.name === "Ollie")!;
+      ollie.preferredRoles = removeOllie
+        ? ["forward", "midfielder"]
+        : ["forward", "midfielder", "goalkeeper"];
       let game = createGame(
         team,
         team.defaultFormationId,
@@ -1374,6 +1391,7 @@ describe("substitutions", () => {
       expect(played.reduce((sum, seconds) => sum + seconds, 0)).toBe(12_000);
       for (const player of team.roster) {
         const total = game.totals[player.id];
+        expect(total.fieldSeconds).toBe(1_200);
         expect(total.fieldSeconds + total.benchSeconds).toBe(2_400);
         if (
           total.fieldSeconds < 960 &&
@@ -1382,6 +1400,63 @@ describe("substitutions", () => {
         ) {
           expect(getPlayingTimePaceWarning(game, player.id)).toBe(0.4);
         }
+      }
+      const summaries = summarizePlayerPositions(game);
+      const keeperTotals = team.roster
+        .filter((player) => player.preferredRoles.includes("goalkeeper"))
+        .map(
+          (player) =>
+            summaries
+              .find((summary) => summary.playerId === player.id)!
+              .positions.find((position) => position.positionId === "gk")
+              ?.seconds ?? 0,
+        )
+        .sort((a, b) => a - b);
+      expect(keeperTotals).toEqual(
+        removeOllie
+          ? [600, 900, 900]
+          : henryOutfieldFirst
+            ? [300, 300, 900, 900]
+            : [0, 600, 900, 900],
+      );
+      const expectedGoalSeconds: Record<string, number> = {
+        Maddox: 900,
+        Evan: henryOutfieldFirst || !removeOllie ? 900 : 600,
+        Henry: henryOutfieldFirst
+          ? removeOllie
+            ? 600
+            : 300
+          : removeOllie
+            ? 900
+            : 600,
+        Ollie: henryOutfieldFirst && !removeOllie ? 300 : 0,
+      };
+      for (const [name, seconds] of Object.entries(expectedGoalSeconds)) {
+        const player = team.roster.find((entry) => entry.name === name)!;
+        expect(
+          summaries
+            .find((entry) => entry.playerId === player.id)!
+            .positions.find((position) => position.positionId === "gk")
+            ?.seconds ?? 0,
+        ).toBe(seconds);
+      }
+      for (const summary of summaries) {
+        const keeperSeconds =
+          summary.positions.find((position) => position.positionId === "gk")
+            ?.seconds ?? 0;
+        if (keeperSeconds > 0) {
+          expect(
+            game.totals[summary.playerId].fieldSeconds - keeperSeconds,
+          ).toBeGreaterThanOrEqual(300);
+        }
+      }
+      if (removeOllie) {
+        const ollie = team.roster.find((player) => player.name === "Ollie")!;
+        expect(
+          summaries
+            .find((summary) => summary.playerId === ollie.id)!
+            .positions.some((position) => position.positionId === "gk"),
+        ).toBe(false);
       }
     },
   );
@@ -1909,7 +1984,7 @@ describe("substitutions", () => {
     expect(fullPlan).toHaveLength(5);
     expect(fullPlan.find((pair) => pair.positionId === "gk")).toMatchObject({
       inPlayerId: team.roster.find((player) => player.name === "Maddox")!.id,
-      outPlayerId: team.roster.find((player) => player.name === "Henry")!.id,
+      outPlayerId: team.roster.find((player) => player.name === "Evan")!.id,
     });
     expect(validateSubstitutionPairs(game, fullPlan)).toEqual([]);
     expect(

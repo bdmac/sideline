@@ -3,17 +3,118 @@ import {
   INITIAL_TEAMS,
   applySubstitutions,
   createGame,
+  endCurrentPeriod,
   fastForwardGame,
+  getNextSubstitutionSeconds,
+  getPeriodStatus,
   getRecommendedSubstitutionCount,
   getRoutineRotationStatus,
+  getSubstitutionPlanningSnapshot,
+  getSubstitutionReminderStatus,
   markUnavailable,
   queueSubstitutions,
+  startNextPeriod,
   suggestSubstitutions,
   validateGame,
 } from "./domain";
 import { u12ThirdRotation } from "./test/rotationFixtures";
 
-describe("end-of-game rotation cutoff", () => {
+describe("period and game rotation cutoffs", () => {
+  it("quiets a ready U8 plan with 41 seconds left in Q2 and 20 seconds until the reminder", () => {
+    const team = INITIAL_TEAMS.u8;
+    let game = createGame(
+      team,
+      team.defaultFormationId,
+      team.roster.map((p) => p.id),
+      40,
+      1_000,
+      4,
+    );
+    game = fastForwardGame(game, 879, 1_000);
+    game.period = { current: 2, startedAtSeconds: 600 };
+    game = applySubstitutions(
+      game,
+      suggestSubstitutions(game, 1, team),
+      5,
+      1_000,
+    );
+    game = fastForwardGame(game, 280, 1_000);
+    game = queueSubstitutions(
+      game,
+      suggestSubstitutions(game, 5, team, {
+        allowEarlyKeeperChange: true,
+      }),
+    );
+    const before = structuredClone(game);
+    expect(game.queuedSubstitutions).toHaveLength(5);
+    expect(
+      getPeriodStatus(2400, game.clock.elapsedSeconds, 4, game.period)
+        .remainingSeconds,
+    ).toBe(41);
+    expect(getSubstitutionReminderStatus(game)).toMatchObject({
+      intervalSeconds: 300,
+      secondsSinceLastSubstitution: 280,
+    });
+    expect(getRoutineRotationStatus(game)).toMatchObject({
+      recommended: true,
+      promptRecommended: false,
+    });
+    expect(getNextSubstitutionSeconds(game)).toBe(1200);
+    expect(getSubstitutionPlanningSnapshot(game).clock.elapsedSeconds).toBe(
+      1200,
+    );
+    expect(getRecommendedSubstitutionCount(game, team)).toBeGreaterThan(0);
+    expect(game).toEqual(before);
+  });
+
+  it.each([
+    ["u8", 4, 1, 120],
+    ["u8", 4, 2, 120],
+    ["u8", 4, 3, 120],
+    ["u8", 2, 1, 120],
+    ["u12", 2, 1, 180],
+    ["u12", 4, 2, 180],
+  ] as const)(
+    "defers within the exact buffer for %s with %i periods at period %i, including earlier added time",
+    (id, periods, current, buffer) => {
+      const team = INITIAL_TEAMS[id];
+      let game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((p) => p.id),
+        team.defaultDurationMinutes,
+        1_000,
+        periods,
+      );
+      const length = game.durationSeconds / periods;
+      const start = current > 1 ? (current - 1) * length + 93 : 0;
+      const end = start + length;
+      game.period = { current, startedAtSeconds: start };
+      game.clock.elapsedSeconds = end - buffer - 1;
+      expect(getRoutineRotationStatus(game)).toMatchObject({
+        recommended: true,
+        promptRecommended: true,
+      });
+      expect(getNextSubstitutionSeconds(game)).toBe(end - buffer - 1);
+      game.clock.elapsedSeconds += 1;
+      const before = structuredClone(game);
+      expect(getRoutineRotationStatus(game)).toMatchObject({
+        recommended: true,
+        promptRecommended: false,
+      });
+      expect(getNextSubstitutionSeconds(game)).toBe(end);
+      expect(game).toEqual(before);
+      game.clock.elapsedSeconds = end + 30;
+      expect(getRoutineRotationStatus(game).promptRecommended).toBe(false);
+      expect(getNextSubstitutionSeconds(game)).toBe(end + 30);
+      game = endCurrentPeriod(game, 1_000);
+      expect(getRoutineRotationStatus(game).promptRecommended).toBe(false);
+      const restarted = startNextPeriod(game, 1_000);
+      expect(getRoutineRotationStatus(restarted).promptRecommended).toBe(true);
+      expect(getNextSubstitutionSeconds(restarted)).toBe(end + 30);
+    },
+  );
+
   it.each([
     ["u8", 4, 120],
     ["u8", 2, 120],
@@ -39,6 +140,7 @@ describe("end-of-game rotation cutoff", () => {
       expect(getRoutineRotationStatus(game)).toEqual({
         bufferSeconds: buffer,
         recommended: true,
+        promptRecommended: true,
       });
       game.clock.elapsedSeconds += 1;
       expect(getRoutineRotationStatus(game).recommended).toBe(false);
@@ -151,6 +253,7 @@ describe("end-of-game rotation cutoff", () => {
       expect(getRoutineRotationStatus(game)).toEqual({
         bufferSeconds: buffer,
         recommended: false,
+        promptRecommended: false,
       });
       game.clock.elapsedSeconds -= 1;
       expect(getRoutineRotationStatus(game).recommended).toBe(true);

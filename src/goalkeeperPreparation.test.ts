@@ -285,13 +285,13 @@ describe("goalkeeper preparation", () => {
     });
   });
 
-  it("suggests a keeper handoff at minute 29 after an outfield rotation at minute 14", () => {
+  it("plans a minute-29 keeper handoff for halftime while allowing the earlier stoppage", () => {
     const { team, keeper, successor, game: initial } = fixture(12, "u12", 2);
     let game = advance(initial, 840);
     const rest = suggestSubstitutions(game, 1, team);
     expect(rest[0].outPlayerId).toBe(successor);
     game = applySubstitutions(game, rest, team.sideSize, 1_000);
-    expect(getNextSubstitutionSeconds(game)).toBe(1_740);
+    expect(getNextSubstitutionSeconds(game)).toBe(1_800);
     const next = suggestSubstitutions(game, 1, team);
     expect(next[0]).toEqual({
       positionId: "gk",
@@ -299,6 +299,10 @@ describe("goalkeeper preparation", () => {
       inPlayerId: successor,
     });
     expect(getGoalkeeperChangeStatus(game, next, 1_740)).toMatchObject({
+      early: false,
+      needsRest: false,
+    });
+    expect(getGoalkeeperChangeStatus(game, next, 1_800)).toMatchObject({
       early: false,
       needsRest: false,
     });

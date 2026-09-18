@@ -1,8 +1,13 @@
 import {
   INITIAL_STATE,
   applySubstitutions,
+  assignStartingPlayersByPreference,
   createGame,
   fastForwardGame,
+  getFormation,
+  getRecommendedSubstitutionCount,
+  getSubstitutionReminderStatus,
+  suggestSubstitutions,
 } from "../domain";
 
 export const u12ThirdRotation = () => {
@@ -13,6 +18,7 @@ export const u12ThirdRotation = () => {
     if (!player) throw new Error(`Missing fixture player: ${name}`);
     return player.id;
   };
+
   let game = createGame(
     team,
     "9-3-1-3-1",
@@ -70,4 +76,62 @@ export const u12ThirdRotation = () => {
   game.period = { current: 2, startedAtSeconds: 2_581 };
   state.activeGame = game;
   return { state, team, game, playerId };
+};
+
+export const u8RepeatKeeperRotation = (
+  durationMinutes = 40,
+  {
+    removeOllie = true,
+    henryOutfieldFirst = false,
+    turns = 6,
+  }: {
+    removeOllie?: boolean;
+    henryOutfieldFirst?: boolean;
+    turns?: number;
+  } = {},
+) => {
+  const state = structuredClone(INITIAL_STATE);
+  const team = state.teams.u8;
+  const ollie = team.roster.find((player) => player.name === "Ollie")!;
+  ollie.preferredRoles = removeOllie
+    ? ["forward", "midfielder"]
+    : ["forward", "midfielder", "goalkeeper"];
+  const henry = team.roster.find((player) => player.name === "Henry")!;
+  henry.preferredRoles = henryOutfieldFirst
+    ? ["forward", "midfielder", "goalkeeper"]
+    : ["goalkeeper", "forward", "midfielder"];
+  let game = createGame(
+    team,
+    team.defaultFormationId,
+    team.roster.map((player) => player.id),
+    durationMinutes,
+    1_000,
+    4,
+  );
+  game.assignments = assignStartingPlayersByPreference(
+    getFormation(game.formationId),
+    game.presentIds,
+    team.roster,
+  );
+  game.benchIds = game.presentIds.filter(
+    (id) => !Object.values(game.assignments).includes(id),
+  );
+  const interval = getSubstitutionReminderStatus(game).intervalSeconds;
+  for (let turn = 1; turn <= turns; turn++) {
+    const now = 1_000 + turn * interval * 1_000;
+    game = fastForwardGame(game, interval, now);
+    const current = Math.floor(turn / 2) + 1;
+    game.period = {
+      current,
+      startedAtSeconds: (current - 1) * interval * 2,
+    };
+    const pairs = suggestSubstitutions(
+      game,
+      getRecommendedSubstitutionCount(game, team),
+      team,
+    );
+    game = applySubstitutions(game, pairs, team.sideSize, now);
+  }
+  state.activeGame = game;
+  return { state, team, game, interval };
 };

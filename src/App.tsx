@@ -2247,16 +2247,18 @@ function LiveGameScreen({
   const routineRotation = getRoutineRotationStatus(displayed);
   const rotationTimingLabel = !routineRotation.recommended
     ? "No more scheduled"
-    : substitutionReminder.due
-      ? "Due now"
-      : `Due in ${formatDuration(
-          Math.max(
-            0,
-            substitutionReminder.intervalSeconds -
-              substitutionReminder.secondsSinceLastSubstitution,
-          ),
-        )}`;
-  const goalkeeperPreparationWarning = routineRotation.recommended
+    : !routineRotation.promptRecommended
+      ? "At the break"
+      : substitutionReminder.due
+        ? "Due now"
+        : `Due in ${formatDuration(
+            Math.max(
+              0,
+              substitutionReminder.intervalSeconds -
+                substitutionReminder.secondsSinceLastSubstitution,
+            ),
+          )}`;
+  const goalkeeperPreparationWarning = routineRotation.promptRecommended
     ? getGoalkeeperPreparationWarning(displayed, team)
     : null;
   const keeperPreparationNote = goalkeeperPreparationWarning ? (
@@ -2270,7 +2272,7 @@ function LiveGameScreen({
     </small>
   ) : null;
   const rotationDue =
-    routineRotation.recommended &&
+    routineRotation.promptRecommended &&
     substitutionReminder.due &&
     game.benchIds.length > 0 &&
     !periodBreak &&
@@ -2912,56 +2914,61 @@ function LiveGameScreen({
             </Banner.Description>
           </Banner>
         )}
-      {queuedPairs.length > 0 && !periodBreak && !periodBoundaryReached && (
-        <section
-          className={`queued-substitution-banner ${
-            queuedPlanErrors.length ? "invalid" : ""
-          } ${keeperPreparationNote && queuedPlanErrors.length === 0 ? "has-preparation" : ""}`}
-          aria-label="Ready substitutions"
-        >
-          <span className="queued-substitution-copy">
-            <strong>
-              {queuedPairs.length} substitution
-              {queuedPairs.length === 1 ? "" : "s"} ready
-            </strong>
-            <small>
-              {queuedPlanErrors.length
-                ? "Plan needs attention before players go in"
-                : "Lineup and timers have not changed"}
-            </small>
-          </span>
-          <span
-            className="queued-substitution-timer"
-            aria-label={
-              !routineRotation.recommended
-                ? "No further reminders scheduled; you can still create a plan"
-                : `Next reminder ${
-                    substitutionReminder.due
-                      ? "due now"
-                      : `due in ${formatDuration(
-                          Math.max(
-                            0,
-                            substitutionReminder.intervalSeconds -
-                              substitutionReminder.secondsSinceLastSubstitution,
-                          ),
-                        )}`
-                  }`
-            }
+      {queuedPairs.length > 0 &&
+        (routineRotation.promptRecommended || queuedPlanErrors.length > 0) &&
+        !periodBreak &&
+        !periodBoundaryReached && (
+          <section
+            className={`queued-substitution-banner ${
+              queuedPlanErrors.length ? "invalid" : ""
+            } ${keeperPreparationNote && queuedPlanErrors.length === 0 ? "has-preparation" : ""}`}
+            aria-label="Ready substitutions"
           >
-            <strong>{rotationTimingLabel}</strong>
-          </span>
-          {queuedPlanErrors.length === 0 && keeperPreparationNote}
-          <Button
-            className="secondary-action queued-substitution-review"
-            variant="default"
-            size="large"
-            leadingVisual={ArrowRightLeft}
-            onClick={() => setQueuedPlanOpen(true)}
-          >
-            Review plan
-          </Button>
-        </section>
-      )}
+            <span className="queued-substitution-copy">
+              <strong>
+                {queuedPairs.length} substitution
+                {queuedPairs.length === 1 ? "" : "s"} ready
+              </strong>
+              <small>
+                {queuedPlanErrors.length
+                  ? "Plan needs attention before players go in"
+                  : "Lineup and timers have not changed"}
+              </small>
+            </span>
+            <span
+              className="queued-substitution-timer"
+              aria-label={
+                !routineRotation.recommended
+                  ? "No further reminders scheduled; you can still create a plan"
+                  : !routineRotation.promptRecommended
+                    ? "Next reminder at the period break"
+                    : `Next reminder ${
+                        substitutionReminder.due
+                          ? "due now"
+                          : `due in ${formatDuration(
+                              Math.max(
+                                0,
+                                substitutionReminder.intervalSeconds -
+                                  substitutionReminder.secondsSinceLastSubstitution,
+                              ),
+                            )}`
+                      }`
+              }
+            >
+              <strong>{rotationTimingLabel}</strong>
+            </span>
+            {queuedPlanErrors.length === 0 && keeperPreparationNote}
+            <Button
+              className="secondary-action queued-substitution-review"
+              variant="default"
+              size="large"
+              leadingVisual={ArrowRightLeft}
+              onClick={() => setQueuedPlanOpen(true)}
+            >
+              Review plan
+            </Button>
+          </section>
+        )}
 
       <div className="live-layout">
         <section className="pitch-section">
@@ -5298,6 +5305,7 @@ function getKeeperChangeNotice(
     timing === "next-rotation"
       ? getNextSubstitutionSeconds(game)
       : game.clock.elapsedSeconds,
+    team,
   );
   if (!status) return null;
   const needsRest = warnAboutRest && status.needsRest;
@@ -5653,7 +5661,9 @@ function SubstitutionPlanner({
       title="Substitution plan"
       description={
         routineRotation.recommended
-          ? "Suggested for fairness. Ready the plan now, then send the players in when the change happens."
+          ? routineRotation.promptRecommended
+            ? "Suggested for fairness. Ready the plan now, then send the players in when the change happens."
+            : "Suggested for the period break. Ready the plan now, then send the players in when the change happens."
           : "No further reminders are scheduled. You can still create a substitution plan."
       }
       onClose={onClose}

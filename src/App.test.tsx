@@ -32,7 +32,10 @@ import { DEVICE_PREFERENCES_STORAGE_KEY } from "./devicePreferences";
 import { STORAGE_KEY } from "./storage";
 import { THEME_STORAGE_KEY } from "./theme";
 import type { AppState } from "./types";
-import { u12ThirdRotation } from "./test/rotationFixtures";
+import {
+  u12ThirdRotation,
+  u8RepeatKeeperRotation,
+} from "./test/rotationFixtures";
 
 const startGame = () => {
   fireEvent.click(screen.getByRole("button", { name: "Formation" }));
@@ -985,6 +988,153 @@ describe("Sideline app", () => {
     expect(vibrate).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["u8", 4, false],
+    ["u8", 4, true],
+    ["u8", 2, false],
+    ["u8", 2, true],
+    ["u12", 2, false],
+    ["u12", 2, true],
+  ] as const)(
+    "quiets %s/%i-period prompts with 41 seconds remaining and a reminder due in 20 seconds (queued=%s)",
+    (teamId, periodCount, queued) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-18T18:00:00Z"));
+      const vibrate = vi.fn();
+      Object.defineProperty(navigator, "vibrate", {
+        value: vibrate,
+        configurable: true,
+      });
+      const state = structuredClone(INITIAL_STATE);
+      const team = state.teams[teamId];
+      const currentPeriod = periodCount === 4 ? 2 : 1;
+      const periodLabel = periodCount === 4 ? "Quarter" : "Half";
+      const periodLength = (team.defaultDurationMinutes * 60) / periodCount;
+      const periodEnd = currentPeriod * periodLength;
+      let game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((p) => p.id),
+        team.defaultDurationMinutes,
+        Date.now(),
+        periodCount,
+      );
+      const interval = getSubstitutionReminderStatus(game).intervalSeconds;
+      game = fastForwardGame(game, periodEnd - 21 - interval, Date.now());
+      game.period = {
+        current: currentPeriod,
+        startedAtSeconds: periodEnd - periodLength,
+      };
+      game = applySubstitutions(
+        game,
+        suggestSubstitutions(game, 1, team),
+        team.sideSize,
+        Date.now(),
+      );
+      game = fastForwardGame(game, interval - 20, Date.now());
+      if (queued) {
+        game = queueSubstitutions(
+          game,
+          suggestSubstitutions(game, 5, team, { allowEarlyKeeperChange: true }),
+        );
+        expect(game.queuedSubstitutions).toHaveLength(5);
+      }
+      state.activeGame = setClockRunning(game, true, Date.now());
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(
+        DEVICE_PREFERENCES_STORAGE_KEY,
+        JSON.stringify({ substitutionAlerts: true }),
+      );
+      render(<App />);
+      expect(screen.getByLabelText("Next reminder")).toHaveTextContent(
+        "At the break",
+      );
+      expect(
+        screen.queryByLabelText("Ready substitutions"),
+      ).not.toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(20_000));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(
+        screen.queryByLabelText("Substitution reminder"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByLabelText("Ready substitutions"),
+      ).not.toBeInTheDocument();
+      expect(vibrate).not.toHaveBeenCalled();
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+      expect(saved.activeGame!.assignments).toEqual(game.assignments);
+      expect(saved.activeGame!.history).toEqual(game.history);
+      expect(saved.activeGame!.queuedSubstitutions).toEqual(
+        game.queuedSubstitutions,
+      );
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: queued ? "Review substitutions" : "Create plan",
+        }),
+      );
+      expect(
+        screen.getByRole("dialog", {
+          name: queued ? "Substitution plan (5)" : "Substitution plan",
+        }),
+      ).toBeInTheDocument();
+      fireEvent.click(
+        within(screen.getByRole("dialog")).getByRole("button", {
+          name: "Close",
+        }),
+      );
+      act(() => vi.advanceTimersByTime(51_000));
+      expect(
+        screen.getByLabelText(`${periodLabel} ${currentPeriod} time reached`),
+      ).toHaveTextContent("+0:30 added time");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(vibrate).not.toHaveBeenCalled();
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: `End ${periodLabel} ${currentPeriod}`,
+        }),
+      );
+      if (queued) {
+        expect(
+          screen.getByLabelText(`End of ${periodLabel} ${currentPeriod}`),
+        ).toHaveTextContent("5 substitutions ready");
+        fireEvent.click(
+          within(
+            screen.getByLabelText(`End of ${periodLabel} ${currentPeriod}`),
+          ).getByRole("button", {
+            name: "Review substitutions",
+          }),
+        );
+        fireEvent.click(
+          within(
+            screen.getByRole("dialog", {
+              name: "Substitution plan (5)",
+            }),
+          ).getByRole("button", { name: "Send players in" }),
+        );
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      }
+      fireEvent.click(
+        screen.getAllByRole("button", {
+          name: `Start ${periodCount === 4 ? "Q" : "H"}${currentPeriod + 1}`,
+        })[0],
+      );
+      expect(screen.getByLabelText("Next reminder")).toHaveTextContent(
+        queued ? `Due in ${interval / 60}:00` : "Due now",
+      );
+      const restarted = JSON.parse(
+        localStorage.getItem(STORAGE_KEY)!,
+      ) as AppState;
+      expect(restarted.activeGame!.period).toEqual({
+        current: currentPeriod + 1,
+        startedAtSeconds: periodEnd + 30,
+      });
+      expect(restarted.activeGame!.history).toHaveLength(
+        game.history.length + (queued ? 1 : 0),
+      );
+      expect(validateGame(restarted.activeGame!, team.sideSize)).toEqual([]);
+    },
+  );
+
   it.each([false, true])(
     "suppresses final-minute automatic prompts but keeps manual and saved plans available (%s)",
     (queued) => {
@@ -1029,9 +1179,9 @@ describe("Sideline app", () => {
       ).not.toBeInTheDocument();
       expect(vibrate).not.toHaveBeenCalled();
       if (queued) {
-        expect(screen.getByLabelText("Ready substitutions")).toHaveTextContent(
-          "1 substitution ready",
-        );
+        expect(
+          screen.queryByLabelText("Ready substitutions"),
+        ).not.toBeInTheDocument();
         fireEvent.click(
           screen.getByRole("button", { name: "Review substitutions" }),
         );
@@ -2174,12 +2324,12 @@ describe("Sideline app", () => {
       "Haru",
       "Collier",
       "Dylan",
+      "Henry",
       "Maddox",
       "Malik",
       "Noah",
       "Ollie",
       "Evan",
-      "Henry",
     ]);
     fireEvent.click(
       screen.getByRole("button", {
@@ -3315,7 +3465,7 @@ describe("Sideline app", () => {
     const note = within(banner).getByRole("status", {
       name: "Goalkeeper preparation",
     });
-    expect(note).toHaveTextContent("Jackson is lined up outfield");
+    expect(note).toHaveTextContent("William is lined up outfield");
     expect(note.parentElement).toBe(banner);
     expect(banner).toHaveClass("has-preparation");
     expect(document.querySelector(".goalkeeper-preparation-banner")).toBeNull();
@@ -3388,6 +3538,54 @@ describe("Sideline app", () => {
       expect(saved.activeGame?.assignments.gk).toBe(successor.id);
       expect(saved.activeGame?.clock.elapsedSeconds).toBe(executionSeconds);
       expect(validateGame(saved.activeGame!, 9)).toEqual([]);
+    },
+  );
+
+  it.each([false, true])(
+    "uses the shortened keeper target in planning and live execution notices (backup first turn=%s)",
+    (backupFirstTurn) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-18T18:00:00Z"));
+      const { state, game } = u8RepeatKeeperRotation(
+        40,
+        backupFirstTurn ? { henryOutfieldFirst: true, removeOllie: false } : {},
+      );
+      const keeperName = state.teams.u8.roster.find(
+        (player) => player.id === game.assignments.gk,
+      )!.name;
+      state.activeGame = setClockRunning(game, true, Date.now());
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      fireEvent.click(
+        screen.getAllByRole("button", { name: "Create plan" })[0],
+      );
+      const planner = screen.getByRole("dialog", { name: "Substitution plan" });
+      expect(planner.querySelector(".keeper-change-warning")).toBeNull();
+      fireEvent.click(
+        within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: "Review substitutions" }),
+      );
+      const review = screen.getByRole("dialog", {
+        name: "Substitution plan (5)",
+      });
+      expect(review).toHaveTextContent(
+        `Sending now would end ${keeperName}'s turn before the recommended 5:00.`,
+      );
+      act(() => vi.advanceTimersByTime(300_000));
+      expect(review.querySelector(".keeper-change-warning")).toBeNull();
+      fireEvent.click(
+        within(review).getByRole("button", { name: "Send players in" }),
+      );
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+      expect(saved.activeGame!.clock.elapsedSeconds).toBe(2_100);
+      expect(
+        saved.teams.u8.roster.find(
+          (player) => player.id === saved.activeGame!.assignments.gk,
+        )?.name,
+      ).toBe("Henry");
+      expect(validateGame(saved.activeGame!, 5)).toEqual([]);
     },
   );
 
@@ -3929,6 +4127,8 @@ describe("Sideline app", () => {
   it("re-optimizes untouched suggestions when the swap count decreases", () => {
     const state = structuredClone(INITIAL_STATE);
     const team = state.teams.u8;
+    // Isolate outfield ranking from the need to replace an atypical keeper.
+    team.roster[0].preferredRoles = ["goalkeeper"];
     const game = createGame(
       team,
       "5-1-2-1",
