@@ -159,7 +159,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
     parsed.version === 10
   ) {
     return {
-      version: 20,
+      version: 21,
       teams: structuredClone(INITIAL_STATE.teams),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -169,7 +169,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 11) {
     return {
-      version: 20,
+      version: 21,
       teams: applyU8DefaultFormation(
         applyCurrentRosterPreferences(parsed.teams as AppState["teams"]),
       ),
@@ -181,7 +181,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 12) {
     return {
-      version: 20,
+      version: 21,
       teams: applyU8DefaultFormation(
         applyJackPreferences(
           applyWilliamPreferences(parsed.teams as AppState["teams"]),
@@ -195,7 +195,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
 
   if (parsed.version === 13) {
     return {
-      version: 20,
+      version: 21,
       teams: applyU8DefaultFormation(
         applyJackPreferences(
           applyWilliamPreferences(parsed.teams as AppState["teams"]),
@@ -210,7 +210,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
   if (parsed.version === 14) {
     return {
       ...(parsed as AppState),
-      version: 20,
+      version: 21,
       teams: applyU8DefaultFormation(
         applyJackPreferences(
           applyWilliamPreferences(parsed.teams as AppState["teams"]),
@@ -225,7 +225,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
   if (parsed.version === 15) {
     return {
       ...(parsed as AppState),
-      version: 20,
+      version: 21,
       teams: applyU8DefaultFormation(
         applyJackPreferences(parsed.teams as AppState["teams"]),
       ),
@@ -238,7 +238,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
   if (parsed.version === 16) {
     return {
       ...(parsed as AppState),
-      version: 20,
+      version: 21,
       teams: applyJackPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -249,7 +249,7 @@ const migratePriorState = (parsed: StoredState): AppState => {
   if (parsed.version === 17) {
     return {
       ...(parsed as AppState),
-      version: 20,
+      version: 21,
       teams: applyJackPreferences(parsed.teams as AppState["teams"]),
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
@@ -257,10 +257,15 @@ const migratePriorState = (parsed: StoredState): AppState => {
     };
   }
 
-  if (parsed.version === 18 || parsed.version === 19 || parsed.version === 20) {
+  if (
+    parsed.version === 18 ||
+    parsed.version === 19 ||
+    parsed.version === 20 ||
+    parsed.version === 21
+  ) {
     return {
       ...(parsed as AppState),
-      version: 20,
+      version: 21,
       activeGame: parsed.activeGame
         ? normalizeActiveGame(parsed.activeGame)
         : null,
@@ -313,7 +318,28 @@ const restoreStartingHistory = (state: AppState): AppState => {
 };
 
 export const migrateStoredState = (parsed: StoredState): AppState => {
-  const state = restoreStartingHistory(migratePriorState(parsed));
+  let state = restoreStartingHistory(migratePriorState(parsed));
+  if (parsed.version !== undefined && parsed.version <= 20) {
+    const preferences = new Map(
+      INITIAL_STATE.teams.u8.roster.map((player) => [
+        player.id,
+        player.preferredRoles,
+      ]),
+    );
+    state = {
+      ...state,
+      teams: {
+        ...state.teams,
+        u8: {
+          ...state.teams.u8,
+          roster: state.teams.u8.roster.map((player) => {
+            const roles = preferences.get(player.id);
+            return roles ? { ...player, preferredRoles: [...roles] } : player;
+          }),
+        },
+      },
+    };
+  }
   const existingCollier = state.teams.u8.roster.find(
     (player) => player.id === "u8-p10",
   );

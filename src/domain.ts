@@ -253,15 +253,15 @@ const rosterNumbers: Record<TeamId, number[]> = {
 
 const rosterPreferences: Record<TeamId, PositionRole[][]> = {
   u8: [
-    ["defender", "midfielder"],
-    ["defender", "midfielder"],
+    ["forward", "midfielder", "defender"],
+    ["defender", "midfielder", "forward"],
     ["goalkeeper", "midfielder", "forward"],
-    ["midfielder", "forward"],
+    ["forward", "midfielder", "goalkeeper"],
     ["forward", "midfielder"],
     ["defender", "midfielder"],
-    ["goalkeeper", "midfielder", "forward"],
-    ["midfielder", "forward"],
-    ["goalkeeper", "midfielder"],
+    ["goalkeeper", "forward", "midfielder"],
+    ["midfielder", "defender", "forward"],
+    ["goalkeeper", "forward", "midfielder"],
     ["defender", "midfielder", "forward"],
   ],
   u12: [
@@ -316,7 +316,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 20,
+  version: 21,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
@@ -657,7 +657,7 @@ export const isImmediateSubstitution = (event: GameEvent) =>
       event.note?.startsWith("Sent immediately.") === true));
 
 export const getSubstitutionReminderStatus = (game: ActiveGame) => {
-  const rotations = game.teamId === "u8" && game.periodCount === 2 ? 6 : 4;
+  const rotations = game.teamId === "u8" ? 8 : 4;
   const intervalSeconds = Math.round(game.durationSeconds / rotations);
   const lastExecutedSubstitution = game.history
     .filter(
@@ -1062,13 +1062,12 @@ export const assignStartingPlayersByPreference = (
   formation: Formation,
   playerIds: string[],
   roster: Player[],
-  periodCount: 2 | 4 = 4,
   previousLineup?: StartingLineup,
 ) => {
   const keepers = roster.filter(
     (p) => playerIds.includes(p.id) && p.preferredRoles.includes("goalkeeper"),
   );
-  const rotations = formation.sideSize === 5 && periodCount === 2 ? 6 : 4;
+  const rotations = formation.sideSize === 5 ? 8 : 4;
   const equalShare = formation.sideSize / Math.max(1, playerIds.length);
   // Allow an outfield start unless its first turn plus an equal share of
   // goalkeeper duty would substantially exceed the player's playing budget.
@@ -1093,7 +1092,6 @@ export const fillStartingLineup = (
   presentIds: string[],
   roster: Player[],
   previousLineup?: StartingLineup,
-  periodCount: 2 | 4 = 4,
 ) => {
   const present = roster.filter(
     (player) => player.active && presentIds.includes(player.id),
@@ -1113,7 +1111,6 @@ export const fillStartingLineup = (
         formation,
         present.map((player) => player.id),
         roster,
-        periodCount,
         previousLineup,
       ),
     };

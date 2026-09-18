@@ -147,7 +147,7 @@ describe("one-game U8 starter history", () => {
       version: 19,
       activeGame: changed,
     });
-    expect(migrated.version).toBe(20);
+    expect(migrated.version).toBe(INITIAL_STATE.version);
     expect(migrated.activeGame?.assignments).toEqual(changed.assignments);
     expect(migrated.activeGame?.history).toEqual(changed.history);
     expect(migrated.teams.u8.lastStartingLineup?.starterIds).toEqual(
@@ -216,7 +216,6 @@ describe("history-aware starting choices", () => {
         formation,
         ids,
         team.roster,
-        4,
         history,
       );
       expect(
@@ -225,13 +224,7 @@ describe("history-aware starting choices", () => {
       ).toBeGreaterThanOrEqual(2);
       expect(new Set(Object.values(next)).size).toBe(5);
       expect(
-        assignStartingPlayersByPreference(
-          formation,
-          ids,
-          team.roster,
-          4,
-          history,
-        ),
+        assignStartingPlayersByPreference(formation, ids, team.roster, history),
       ).toEqual(next);
     },
   );
@@ -252,7 +245,6 @@ describe("history-aware starting choices", () => {
       getFormation(game.formationId),
       ids,
       team.roster,
-      4,
       history,
     );
     expect(Object.values(chosen)).not.toContain(game.benchIds[0]);
@@ -274,7 +266,6 @@ describe("history-aware starting choices", () => {
       formation,
       game.presentIds,
       team.roster,
-      4,
       history,
     );
     expect(next.gk).toBe(team.roster[0].id);
@@ -307,10 +298,9 @@ describe("history-aware starting choices", () => {
       formation,
       ids,
       team.roster,
-      2,
     );
     expect(
-      assignStartingPlayersByPreference(formation, ids, team.roster, 2, {
+      assignStartingPlayersByPreference(formation, ids, team.roster, {
         starterIds: Object.values(first),
         presentIds: ids,
       }),

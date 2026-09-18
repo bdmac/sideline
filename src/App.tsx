@@ -1527,7 +1527,6 @@ function SetupScreen({
       formation,
       activePlayers.map((player) => player.id),
       team.roster,
-      team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
       team.lastStartingLineup,
     ),
   );
@@ -1569,7 +1568,6 @@ function SetupScreen({
         nextFormation,
         present.map((player) => player.id),
         setupTeam.roster,
-        team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
         team.lastStartingLineup,
       ),
     );
@@ -1605,7 +1603,6 @@ function SetupScreen({
         presentIds,
         setupTeam.roster,
         team.lastStartingLineup,
-        team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
       ),
     );
   };
@@ -1631,7 +1628,6 @@ function SetupScreen({
               .filter((player) => next.includes(player.id))
               .map((player) => player.id),
             setupTeam.roster,
-            team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
             team.lastStartingLineup,
           );
         }
@@ -1641,7 +1637,6 @@ function SetupScreen({
           next,
           setupTeam.roster,
           team.lastStartingLineup,
-          team.id === "u8" ? gameFormat.periodCount : team.defaultPeriodCount,
         );
       });
       return next;

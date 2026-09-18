@@ -129,7 +129,7 @@ describe("end-of-game rotation cutoff", () => {
   });
 
   it.each([
-    ["u8", 60, 180],
+    ["u8", 60, 120],
     ["u12", 80, 240],
   ] as const)(
     "scales the buffer for a custom %s duration of %i minutes",
