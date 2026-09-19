@@ -4330,6 +4330,10 @@ select:hover {
   font: inherit;
 }
 
+.plan-impact-note {
+  margin: 0 0 1rem;
+}
+
 .bench-replacement-list button {
   width: 100%;
   min-height: 62px;

@@ -15,6 +15,7 @@ import {
 } from "./domain";
 import { TOUCH_DRAG_HOLD_MS } from "./playerDrag";
 import { STORAGE_KEY } from "./storage";
+import { keeperHandoffGame } from "./test/keeperHandoffFixtures";
 import type { AppState, Player } from "./types";
 
 function pointer(
@@ -104,6 +105,36 @@ describe("live bench dragging", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it("asks before a bench drop replaces a saved keeper handoff", () => {
+    Object.defineProperty(window, "innerWidth", {
+      value: 1024,
+      configurable: true,
+      writable: true,
+    });
+    const { state, game } = keeperHandoffGame();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    const source = document.querySelector(
+      '[data-live-bench-player-id="u8-p10"]',
+    )!;
+    const target = screen.getByRole("button", {
+      name: "Review planned keeper move for Henry",
+    });
+    bounds(target);
+    pointer(source, "pointerdown", 750, 500);
+    pointer(source, "pointermove", 250, 240);
+    pointer(source, "pointerup", 250, 240);
+    const confirmation = screen.getByRole("alertdialog", {
+      name: "Override the keeper plan?",
+    });
+    expect(confirmation).toHaveTextContent("Collier will replace Henry now.");
+    expect(savedGame()).toEqual(game);
+    fireEvent.click(
+      within(confirmation).getByRole("button", { name: "Keep current plan" }),
+    );
+    expect(savedGame()).toEqual(game);
   });
 
   it.each<{

@@ -9,7 +9,7 @@ import {
   ToggleSwitch,
   type DialogWidth,
 } from "@primer/react";
-import { Card } from "@primer/react/experimental";
+import { Card, InlineMessage } from "@primer/react/experimental";
 import { ThemeProvider } from "@primer/react/next";
 import {
   ArrowLeft,
@@ -109,6 +109,7 @@ import {
   materializeGame,
   movePlayer,
   previewBenchSubstitution,
+  getQueuedKeeperHandoffConflict,
   queueBenchSubstitution,
   queueSubstitutions,
   reassignIncomingSubstitution,
@@ -2121,6 +2122,10 @@ function LiveGameScreen({
   const [fieldQueuePlayerId, setFieldQueuePlayerId] = useState<string | null>(
     null,
   );
+  const [immediatePlanOverride, setImmediatePlanOverride] = useState<{
+    inPlayerId: string;
+    outPlayerId: string;
+  } | null>(null);
   const [rosterView, setRosterView] = useState<"field" | "bench">("bench");
   const [confirmedPairs, setConfirmedPairs] = useState<
     SubstitutionPair[] | null
@@ -2424,7 +2429,10 @@ function LiveGameScreen({
     }
   };
 
-  const sendSingleSubstitution = (inPlayerId: string, outPlayerId: string) => {
+  const executeSingleSubstitution = (
+    inPlayerId: string,
+    outPlayerId: string,
+  ) => {
     let executedPairs: SubstitutionPair[] = [];
     const succeeded = safeChange(() => {
       const next = applyImmediateSubstitution(
@@ -2447,6 +2455,22 @@ function LiveGameScreen({
       setConfirmedPairs(executedPairs);
     }
     return succeeded;
+  };
+
+  const sendSingleSubstitution = (inPlayerId: string, outPlayerId: string) => {
+    if (queuedKeeperMove) {
+      setBenchQueuePlayerId(null);
+      setFieldQueuePlayerId(null);
+      setImmediatePlanOverride({ inPlayerId, outPlayerId });
+      return false;
+    }
+    return executeSingleSubstitution(inPlayerId, outPlayerId);
+  };
+
+  const editKeeperPlan = () => {
+    setBenchQueuePlayerId(null);
+    setFieldQueuePlayerId(null);
+    setPlannerOpen(true);
   };
 
   const benchDrag = useLiveBenchDrag({
@@ -3480,6 +3504,7 @@ function LiveGameScreen({
           game={displayed}
           team={team}
           onClose={() => setBenchQueuePlayerId(null)}
+          onEditKeeperPlan={editKeeperPlan}
           onSendImmediately={(outPlayerId) =>
             sendSingleSubstitution(benchQueuePlayerId, outPlayerId)
           }
@@ -3509,6 +3534,7 @@ function LiveGameScreen({
           game={displayed}
           team={team}
           onClose={() => setFieldQueuePlayerId(null)}
+          onEditKeeperPlan={editKeeperPlan}
           onSendImmediately={(inPlayerId) =>
             sendSingleSubstitution(inPlayerId, fieldQueuePlayerId)
           }
@@ -3528,6 +3554,26 @@ function LiveGameScreen({
               )
             ) {
               setFieldQueuePlayerId(null);
+            }
+          }}
+        />
+      )}
+      {immediatePlanOverride && (
+        <ConfirmSheet
+          title="Override the keeper plan?"
+          body={`${playerName(team, immediatePlanOverride.inPlayerId)} will replace ${playerName(team, immediatePlanOverride.outPlayerId)} now. This overrides the saved ${queuedKeeperMove ? `${playerName(team, queuedKeeperMove.playerId)} to Keeper` : "keeper"} change and recalculates the remaining substitutions. Review the new plan before sending it.`}
+          cancelLabel="Keep current plan"
+          confirmLabel="Sub now and replan"
+          confirmIcon={<ArrowRightLeft size={18} aria-hidden="true" />}
+          onCancel={() => setImmediatePlanOverride(null)}
+          onConfirm={() => {
+            if (
+              executeSingleSubstitution(
+                immediatePlanOverride.inPlayerId,
+                immediatePlanOverride.outPlayerId,
+              )
+            ) {
+              setImmediatePlanOverride(null);
             }
           }}
         />
@@ -4380,6 +4426,8 @@ function SingleSubstitutionActions({
   onPlan,
   onSendImmediately,
   editing,
+  onEditKeeperPlan,
+  replacing = false,
 }: {
   game: ActiveGame;
   team: Team;
@@ -4388,13 +4436,33 @@ function SingleSubstitutionActions({
   onPlan: () => void;
   onSendImmediately: () => void;
   editing: boolean;
+  onEditKeeperPlan: () => void;
+  replacing?: boolean;
 }) {
   const noticeId = useId();
+  const conflictId = useId();
+  const conflict = pair
+    ? getQueuedKeeperHandoffConflict(game, pair.inPlayerId, pair.outPlayerId)
+    : undefined;
   const notice = getKeeperChangeNotice(game, team, pair ? [pair] : [], "now", {
     warnAboutRest: false,
   });
   return (
     <div className="single-substitution-actions">
+      {conflict?.keeperHandoff && (
+        <InlineMessage
+          className="plan-impact-note"
+          id={conflictId}
+          role="status"
+          variant="warning"
+        >
+          <span>
+            This conflicts with{" "}
+            {playerName(team, conflict.keeperHandoff.playerId)}'s move to
+            Keeper. Edit the keeper plan, or use Sub now to override and replan.
+          </span>
+        </InlineMessage>
+      )}
       <KeeperChangeNotice notice={notice} id={noticeId} />
       <div className="bench-picker-actions">
         <Button
@@ -4403,7 +4471,11 @@ function SingleSubstitutionActions({
           size="large"
           leadingVisual={ArrowRightLeft}
           disabled={!pair}
-          aria-describedby={notice ? noticeId : undefined}
+          aria-describedby={
+            [notice ? noticeId : "", conflict ? conflictId : ""]
+              .filter(Boolean)
+              .join(" ") || undefined
+          }
           onClick={onSendImmediately}
         >
           Sub now
@@ -4413,10 +4485,17 @@ function SingleSubstitutionActions({
           variant="primary"
           size="large"
           leadingVisual={Check}
-          disabled={!canPlan}
-          onClick={onPlan}
+          disabled={!conflict && !canPlan}
+          aria-describedby={conflict ? conflictId : undefined}
+          onClick={conflict ? onEditKeeperPlan : onPlan}
         >
-          {editing ? "Update plan" : "Add to plan"}
+          {conflict
+            ? "Edit keeper plan"
+            : replacing
+              ? "Replace planned swap"
+              : editing
+                ? "Update plan"
+                : "Add to plan"}
         </Button>
       </div>
     </div>
@@ -4430,7 +4509,7 @@ function ScheduledChoicesHeader({ direction }: { direction: "in" | "out" }) {
         {direction === "in" ? "Already going in" : "Already going out"}
       </h3>
       <p className="scheduled-choices-description">
-        Replaces existing pairings.
+        Already included in the plan.
       </p>
     </div>
   );
@@ -4447,6 +4526,13 @@ function PlannedPairingImpact({
   inPlayerId: string;
   outPlayerId: string;
 }) {
+  if (getQueuedKeeperHandoffConflict(game, inPlayerId, outPlayerId)) {
+    return (
+      <span className="planned-pairing-impact">
+        Changes the linked keeper plan.
+      </span>
+    );
+  }
   const { removedPlayerIds } = previewBenchSubstitution(
     game,
     inPlayerId,
@@ -4487,6 +4573,7 @@ function BenchSubstitutionPicker({
   onSelect,
   onSendImmediately,
   onRemove,
+  onEditKeeperPlan,
 }: {
   playerId: string;
   game: ActiveGame;
@@ -4495,6 +4582,7 @@ function BenchSubstitutionPicker({
   onSelect: (outPlayerId: string) => void;
   onSendImmediately: (outPlayerId: string) => void;
   onRemove: () => void;
+  onEditKeeperPlan: () => void;
 }) {
   const currentPair = game.queuedSubstitutions?.find(
     (pair) => pair.inPlayerId === playerId,
@@ -4504,6 +4592,18 @@ function BenchSubstitutionPicker({
   );
   const player = team.roster.find((item) => item.id === playerId);
   if (!player) return null;
+  const queued = game.queuedSubstitutions ?? [];
+  const selectedConflictsWithHandoff = Boolean(
+    getQueuedKeeperHandoffConflict(game, playerId, selectedOutPlayerId),
+  );
+  const reservedMovers = new Set(
+    queued.flatMap((pair) =>
+      pair.keeperHandoff ? [pair.keeperHandoff.playerId] : [],
+    ),
+  );
+  const planFull =
+    queued.length > 0 &&
+    queued.length >= Object.keys(game.assignments).length - reservedMovers.size;
   const formation = getFormation(game.formationId);
   const planningGame = getSubstitutionPlanningSnapshot(game);
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
@@ -4523,9 +4623,9 @@ function BenchSubstitutionPicker({
         (item) => item.id === positionId,
       )!;
       const preferenceIndex = player.preferredRoles.indexOf(position.role);
-      const plannedPair = game.queuedSubstitutions
-        ?.filter((pair) => pair.inPlayerId !== playerId)
-        .find((pair) => pair.outPlayerId === outPlayerId);
+      const plannedPair = game.queuedSubstitutions?.find(
+        (pair) => pair.outPlayerId === outPlayerId,
+      );
       return {
         position,
         outPlayerId,
@@ -4540,6 +4640,10 @@ function BenchSubstitutionPicker({
         plannedIncomingName: plannedPair
           ? playerName(team, plannedPair.inPlayerId)
           : undefined,
+        keeperMove: queued.find(
+          (pair) => pair.keeperHandoff?.playerId === outPlayerId,
+        )?.keeperHandoff,
+        linkedKeeperExit: Boolean(plannedPair?.keeperHandoff),
       };
     })
     .sort(compareSubstitutionDestinations);
@@ -4570,6 +4674,8 @@ function BenchSubstitutionPicker({
           onPlan={() => onSelect(selectedOutPlayerId)}
           onSendImmediately={() => onSendImmediately(selectedOutPlayerId)}
           editing={Boolean(currentPair)}
+          replacing={planFull && Boolean(selectedOutPlayerId) && !currentPair}
+          onEditKeeperPlan={onEditKeeperPlan}
         />
       }
       footerClassName="bench-picker-footer"
@@ -4603,10 +4709,14 @@ function BenchSubstitutionPicker({
           ...(selectedOutPlayerId
             ? [
                 {
-                  label: "In this plan",
+                  label: selectedConflictsWithHandoff
+                    ? "Selected swap"
+                    : "In this plan",
                   value: (
                     <>
-                      Scheduled in at{" "}
+                      {selectedConflictsWithHandoff
+                        ? "Would go in at"
+                        : "Scheduled in at"}{" "}
                       {selectedPosition?.mediumLabel ??
                         selectedPositionEntry?.[0]}{" "}
                       for {playerName(team, selectedOutPlayerId)}
@@ -4633,7 +4743,14 @@ function BenchSubstitutionPicker({
       <div className="bench-replacement-list">
         {choices.map(
           (
-            { position, outPlayerId, preferenceIndex, plannedIncomingName },
+            {
+              position,
+              outPlayerId,
+              preferenceIndex,
+              plannedIncomingName,
+              keeperMove,
+              linkedKeeperExit,
+            },
             index,
           ) => {
             const selected = selectedOutPlayerId === outPlayerId;
@@ -4693,11 +4810,23 @@ function BenchSubstitutionPicker({
                       </strong>
                     </span>
                   </span>
-                  {plannedIncomingName && (
-                    <span className="replacement-player-status outgoing-status">
-                      <ArrowRightLeft size={13} aria-hidden="true" />
-                      Scheduled out for {plannedIncomingName}
+                  {keeperMove ? (
+                    <span className="replacement-player-status">
+                      <Move size={13} aria-hidden="true" />
+                      Moving to Keeper · stays on
                     </span>
+                  ) : linkedKeeperExit ? (
+                    <span className="replacement-player-status outgoing-status">
+                      <Move size={13} aria-hidden="true" />
+                      Part of the linked keeper change
+                    </span>
+                  ) : (
+                    plannedIncomingName && (
+                      <span className="replacement-player-status outgoing-status">
+                        <ArrowRightLeft size={13} aria-hidden="true" />
+                        Scheduled out for {plannedIncomingName}
+                      </span>
+                    )
                   )}
                 </button>
               </Fragment>
@@ -4717,6 +4846,7 @@ function FieldSubstitutionPicker({
   onSelect,
   onSendImmediately,
   onRemove,
+  onEditKeeperPlan,
 }: {
   playerId: string;
   game: ActiveGame;
@@ -4725,12 +4855,16 @@ function FieldSubstitutionPicker({
   onSelect: (inPlayerId: string) => void;
   onSendImmediately: (inPlayerId: string) => void;
   onRemove: () => void;
+  onEditKeeperPlan: () => void;
 }) {
   const currentPair = game.queuedSubstitutions?.find(
     (pair) => pair.outPlayerId === playerId,
   );
   const [selectedInPlayerId, setSelectedInPlayerId] = useState(
     currentPair?.inPlayerId ?? "",
+  );
+  const selectedConflictsWithHandoff = Boolean(
+    getQueuedKeeperHandoffConflict(game, selectedInPlayerId, playerId),
   );
   const player = team.roster.find((item) => item.id === playerId);
   if (!player) return null;
@@ -4748,9 +4882,9 @@ function FieldSubstitutionPicker({
     .map((inPlayerId) => {
       const incoming = team.roster.find((item) => item.id === inPlayerId)!;
       const preferenceIndex = incoming.preferredRoles.indexOf(position.role);
-      const plannedPair = game.queuedSubstitutions
-        ?.filter((pair) => pair.outPlayerId !== playerId)
-        .find((pair) => pair.inPlayerId === inPlayerId);
+      const plannedPair = game.queuedSubstitutions?.find(
+        (pair) => pair.inPlayerId === inPlayerId,
+      );
       return {
         player: incoming,
         preferenceIndex:
@@ -4811,6 +4945,7 @@ function FieldSubstitutionPicker({
           onPlan={() => onSelect(selectedInPlayerId)}
           onSendImmediately={() => onSendImmediately(selectedInPlayerId)}
           editing={Boolean(currentPair)}
+          onEditKeeperPlan={onEditKeeperPlan}
         />
       }
       footerClassName="bench-picker-footer"
@@ -4844,10 +4979,15 @@ function FieldSubstitutionPicker({
           ...(selectedInPlayerId
             ? [
                 {
-                  label: "In this plan",
+                  label: selectedConflictsWithHandoff
+                    ? "Selected swap"
+                    : "In this plan",
                   value: (
                     <>
-                      Scheduled out for {playerName(team, selectedInPlayerId)}
+                      {selectedConflictsWithHandoff
+                        ? "Would come off for"
+                        : "Scheduled out for"}{" "}
+                      {playerName(team, selectedInPlayerId)}
                       <PlannedPairingImpact
                         game={game}
                         team={team}

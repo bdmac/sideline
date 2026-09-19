@@ -6,6 +6,8 @@ import {
   endCurrentPeriod,
   fastForwardGame,
   getGoalkeeperPreparationWarning,
+  getQueuedKeeperHandoffConflict,
+  queueBenchSubstitution,
   validateGame,
   validateSubstitutionPairs,
 } from "./domain";
@@ -18,6 +20,235 @@ describe("planned on-field keeper moves", () => {
     sessionStorage.clear();
     window.history.replaceState({}, "", "/");
     localStorage.setItem(COACH_ID_STORAGE_KEY, "brian");
+  });
+
+  it.each(["in", "out"] as const)(
+    "keeps the current pairing inside the scheduled group when editing Plan %s",
+    (direction) => {
+      const { state, game } = keeperHandoffGame();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      fireEvent.click(
+        screen.getByRole("button", {
+          name:
+            direction === "in"
+              ? "Edit Ollie going in"
+              : /^Plan substitution for Haru/,
+        }),
+      );
+      const picker = screen.getByRole("dialog");
+      const header = within(picker)
+        .getByRole("heading", {
+          name: direction === "in" ? "Already going out" : "Already going in",
+        })
+        .closest(".scheduled-choices-header")!;
+      const current = within(picker).getByRole("button", {
+        name: direction === "in" ? /^Haru/ : /^Ollie/,
+      });
+      expect(current).toHaveAttribute("aria-pressed", "true");
+      expect(current).toHaveTextContent(
+        direction === "in"
+          ? "Scheduled out for Ollie"
+          : "Scheduled in for Haru",
+      );
+      expect(
+        header.compareDocumentPosition(current) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).not.toBe(0);
+      expect(
+        within(picker).getByRole("button", { name: "Update plan" }),
+      ).toBeDisabled();
+
+      fireEvent.click(
+        within(picker).getByRole("button", {
+          name: direction === "in" ? /^Noah/ : /^Collier/,
+        }),
+      );
+      expect(current).toHaveAttribute("aria-pressed", "false");
+      expect(
+        header.compareDocumentPosition(current) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).not.toBe(0);
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeGame).toEqual(
+        game,
+      );
+    },
+  );
+
+  it("rejects focused edits that would split a linked handoff without mutating the plan", () => {
+    const { game, pairs } = keeperHandoffGame();
+    const before = structuredClone(game);
+    for (const [incoming, outgoing] of [
+      ["u8-p10", "u8-p7"],
+      ["u8-p10", "u8-p3"],
+      [pairs[0].inPlayerId, "u8-p2"],
+    ]) {
+      expect(getQueuedKeeperHandoffConflict(game, incoming, outgoing)).toEqual(
+        pairs[0],
+      );
+      expect(() => queueBenchSubstitution(game, incoming, outgoing)).toThrow(
+        "Edit that change in the full substitution plan",
+      );
+      expect(game).toEqual(before);
+    }
+    const updated = queueBenchSubstitution(game, "u8-p10", "u8-p2");
+    expect(updated.queuedSubstitutions).toHaveLength(4);
+    expect(updated.queuedSubstitutions).toContainEqual(pairs[0]);
+    expect(
+      validateSubstitutionPairs(updated, updated.queuedSubstitutions!),
+    ).toEqual([]);
+  });
+
+  it("explains a reserved keeper conflict beside the actions without a redundant full-plan notice", () => {
+    const { state, game } = keeperHandoffGame();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan Collier in" }));
+    const picker = screen.getByRole("dialog");
+    expect(picker).not.toHaveTextContent("Plan is full");
+    expect(picker.querySelector(".plan-impact-note")).not.toBeInTheDocument();
+    const henry = within(picker).getByRole("button", { name: /^Henry/ });
+    expect(henry).toHaveTextContent("Moving to Keeper · stays on");
+    fireEvent.click(henry);
+    expect(picker).not.toHaveTextContent("Plan is full");
+    expect(picker.querySelectorAll(".plan-impact-note")).toHaveLength(1);
+    expect(
+      picker.querySelector(".bench-picker-footer .plan-impact-note"),
+    ).toHaveTextContent(
+      "This conflicts with Henry's move to Keeper. Edit the keeper plan, or use Sub now to override and replan.",
+    );
+    const warning = picker.querySelector(".plan-impact-note")!;
+    expect(warning).toHaveAttribute("data-component", "InlineMessage");
+    expect(warning).toHaveAttribute("data-variant", "warning");
+    expect(warning).toHaveAttribute("role", "status");
+    expect(
+      within(picker).getByRole("button", { name: "Edit keeper plan" }),
+    ).toHaveAttribute("aria-describedby", warning.id);
+    expect(picker).toHaveTextContent("Would go in at Left Mid for Henry");
+    expect(picker).not.toHaveTextContent("Scheduled in at Left Mid for Henry");
+    expect(picker).toHaveTextContent(
+      "This conflicts with Henry's move to Keeper.",
+    );
+    expect(
+      within(picker).queryByRole("button", { name: "Add to plan" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(picker).getByRole("button", { name: "Edit keeper plan" }),
+    );
+    const planner = screen.getByRole("dialog", { name: "Substitution plan" });
+    expect(within(planner).getByRole("button", { name: "5" })).toBeDisabled();
+    expect(planner).toHaveTextContent("Henry");
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeGame).toEqual(
+      game,
+    );
+  });
+
+  it("allows explicit replacement of an ordinary planned swap without removing the handoff", () => {
+    const { state, game, pairs } = keeperHandoffGame();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan Collier in" }));
+    const picker = screen.getByRole("dialog");
+    fireEvent.click(within(picker).getByRole("button", { name: /^Noah/ }));
+    fireEvent.click(
+      within(picker).getByRole("button", { name: "Replace planned swap" }),
+    );
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeGame;
+    expect(saved.queuedSubstitutions).toHaveLength(4);
+    expect(saved.queuedSubstitutions).toContainEqual(pairs[0]);
+    expect(saved.queuedSubstitutions).toContainEqual({
+      positionId: "dl",
+      inPlayerId: "u8-p10",
+      outPlayerId: "u8-p2",
+    });
+    expect(saved.assignments).toEqual(game.assignments);
+    expect(saved.history).toEqual(game.history);
+  });
+
+  it("requires explicit confirmation before Sub now replans a saved keeper change", () => {
+    const { state, game } = keeperHandoffGame();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    const request = () => {
+      fireEvent.click(screen.getByRole("button", { name: "Plan Collier in" }));
+      const picker = screen.getByRole("dialog");
+      fireEvent.click(within(picker).getByRole("button", { name: /^Henry/ }));
+      fireEvent.click(within(picker).getByRole("button", { name: "Sub now" }));
+    };
+    request();
+    let confirmation = screen.getByRole("alertdialog", {
+      name: "Override the keeper plan?",
+    });
+    expect(confirmation).toHaveTextContent("Collier will replace Henry now.");
+    expect(confirmation).toHaveTextContent(
+      "overrides the saved Henry to Keeper change and recalculates",
+    );
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeGame).toEqual(
+      game,
+    );
+    fireEvent.click(
+      within(confirmation).getByRole("button", { name: "Keep current plan" }),
+    );
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeGame).toEqual(
+      game,
+    );
+    request();
+    confirmation = screen.getByRole("alertdialog", {
+      name: "Override the keeper plan?",
+    });
+    fireEvent.click(
+      within(confirmation).getByRole("button", { name: "Sub now and replan" }),
+    );
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeGame;
+    expect(saved.assignments.dr).toBe("u8-p10");
+    expect(saved.benchIds).toContain("u8-p7");
+    expect(saved.history).toHaveLength(game.history.length + 1);
+    expect(validateGame(saved, 5)).toEqual([]);
+    if (saved.queuedSubstitutions) {
+      expect(
+        validateSubstitutionPairs(saved, saved.queuedSubstitutions),
+      ).toEqual([]);
+    }
+  });
+
+  it("also discloses replanning for immediate swaps outside the linked row", () => {
+    const { state, game } = keeperHandoffGame();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan Collier in" }));
+    const picker = screen.getByRole("dialog");
+    fireEvent.click(within(picker).getByRole("button", { name: /^Noah/ }));
+    fireEvent.click(within(picker).getByRole("button", { name: "Sub now" }));
+    expect(
+      screen.getByRole("alertdialog", { name: "Override the keeper plan?" }),
+    ).toHaveTextContent("Collier will replace Noah now.");
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeGame).toEqual(
+      game,
+    );
+  });
+
+  it("routes a field picker away from stealing the handoff's incoming player", () => {
+    const { state, game } = keeperHandoffGame();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Plan substitution for Noah/ }),
+    );
+    const picker = screen.getByRole("dialog");
+    fireEvent.click(within(picker).getByRole("button", { name: /^Evan/ }));
+    expect(picker).toHaveTextContent("Would come off for Evan");
+    expect(picker).toHaveTextContent(
+      "This conflicts with Henry's move to Keeper.",
+    );
+    fireEvent.click(
+      within(picker).getByRole("button", { name: "Edit keeper plan" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Substitution plan" }),
+    ).toHaveTextContent("Henry");
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeGame).toEqual(
+      game,
+    );
   });
 
   it.each(["u8", "u12"] as const)(

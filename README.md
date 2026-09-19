@@ -60,6 +60,8 @@ With no bench players available, tapping a pitch card explains that a player mus
 
 Immediate swaps and taking a player out leave the team rotation timer running toward its existing deadline. Only sending a planned rotation, including a partial batch, restarts that interval. Each player's playing and bench times still update for every change.
 
+If a linked keeper move is already planned, focused pickers mark its reserved players and explain conflicts beside **Edit keeper plan** after selection. Ordinary replacements in a full plan use **Replace planned swap**, rather than Add to plan. **Sub now** or a bench drop asks before overriding a saved keeper handoff and recalculating the remaining plan.
+
 Playing-time notices flag accumulating shortfalls for regular players and guests, accounting for late arrival and time out of the game. They remain visible when a player is queued or on the field, become more urgent as catch-up time runs short, and link directly to planning or review. The End game confirmation also lists players below their available-time minimum; you can continue playing or explicitly finish if the match is over.
 
 For testing or demos, enable **Settings → Demo mode**. During an active game, the expanded match header gains a fast-forward button that opens **Fast-forward**. Enter a positive number of minutes to add while advancing current field and bench time through the normal accounting path. The clock pauses automatically after the jump and leaves period transitions manual.

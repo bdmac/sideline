@@ -6185,9 +6185,12 @@ describe("Sideline app", () => {
         name: new RegExp(`^${scheduled.name} #`),
       });
       const groupHeader = heading.closest(".scheduled-choices-header")!;
-      expect(groupHeader.nextElementSibling).toBe(choice);
+      expect(
+        groupHeader.compareDocumentPosition(choice) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).not.toBe(0);
       expect(groupHeader.previousElementSibling?.tagName).toBe("BUTTON");
-      expect(groupHeader).toHaveTextContent("Replaces existing pairings.");
+      expect(groupHeader).toHaveTextContent("Already included in the plan.");
       expect(choice).toBeEnabled();
       expect(choice).toHaveTextContent(
         direction === "in" ? "Scheduled out for" : "Scheduled in for",
@@ -6303,7 +6306,7 @@ describe("Sideline app", () => {
       within(editPicker).queryByRole("heading", {
         name: "Already going in",
       }),
-    ).not.toBeInTheDocument();
+    ).toBeInTheDocument();
     expect(editPicker).toHaveTextContent("In this planScheduled out for Dylan");
     const selectedIncoming = within(editPicker).getByRole("button", {
       name: /Dylan/,

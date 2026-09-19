@@ -2468,15 +2468,34 @@ export const previewBenchSubstitution = (
   };
 };
 
+export const getQueuedKeeperHandoffConflict = (
+  game: ActiveGame,
+  inPlayerId: string,
+  outPlayerId: string,
+) =>
+  game.queuedSubstitutions?.find(
+    (pair) =>
+      pair.keeperHandoff &&
+      (pair.inPlayerId === inPlayerId ||
+        pair.outPlayerId === outPlayerId ||
+        pair.keeperHandoff.playerId === outPlayerId),
+  );
+
 export const queueBenchSubstitution = (
   game: ActiveGame,
   inPlayerId: string,
   outPlayerId: string,
-): ActiveGame =>
-  queueSubstitutions(
+): ActiveGame => {
+  if (getQueuedKeeperHandoffConflict(game, inPlayerId, outPlayerId)) {
+    throw new Error(
+      "This player is part of the linked keeper change. Edit that change in the full substitution plan.",
+    );
+  }
+  return queueSubstitutions(
     game,
     previewBenchSubstitution(game, inPlayerId, outPlayerId).pairs,
   );
+};
 
 export const removeQueuedSubstitution = (
   game: ActiveGame,
