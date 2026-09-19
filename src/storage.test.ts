@@ -16,11 +16,111 @@ import {
 } from "./storage";
 import type { Player } from "./types";
 
+const approvedU12Preferences: Record<string, Player["preferredRoles"]> = {
+  Jackson: ["goalkeeper", "defender", "midfielder"],
+  Lazar: ["defender", "midfielder"],
+  Nikola: ["defender", "midfielder"],
+  Kai: ["midfielder", "defender"],
+  Elliott: ["midfielder", "defender"],
+  William: ["midfielder", "forward", "goalkeeper", "defender"],
+  Obasi: ["defender", "midfielder"],
+  Andrew: ["midfielder", "forward"],
+  Matt: ["forward", "midfielder", "goalkeeper"],
+  John: ["forward", "midfielder", "defender"],
+  Eli: ["midfielder", "forward"],
+  Aaron: ["midfielder", "defender", "forward"],
+  Rayek: ["goalkeeper", "forward", "defender", "midfielder"],
+  Jack: ["defender", "midfielder", "goalkeeper"],
+  Ryan: ["defender", "midfielder"],
+};
+
 describe("persistence migrations", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
   });
+
+  it("matches all fifteen ordered U12 CSV preferences without blank placeholders", () => {
+    expect(
+      Object.fromEntries(
+        INITIAL_STATE.teams.u12.roster.map((player) => [
+          player.name,
+          player.preferredRoles,
+        ]),
+      ),
+    ).toEqual(approvedU12Preferences);
+  });
+
+  it.each(["u8", "u12"] as const)(
+    "applies the U12 CSV once from version 22 while preserving U8 and an active %s game",
+    (teamId) => {
+      const teams = structuredClone(INITIAL_STATE.teams);
+      teams.u12.roster.forEach((player) => {
+        player.preferredRoles = ["forward"];
+      });
+      const kai = teams.u12.roster.find((player) => player.id === "u12-p4")!;
+      kai.name = "Kai local";
+      kai.number = 99;
+      kai.active = false;
+      teams.u12.defaultDurationMinutes = 64;
+      teams.u12.roster.push({
+        id: "custom-u12-player",
+        name: "Extra",
+        preferredRoles: ["goalkeeper"],
+        active: true,
+      });
+      teams.u8.roster[0].preferredRoles = ["defender"];
+      const team = INITIAL_STATE.teams[teamId];
+      let game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+      );
+      game = movePlayer(game, team.roster[3].id, "gk", 1_000);
+      game.startingLineup = {
+        starterIds: Object.values(game.assignments),
+        presentIds: [...game.presentIds],
+      };
+      if (teamId === "u8")
+        teams.u8.lastStartingLineup = structuredClone(game.startingLineup);
+      game = fastForwardGame(game, 180, 1_000);
+      game = queueSubstitutions(game, suggestSubstitutions(game, 2, team));
+      game.clock = { ...game.clock, running: true, lastStartedAt: 2_000 };
+      const original = structuredClone({ teams, game });
+      const migrated = migrateStoredState({
+        version: 22,
+        teams,
+        activeGame: game,
+      });
+      const preferencesById = new Map(
+        INITIAL_STATE.teams.u12.roster.map((player) => [
+          player.id,
+          approvedU12Preferences[player.name],
+        ]),
+      );
+      expect(migrated.version).toBe(23);
+      expect(migrated.teams.u8).toEqual(teams.u8);
+      expect(migrated.teams.u12).toEqual({
+        ...teams.u12,
+        roster: teams.u12.roster.map((player) => ({
+          ...player,
+          preferredRoles:
+            preferencesById.get(player.id) ?? player.preferredRoles,
+        })),
+      });
+      expect(migrated.activeGame).toEqual(game);
+      expect({ teams, game }).toEqual(original);
+      migrated.teams.u12.roster.find(
+        (player) => player.id === kai.id,
+      )!.preferredRoles = ["goalkeeper"];
+      migrated.teams.u12.roster[0].preferredRoles = [];
+      saveState(migrated);
+      expect(loadState()).toEqual(migrated);
+      expect(migrateStoredState(migrated)).toEqual(migrated);
+    },
+  );
 
   it.each(["u8", "u12"] as const)(
     "applies the approved U8 CSV once while preserving an active %s game",
@@ -37,7 +137,7 @@ describe("persistence migrations", () => {
         starterIds: ["u8-p1"],
         presentIds: ["u8-p1", "u8-p2"],
       };
-      teams.u12.roster[0].preferredRoles = ["forward"];
+      teams.u12.roster[0].name = "Jackson local";
       const extraPlayer: Player = {
         id: "custom-u8-player",
         name: "Extra",
@@ -104,7 +204,7 @@ describe("persistence migrations", () => {
       henry.number = 99;
       henry.active = false;
       teams.u8.roster[0].preferredRoles = ["goalkeeper"];
-      teams.u12.roster[0].preferredRoles = ["forward"];
+      teams.u12.roster[0].name = "Jackson local";
       teams.u8.defaultDurationMinutes = 48;
       teams.u8.roster.push({
         id: "custom-player",
@@ -603,7 +703,7 @@ describe("persistence migrations", () => {
     expect(
       migrated.teams.u12.roster.find((player) => player.name === "Rayek")
         ?.preferredRoles,
-    ).toEqual(["goalkeeper", "defender", "midfielder", "forward"]);
+    ).toEqual(["goalkeeper", "forward", "defender", "midfielder"]);
   });
 
   it("migrates active version 12 games to explicit period timing", () => {
@@ -670,7 +770,7 @@ describe("persistence migrations", () => {
     expect(migrated.activeGame?.periodEnds).toEqual([]);
   });
 
-  it("migrates William's role order without resetting other players", () => {
+  it("migrates William's role order and applies the current U12 CSV", () => {
     const teams = structuredClone(INITIAL_STATE.teams);
     const william = teams.u12.roster.find(
       (player) => player.name === "William",
@@ -695,7 +795,7 @@ describe("persistence migrations", () => {
     expect(
       migrated.teams.u12.roster.find((player) => player.name === "Jackson")
         ?.preferredRoles,
-    ).toEqual(["defender", "goalkeeper"]);
+    ).toEqual(["goalkeeper", "defender", "midfielder"]);
   });
 
   it("migrates version 13 period starts into timeline boundaries", () => {
@@ -783,7 +883,7 @@ describe("persistence migrations", () => {
     );
   });
 
-  it("updates Jack's preferences without resetting another player", () => {
+  it("updates Jack's preferences and applies the current U12 CSV", () => {
     const teams = structuredClone(INITIAL_STATE.teams);
     const jack = teams.u12.roster.find((player) => player.name === "Jack")!;
     const jackson = teams.u12.roster.find(
@@ -806,6 +906,6 @@ describe("persistence migrations", () => {
     expect(
       migrated.teams.u12.roster.find((player) => player.name === "Jackson")
         ?.preferredRoles,
-    ).toEqual(["defender", "goalkeeper"]);
+    ).toEqual(["goalkeeper", "defender", "midfielder"]);
   });
 });

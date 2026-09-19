@@ -3,7 +3,7 @@ import {
   isImmediateSubstitution,
   updateActiveGame,
 } from "./domain";
-import type { ActiveGame, AppState, StartingLineup } from "./types";
+import type { ActiveGame, AppState, StartingLineup, TeamId } from "./types";
 
 export const STORAGE_KEY = "sideline-state-v1";
 export const ACTIVE_GAME_KEY = "sideline-active-game";
@@ -14,9 +14,10 @@ type StoredState = Omit<Partial<AppState>, "version"> & {
 
 const applyCurrentRosterPreferences = (
   teams: AppState["teams"],
+  teamIds: readonly TeamId[] = ["u8", "u12"],
 ): AppState["teams"] => {
   const nextTeams = structuredClone(teams);
-  (["u8", "u12"] as const).forEach((teamId) => {
+  teamIds.forEach((teamId) => {
     const currentPreferences = new Map(
       INITIAL_STATE.teams[teamId].roster.map((player) => [
         player.id,
@@ -262,7 +263,8 @@ const migratePriorState = (parsed: StoredState): AppState => {
     parsed.version === 19 ||
     parsed.version === 20 ||
     parsed.version === 21 ||
-    parsed.version === 22
+    parsed.version === 22 ||
+    parsed.version === 23
   ) {
     return {
       ...(parsed as AppState),
@@ -342,6 +344,12 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
           }),
         },
       },
+    };
+  }
+  if (previousVersion !== undefined && previousVersion <= 22) {
+    state = {
+      ...state,
+      teams: applyCurrentRosterPreferences(state.teams, ["u12"]),
     };
   }
   const existingCollier = state.teams.u8.roster.find(

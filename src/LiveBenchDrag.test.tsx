@@ -234,7 +234,7 @@ describe("live bench dragging", () => {
     act(() => vi.advanceTimersByTime(1));
     const board = screen.getByLabelText("Temporary substitution pitch");
     expect(board.querySelector(".bench-drop-positions")).toHaveTextContent(
-      "Positions: Forward · Midfield",
+      "Positions: Midfield · Defense · Forward",
     );
     expect(board.querySelectorAll("[data-position-id]")).toHaveLength(9);
     expect(panel.querySelectorAll("[data-live-bench-player-id]")).toHaveLength(
@@ -255,7 +255,7 @@ describe("live bench dragging", () => {
     );
     expect(target.querySelector("small")).toHaveTextContent(/^Left Back$/);
     expect(board.querySelector(".bench-drop-positions")).toHaveTextContent(
-      "Positions: Forward · Midfield",
+      "Positions: Midfield · Defense · Forward",
     );
     expect(within(board).getByRole("status")).toHaveTextContent(
       "IN · Left BackAaron #21OUTLazar #15",
