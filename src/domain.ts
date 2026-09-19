@@ -256,7 +256,7 @@ const rosterPreferences: Record<TeamId, PositionRole[][]> = {
     ["forward", "midfielder", "defender"],
     ["defender", "midfielder", "forward"],
     ["goalkeeper", "midfielder", "forward"],
-    ["forward", "midfielder"],
+    ["defender", "goalkeeper", "midfielder", "forward"],
     ["forward", "midfielder"],
     ["defender", "midfielder"],
     ["forward", "midfielder", "goalkeeper"],
@@ -298,8 +298,8 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
     name: "Golden Dragons",
     ageGroup: "U8",
     sideSize: 5,
-    defaultDurationMinutes: 40,
-    defaultPeriodCount: 4,
+    defaultDurationMinutes: 50,
+    defaultPeriodCount: 2,
     defaultFormationId: "5-2-2",
     roster: makeRoster("u8", sampleNames.u8),
   },
@@ -316,7 +316,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 23,
+  version: 25,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
@@ -696,28 +696,87 @@ export const getMinimumPlayingTimePace = (game: ActiveGame): number | null => {
   return Math.min(0.5, (4 * sideSize) / (5 * availableCount));
 };
 
+export type PlayingTimeWarning = {
+  playerId: string;
+  playedSeconds: number;
+  availableSeconds: number;
+  minimumSeconds: number;
+  targetSeconds: number;
+  shortfallSeconds: number;
+  neededSeconds: number;
+  minimumPace: number;
+  urgent: boolean;
+};
+
+export const getPlayingTimeWarnings = (
+  game: ActiveGame,
+  ending = false,
+): PlayingTimeWarning[] => {
+  const minimumPace = getMinimumPlayingTimePace(game);
+  if (minimumPace === null) return [];
+  const remainingSeconds = ending
+    ? 0
+    : getPeriodStatus(
+        game.durationSeconds,
+        game.clock.elapsedSeconds,
+        game.periodCount,
+        game.period,
+      ).regulationRemainingSeconds;
+  const { intervalSeconds } = getSubstitutionReminderStatus(game);
+  const nextRotationWait = Math.max(
+    0,
+    getNextSubstitutionSeconds(game) - game.clock.elapsedSeconds,
+  );
+  // Allow ordinary rotation-sized swings, not a new grace period after every swap.
+  const rotationAllowance = (intervalSeconds + 60) * minimumPace;
+  return game.presentIds
+    .filter((id) => !game.unavailableIds.includes(id))
+    .flatMap((playerId): PlayingTimeWarning[] => {
+      const totals = game.totals[playerId];
+      const playedSeconds = totals?.fieldSeconds ?? 0;
+      // These counters exclude pre-arrival time, pauses, and time out of the game,
+      // and remain accurate when an assignment/availability change is undone.
+      const availableSeconds = playedSeconds + (totals?.benchSeconds ?? 0);
+      const minimumSeconds = availableSeconds * minimumPace;
+      const shortfallSeconds = Math.max(0, minimumSeconds - playedSeconds);
+      if (shortfallSeconds < 1) return [];
+      const targetSeconds = minimumSeconds + remainingSeconds * minimumPace;
+      const neededSeconds = Math.max(0, targetSeconds - playedSeconds);
+      const lastChance = remainingSeconds <= neededSeconds + 60;
+      const urgent =
+        lastChance ||
+        (game.benchIds.includes(playerId) &&
+          remainingSeconds <= neededSeconds + nextRotationWait);
+      if (!ending && !lastChance && shortfallSeconds <= rotationAllowance)
+        return [];
+      return [
+        {
+          playerId,
+          playedSeconds,
+          availableSeconds,
+          minimumSeconds,
+          targetSeconds,
+          shortfallSeconds,
+          neededSeconds,
+          minimumPace,
+          urgent,
+        },
+      ];
+    })
+    .sort(
+      (a, b) =>
+        Number(b.urgent) - Number(a.urgent) ||
+        b.shortfallSeconds - a.shortfallSeconds ||
+        a.playerId.localeCompare(b.playerId),
+    );
+};
+
 export const getPlayingTimePaceWarning = (
   game: ActiveGame,
   playerId: string,
-): number | null => {
-  const elapsed = game.clock.elapsedSeconds;
-  if (
-    elapsed < game.durationSeconds * 0.25 ||
-    !game.benchIds.includes(playerId)
-  ) {
-    return null;
-  }
-  const { intervalSeconds } = getSubstitutionReminderStatus(game);
-  // Allow a normal bench turn and one minute to complete the next rotation.
-  if (getCurrentBenchSeconds(game, playerId) <= intervalSeconds + 60) {
-    return null;
-  }
-  const minimumPace = getMinimumPlayingTimePace(game);
-  const playedSeconds = game.totals[playerId]?.fieldSeconds ?? 0;
-  return minimumPace !== null && playedSeconds / elapsed < minimumPace
-    ? minimumPace
-    : null;
-};
+): number | null =>
+  getPlayingTimeWarnings(game).find((warning) => warning.playerId === playerId)
+    ?.minimumPace ?? null;
 
 export const getSubstitutionTimeBandSize = (game: ActiveGame) =>
   Math.max(
@@ -1492,7 +1551,11 @@ export const getGoalkeeperPreparationWarning = (
       const incomingName =
         roster.find((p) => p.id === keeperChange.incomingPlayerId)?.name ??
         "The next goalkeeper";
-      return keeperChange.needsRest
+      return keeperChange.needsRest &&
+        !queued.some(
+          (pair) =>
+            pair.keeperHandoff?.playerId === keeperChange.incomingPlayerId,
+        )
         ? `${incomingName} needs more bench rest before the planned goalkeeper change.`
         : null;
     }

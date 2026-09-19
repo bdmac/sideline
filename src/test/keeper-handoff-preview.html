@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Keeper-move preview · Sideline</title>
+  </head>
+  <body>
+    <h1>Keeper-move preview</h1>
+    <p id="status" role="status">Preparing the local demonstration…</p>
+    <a href="/">Open Sideline</a>
+    <script type="module">
+      import { keeperHandoffGame } from "./keeperHandoffFixtures.ts";
+      import { STORAGE_KEY, saveState } from "../storage.ts";
+      import { COACH_ID_STORAGE_KEY } from "../coaches.ts";
+
+      const status = document.getElementById("status");
+      try {
+        if (!import.meta.env.DEV) {
+          throw new Error(
+            "This demonstration is only available in the local development preview.",
+          );
+        }
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved !== null) {
+          status.textContent =
+            "Sideline data is already saved here, so it has not been replaced. Open Sideline to resume, or use a separate development-server port for this demonstration.";
+        } else {
+          const { state } = keeperHandoffGame();
+          saveState(state);
+          localStorage.setItem(COACH_ID_STORAGE_KEY, "brian");
+          location.replace("/");
+        }
+      } catch (error) {
+        console.error("Keeper-move preview could not start.", error);
+        status.textContent =
+          error instanceof Error
+            ? error.message
+            : "The demonstration could not be loaded.";
+      }
+    </script>
+  </body>
+</html>

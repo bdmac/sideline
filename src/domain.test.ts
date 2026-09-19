@@ -98,7 +98,7 @@ describe("minimum playing-time pace", () => {
       teamId: "u8",
       count: 10,
       duration: 40,
-      elapsed: 599,
+      elapsed: 360,
       played: 0,
       warn: false,
     },
@@ -172,7 +172,7 @@ describe("minimum playing-time pace", () => {
       duration: 40,
       elapsed: 900,
       played: 399,
-      warn: true,
+      warn: false,
     },
     {
       teamId: "u8",
@@ -194,7 +194,7 @@ describe("minimum playing-time pace", () => {
       teamId: "u8",
       count: 10,
       duration: 80,
-      elapsed: 1199,
+      elapsed: 660,
       played: 0,
       warn: false,
     },
@@ -276,6 +276,13 @@ describe("minimum playing-time pace", () => {
       const game = createPaceGame(teamId, count, duration);
       const id = game.benchIds[0];
       game.clock.elapsedSeconds = elapsed;
+      if (elapsed >= game.durationSeconds) {
+        game.period = {
+          current: game.periodCount,
+          startedAtSeconds:
+            (game.durationSeconds * (game.periodCount - 1)) / game.periodCount,
+        };
+      }
       game.totals[id] = {
         fieldSeconds: played,
         benchSeconds: elapsed - played,
@@ -326,7 +333,7 @@ describe("minimum playing-time pace", () => {
   );
 
   it.each(["u8", "u12"] as const)(
-    "keeps ordinary alternating %s rotations quiet until the bench turn is overdue",
+    "keeps ordinary alternating %s rotations quiet until accumulated time falls behind",
     (teamId) => {
       const team = INITIAL_TEAMS[teamId];
       let game = createPaceGame(teamId, team.sideSize * 2);
@@ -355,6 +362,8 @@ describe("minimum playing-time pace", () => {
       game = fastForwardGame(game, 60, 1_000);
       expect(getPlayingTimePaceWarning(game, id)).toBeNull();
       game = fastForwardGame(game, 1, 1_000);
+      expect(getPlayingTimePaceWarning(game, id)).toBeNull();
+      game = fastForwardGame(game, intervalSeconds, 1_000);
       expect(getPlayingTimePaceWarning(game, id)).toBe(0.4);
       expect(validateGame(game, team.sideSize)).toEqual([]);
     },
@@ -719,7 +728,7 @@ describe("team rosters", () => {
       INITIAL_TEAMS.u8.roster
         .filter((player) => player.preferredRoles.includes("goalkeeper"))
         .map((player) => player.name),
-    ).toEqual(["Maddox", "Henry", "Evan"]);
+    ).toEqual(["Maddox", "Ollie", "Henry", "Evan"]);
     expect(
       INITIAL_TEAMS.u12.roster
         .filter((player) => player.preferredRoles.includes("goalkeeper"))
@@ -760,7 +769,7 @@ describe("preference-aware assignments", () => {
       team.roster.find((player) => player.name === "Maddox")?.id,
     );
     expect(assignments.dl).toBe(
-      team.roster.find((player) => player.name === "Noah")?.id,
+      team.roster.find((player) => player.name === "Ollie")?.id,
     );
     expect(assignments.f).toBe(
       team.roster.find((player) => player.name === "Malik")?.id,
@@ -898,6 +907,7 @@ describe("period accounting", () => {
       team.roster.map((player) => player.id),
       40,
       1_000,
+      4,
     );
     game.periodEnds = [
       { period: 1, atSeconds: 11 * 60 },
@@ -938,6 +948,7 @@ describe("period accounting", () => {
       team.roster.map((player) => player.id),
       40,
       1_000,
+      4,
     );
     game.clock = {
       elapsedSeconds: 9 * 60 + 59,
@@ -1072,6 +1083,7 @@ describe("period accounting", () => {
       team.roster.map((player) => player.id),
       40,
       1_000,
+      4,
     );
     game.clock = {
       elapsedSeconds: 10 * 60,
@@ -1467,8 +1479,9 @@ describe("substitutions", () => {
       team,
       team.defaultFormationId,
       team.roster.map((player) => player.id),
-      team.defaultDurationMinutes,
+      40,
       1_000,
+      2,
     );
 
     game.clock.elapsedSeconds = 299;

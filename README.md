@@ -39,7 +39,7 @@ npm run build
 
 1. Choose U8 or U12. Team state is deliberately isolated.
 2. Start a game and mark attendance from the fixed team roster.
-3. Select a formation, assign starters, and confirm the bench. U8 games can use quarters or halves; U12 uses its fixed two-half format.
+3. Select a formation, assign starters, and confirm the bench. U8 defaults to two 25-minute halves, with four 10-minute quarters or two 20-minute halves available in setup. U12 uses two 30-minute halves.
 4. Start or pause the clock from the sticky game controls.
 5. Open **Create plan**, choose the number of swaps, review or override the fair suggestions, and confirm the OUT/IN checklist.
 6. Tap a live pitch card or an **On field** player row to open that player's **Plan out** picker directly. Use the **On field** row's **Change positions** or **Take out of game** controls for other actions; dragging between pitch positions still changes positions without recording a substitution.
@@ -60,7 +60,15 @@ With no bench players available, tapping a pitch card explains that a player mus
 
 Immediate swaps and taking a player out leave the team rotation timer running toward its existing deadline. Only sending a planned rotation, including a partial batch, restarts that interval. Each player's playing and bench times still update for every change.
 
+Playing-time notices flag accumulating shortfalls for regular players and guests, accounting for late arrival and time out of the game. They remain visible when a player is queued or on the field, become more urgent as catch-up time runs short, and link directly to planning or review. The End game confirmation also lists players below their available-time minimum; you can continue playing or explicitly finish if the match is over.
+
 For testing or demos, enable **Settings → Demo mode**. During an active game, the expanded match header gains a fast-forward button that opens **Fast-forward**. Enter a positive number of minutes to add while advancing current field and bench time through the normal accounting path. The clock pauses automatically after the jump and leaves period transitions manual.
+
+### Reproduce a linked keeper move locally
+
+Run `npm run dev -- --host 127.0.0.1 --port 5185 --strictPort`, then open `http://127.0.0.1:5185/src/test/keeper-handoff-preview.html`. On a fresh preview origin, it loads a paused U8 game with five players on the bench and four queued substitutions, including Henry moving from Left Mid to Keeper. Tap Henry or **Review plan**, then **Edit plan** to see why 5 is disabled. Nothing is executed until **Send players in**.
+
+This development-only fixture refuses to overwrite existing Sideline data. If that port already has saved data, open its existing game or use another unused port. The fixture page is not included in the production build.
 
 ## Data
 

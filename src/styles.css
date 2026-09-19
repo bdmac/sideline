@@ -145,6 +145,73 @@
   font-weight: 900;
 }
 
+.playing-time-notice {
+  margin-block: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--warm-dark);
+  border-radius: 4px;
+  background: var(--warm-pale);
+  color: var(--ink);
+}
+
+.playing-time-notice.urgent {
+  border-color: var(--danger);
+  background: var(--danger-pale);
+}
+
+.playing-time-notice h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.playing-time-notice h3 svg {
+  flex-shrink: 0;
+}
+
+.playing-time-notice p {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+}
+
+.playing-time-notice ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+}
+
+.playing-time-notice li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-block: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.playing-time-notice li:last-child {
+  padding-bottom: 0;
+}
+
+.playing-time-notice li > div {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.playing-time-notice li > div > span,
+.playing-time-notice li > div > small {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.875rem;
+}
+
+.playing-time-notice button {
+  min-height: 44px;
+}
+
 html {
   background: var(--canvas-edge);
 }
@@ -2498,6 +2565,51 @@ select:hover {
   stroke-width: 2.5;
 }
 
+.pitch-player.keeper-move-planned:not(.empty) {
+  grid-template-areas:
+    "position plan time"
+    "name name name"
+    "keeper keeper keeper";
+}
+
+.pitch-keeper-move {
+  grid-area: keeper;
+  color: var(--warm-dark);
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 750;
+  line-height: 1.1;
+}
+
+.queued-keeper-move {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+  font-weight: 750;
+}
+
+.queued-keeper-move > svg {
+  flex-shrink: 0;
+}
+
+.keeper-move-summary {
+  padding: 0;
+  margin-bottom: 1rem;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.keeper-move-summary p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.keeper-move-summary strong {
+  color: var(--ink);
+}
+
 .starter-slot.empty .position-label {
   position: static;
   grid-area: position;
@@ -3395,11 +3507,8 @@ select:hover {
   font-weight: 800;
 }
 
-.sub-count-explanation {
-  margin: 0 0 1rem;
-  color: var(--ink-soft);
-  font-size: 0.875rem;
-  line-height: 1.5;
+.sub-count:has(+ .keeper-move-summary) {
+  padding-bottom: 0.5rem;
 }
 
 .keeper-change-warning {
@@ -3514,45 +3623,111 @@ select:hover {
   border-color: var(--control-border-hover);
 }
 
-.player-action-menu-trigger.fixed-player {
-  justify-content: center;
-  border-style: dashed;
-  text-align: center;
-}
-
-.player-action-menu-trigger.fixed-player:disabled,
-.player-action-menu-trigger.fixed-player:disabled:hover {
-  color: var(--ink-soft) !important;
-  background: var(--wash) !important;
-  border-color: var(--input-line) !important;
-  font-size: 0.875rem;
-  font-weight: 500;
-  opacity: 1 !important;
-}
-
-.keeper-handoff-note,
-.ready-keeper-handoff {
-  grid-column: 1 / -1;
+.keeper-handoff-steps {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: minmax(1.375rem, auto) auto;
+  gap: 0.5rem;
+  list-style: none;
   margin: 0;
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-  font-weight: 700;
+  padding: 0;
+  min-width: 0;
+}
+
+.swap-row .keeper-handoff-steps {
+  grid-column: 2 / -2;
+  grid-template-columns: subgrid;
+  column-gap: normal;
+}
+
+.keeper-handoff-steps li {
+  display: grid;
+  min-width: 0;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  gap: 0.3rem;
+  align-content: start;
+}
+
+.keeper-handoff-steps li:nth-child(2) {
   text-align: center;
 }
 
-.keeper-handoff-note {
-  padding: 0.1rem 0.6rem 0;
+.keeper-handoff-steps li:last-child {
+  text-align: right;
 }
 
-.keeper-handoff-note strong,
-.ready-keeper-handoff strong {
-  color: var(--warm-dark);
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
+.keeper-handoff-steps li:nth-child(2) .ready-player-identity,
+.keeper-handoff-steps li:nth-child(2) .handoff-route {
+  justify-content: center;
 }
 
-.ready-keeper-handoff {
-  padding-top: 0.45rem;
+.keeper-handoff-steps li:last-child .ready-player-identity,
+.keeper-handoff-steps li:last-child .handoff-route {
+  justify-content: flex-end;
+}
+
+.handoff-player {
+  align-self: center;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.handoff-player .ready-player-identity {
+  flex-wrap: wrap;
+}
+
+.handoff-player .player-name-with-goals {
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.handoff-player .player-identity {
+  flex-wrap: wrap;
+}
+
+.handoff-player .player-identity-name {
+  white-space: normal;
+  overflow: visible;
+}
+
+.handoff-player strong {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 1.18rem;
+  line-height: 1.15;
+}
+
+.handoff-route {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.handoff-route > svg {
+  flex-shrink: 0;
+}
+
+.handoff-route > span {
+  min-width: 0;
+}
+
+.swap-row.keeper-handoff-row {
+  align-items: center;
+}
+
+@media (max-width: 400px) {
+  .handoff-player strong {
+    font-size: 1rem;
+  }
+
+  .ready-swap .keeper-handoff-steps {
+    column-gap: 0.3rem;
+  }
 }
 
 .player-action-menu-trigger > span {

@@ -264,7 +264,9 @@ const migratePriorState = (parsed: StoredState): AppState => {
     parsed.version === 20 ||
     parsed.version === 21 ||
     parsed.version === 22 ||
-    parsed.version === 23
+    parsed.version === 23 ||
+    parsed.version === 24 ||
+    parsed.version === 25
   ) {
     return {
       ...(parsed as AppState),
@@ -350,6 +352,39 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     state = {
       ...state,
       teams: applyCurrentRosterPreferences(state.teams, ["u12"]),
+    };
+  }
+  if (previousVersion !== undefined && previousVersion <= 23) {
+    state = {
+      ...state,
+      teams: {
+        ...state.teams,
+        u8: {
+          ...state.teams.u8,
+          defaultDurationMinutes: INITIAL_STATE.teams.u8.defaultDurationMinutes,
+          defaultPeriodCount: INITIAL_STATE.teams.u8.defaultPeriodCount,
+        },
+      },
+    };
+  }
+  if (previousVersion !== undefined && previousVersion <= 24) {
+    const ollie = INITIAL_STATE.teams.u8.roster.find(
+      (player) => player.id === "u8-p4",
+    );
+    if (!ollie) throw new Error("Ollie is missing from the fixed U8 roster.");
+    state = {
+      ...state,
+      teams: {
+        ...state.teams,
+        u8: {
+          ...state.teams.u8,
+          roster: state.teams.u8.roster.map((player) =>
+            player.id === ollie.id
+              ? { ...player, preferredRoles: [...ollie.preferredRoles] }
+              : player,
+          ),
+        },
+      },
     };
   }
   const existingCollier = state.teams.u8.roster.find(
