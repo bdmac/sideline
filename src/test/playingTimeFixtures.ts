@@ -5,10 +5,12 @@ import {
   createGame,
   endCurrentPeriod,
   fastForwardGame,
+  getMinimumPlayingTimePace,
+  markAvailable,
   setClockRunning,
   startNextPeriod,
 } from "../domain";
-import type { ActiveGame, Player } from "../types";
+import type { ActiveGame, Player, TeamId } from "../types";
 
 export const advanceMatchTo = (game: ActiveGame, seconds: number) => {
   const periodLength = game.durationSeconds / game.periodCount;
@@ -25,6 +27,50 @@ export const advanceMatchTo = (game: ActiveGame, seconds: number) => {
   return delta > 0
     ? fastForwardGame(game, delta, 1_000)
     : setClockRunning(game, false, 1_000);
+};
+
+export const lateArrivalNearMinimumGame = (
+  teamId: TeamId,
+  shortfallSeconds: number,
+  remainingSeconds = 0,
+) => {
+  const state = structuredClone(INITIAL_STATE);
+  const team = state.teams[teamId];
+  const player =
+    teamId === "u8"
+      ? team.roster.find((item) => item.name === "Haru")!
+      : team.roster[0];
+  let game = createGame(
+    team,
+    team.defaultFormationId,
+    team.roster.filter((item) => item.id !== player.id).map((item) => item.id),
+    team.defaultDurationMinutes,
+    1_000,
+    2,
+  );
+  game = markAvailable(
+    advanceMatchTo(game, 5 * 60),
+    player.id,
+    team.sideSize,
+    1_000,
+  );
+  const targetSeconds = game.durationSeconds - remainingSeconds;
+  const playedSeconds =
+    (targetSeconds - 5 * 60) * getMinimumPlayingTimePace(game)! -
+    shortfallSeconds;
+  game = advanceMatchTo(game, targetSeconds - playedSeconds);
+  const [positionId, outPlayerId] = Object.entries(game.assignments).find(
+    ([id]) => id !== "gk",
+  )!;
+  game = applySubstitutions(
+    game,
+    [{ positionId, outPlayerId, inPlayerId: player.id }],
+    team.sideSize,
+    2_000,
+  );
+  game = advanceMatchTo(game, targetSeconds);
+  state.activeGame = game;
+  return { state, team, game, player };
 };
 
 export const lateHaruGame = (atMinutes = 30) => {

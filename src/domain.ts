@@ -729,6 +729,7 @@ export const getPlayingTimeWarnings = (
   );
   // Allow ordinary rotation-sized swings, not a new grace period after every swap.
   const rotationAllowance = (intervalSeconds + 60) * minimumPace;
+  const endGameToleranceSeconds = 60;
   return game.presentIds
     .filter((id) => !game.unavailableIds.includes(id))
     .flatMap((playerId): PlayingTimeWarning[] => {
@@ -743,6 +744,8 @@ export const getPlayingTimeWarnings = (
       const targetSeconds = minimumSeconds + remainingSeconds * minimumPace;
       const neededSeconds = Math.max(0, targetSeconds - playedSeconds);
       const lastChance = remainingSeconds <= neededSeconds + 60;
+      if ((ending || lastChance) && shortfallSeconds <= endGameToleranceSeconds)
+        return [];
       const urgent =
         lastChance ||
         (game.benchIds.includes(playerId) &&

@@ -140,7 +140,7 @@ describe("minimum playing-time pace", () => {
       duration: 40,
       elapsed: 2400,
       played: 959,
-      warn: true,
+      warn: false,
     },
     {
       teamId: "u8",
@@ -156,6 +156,14 @@ describe("minimum playing-time pace", () => {
       duration: 40,
       elapsed: 2460,
       played: 983,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 40,
+      elapsed: 2460,
+      played: 923,
       warn: true,
     },
     {
@@ -188,7 +196,7 @@ describe("minimum playing-time pace", () => {
       duration: 40,
       elapsed: 2400,
       played: 1199,
-      warn: true,
+      warn: false,
     },
     {
       teamId: "u8",
@@ -212,6 +220,14 @@ describe("minimum playing-time pace", () => {
       duration: 80,
       elapsed: 4800,
       played: 1919,
+      warn: false,
+    },
+    {
+      teamId: "u8",
+      count: 10,
+      duration: 80,
+      elapsed: 4800,
+      played: 1859,
       warn: true,
     },
     {
@@ -252,7 +268,7 @@ describe("minimum playing-time pace", () => {
       duration: 60,
       elapsed: 3600,
       played: 1727,
-      warn: true,
+      warn: false,
     },
     {
       teamId: "u12",
@@ -268,7 +284,7 @@ describe("minimum playing-time pace", () => {
       duration: 60,
       elapsed: 3600,
       played: 1799,
-      warn: true,
+      warn: false,
     },
   ] as const)(
     "handles $teamId/$count, $duration minutes, $elapsed elapsed and $played played",

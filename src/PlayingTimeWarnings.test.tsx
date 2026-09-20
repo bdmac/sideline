@@ -8,7 +8,10 @@ import {
   setClockRunning,
 } from "./domain";
 import { STORAGE_KEY } from "./storage";
-import { lateHaruGame } from "./test/playingTimeFixtures";
+import {
+  lateArrivalNearMinimumGame,
+  lateHaruGame,
+} from "./test/playingTimeFixtures";
 
 describe("playing-time safeguards", () => {
   beforeEach(() => {
@@ -18,6 +21,29 @@ describe("playing-time safeguards", () => {
     localStorage.setItem(COACH_ID_STORAGE_KEY, "brian");
   });
   afterEach(() => vi.useRealTimers());
+
+  it.each([15, 60, 61])(
+    "applies the one-minute tolerance to both visible warnings for a %s-second shortfall",
+    (shortfallSeconds) => {
+      const { state } = lateArrivalNearMinimumGame("u8", shortfallSeconds);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      const live = screen.getByRole("region", { name: "Playing-time warning" });
+      expect(Boolean(within(live).queryByText("Haru"))).toBe(
+        shortfallSeconds > 60,
+      );
+      fireEvent.click(screen.getAllByRole("button", { name: "End game" })[0]);
+      const dialog = screen.getByRole("alertdialog", {
+        name: "End this game?",
+      });
+      const ending = within(dialog).getByRole("region", {
+        name: "End-game playing time",
+      });
+      expect(Boolean(within(ending).queryByText("Haru"))).toBe(
+        shortfallSeconds > 60,
+      );
+    },
+  );
 
   it("shows actionable guest deficits independently of the roster tab", () => {
     const { state } = lateHaruGame();

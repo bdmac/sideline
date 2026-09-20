@@ -14,9 +14,46 @@ import {
   validateGame,
 } from "./domain";
 import { loadState, saveState } from "./storage";
-import { advanceMatchTo, lateHaruGame } from "./test/playingTimeFixtures";
+import {
+  advanceMatchTo,
+  lateArrivalNearMinimumGame,
+  lateHaruGame,
+} from "./test/playingTimeFixtures";
 
 describe("availability-aware playing-time safeguards", () => {
+  it.each(["u8", "u12"] as const)(
+    "allows up to one minute of shortfall in %s late-game and end-game warnings",
+    (teamId) => {
+      for (const remainingSeconds of [0, 75]) {
+        for (const shortfallSeconds of [0, 1, 15, 30, 60, 61, 120]) {
+          const { game, team, player } = lateArrivalNearMinimumGame(
+            teamId,
+            shortfallSeconds,
+            remainingSeconds,
+          );
+          expect(validateGame(game, team.sideSize)).toEqual([]);
+          expect(
+            game.totals[player.id].fieldSeconds +
+              game.totals[player.id].benchSeconds,
+          ).toBe(game.clock.elapsedSeconds - 5 * 60);
+          const before = structuredClone(game);
+          for (const ending of [false, true]) {
+            const warning = getPlayingTimeWarnings(game, ending).find(
+              (item) => item.playerId === player.id,
+            );
+            if (shortfallSeconds <= 60) {
+              expect(warning).toBeUndefined();
+            } else {
+              expect(warning?.shortfallSeconds).toBeCloseTo(shortfallSeconds);
+              expect(warning?.urgent).toBe(true);
+            }
+          }
+          expect(game).toEqual(before);
+        }
+      }
+    },
+  );
+
   it("flags late guest Haru's seven minutes well before a 50-minute game ends", () => {
     const { game, guest } = lateHaruGame();
     const before = structuredClone(game);
@@ -116,11 +153,17 @@ describe("availability-aware playing-time safeguards", () => {
     expect(
       getPlayingTimeWarnings(later).some((item) => item.playerId === guest.id),
     ).toBe(false);
-    const finalWarning = getPlayingTimeWarnings(later, true).find(
+    expect(
+      getPlayingTimeWarnings(later, true).some(
+        (item) => item.playerId === guest.id,
+      ),
+    ).toBe(false);
+    const afterFourMinutes = advanceMatchTo(joined, 49 * 60);
+    const finalWarning = getPlayingTimeWarnings(afterFourMinutes, true).find(
       (item) => item.playerId === guest.id,
     )!;
-    expect(finalWarning.availableSeconds).toBe(30);
-    expect(finalWarning.minimumSeconds).toBeCloseTo((30 * 4) / 11);
+    expect(finalWarning.availableSeconds).toBe(4 * 60);
+    expect(finalWarning.minimumSeconds).toBeCloseTo((4 * 60 * 4) / 11);
   });
 
   it("tracks regular late arrivals with the same available-time denominator", () => {
