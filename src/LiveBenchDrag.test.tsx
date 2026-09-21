@@ -208,12 +208,17 @@ describe("live bench dragging", () => {
     },
   );
 
-  it.each([390, 1024])(
-    "builds a manual plan with successive bench drops at width %s without sending anyone in",
-    (width) => {
+  it.each([
+    { width: 390, manualPlanning: false },
+    { width: 390, manualPlanning: true },
+    { width: 1024, manualPlanning: false },
+    { width: 1024, manualPlanning: true },
+  ])(
+    "builds a plan with successive bench drops at $width without sending anyone in (manual: $manualPlanning)",
+    ({ width, manualPlanning }) => {
       localStorage.setItem(
         DEVICE_PREFERENCES_STORAGE_KEY,
-        JSON.stringify({ manualPlanning: true }),
+        JSON.stringify({ manualPlanning }),
       );
       const { game, source, target } = setup(width);
       const drop = (incoming: Element, outgoing: Element) => {
@@ -347,7 +352,7 @@ describe("live bench dragging", () => {
     expect(savedGame()).toEqual(game);
   });
 
-  it("asks before a bench drop replaces a saved keeper handoff", () => {
+  it("opens the editor without altering a saved keeper handoff on an assisted-mode drop", () => {
     Object.defineProperty(window, "innerWidth", {
       value: 1024,
       configurable: true,
@@ -366,14 +371,11 @@ describe("live bench dragging", () => {
     pointer(source, "pointerdown", 750, 500);
     pointer(source, "pointermove", 250, 240);
     pointer(source, "pointerup", 250, 240);
-    const confirmation = screen.getByRole("alertdialog", {
-      name: "Override the keeper plan?",
-    });
-    expect(confirmation).toHaveTextContent("Collier will replace Henry now.");
+    const editor = screen.getByRole("dialog", { name: "Substitution plan" });
+    expect(editor).toHaveTextContent("Henry stays on");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(savedGame()).toEqual(game);
-    fireEvent.click(
-      within(confirmation).getByRole("button", { name: "Keep current plan" }),
-    );
+    fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
     expect(savedGame()).toEqual(game);
   });
 
@@ -399,7 +401,6 @@ describe("live bench dragging", () => {
         60,
       );
       const props = {
-        manualPlanning: true,
         compact: true,
         formation,
         assignments: game.assignments,
@@ -468,7 +469,7 @@ describe("live bench dragging", () => {
   );
 
   it.each([false, true])(
-    "drops a bench player onto the live pitch and sends only that swap (plan: %s)",
+    "drops a bench player onto the live pitch and saves only the selected plan edit (plan: %s)",
     (planned) => {
       const { game, source, target, team } = setup(1024, planned);
       pointer(source, "pointerdown", 750, 500);
@@ -476,7 +477,7 @@ describe("live bench dragging", () => {
       expect(target).toHaveClass("drop-target");
       expect(source).toHaveClass("bench-source-dragging");
       expect(
-        screen.getByLabelText("Immediate substitution preview"),
+        screen.getByLabelText("Planned substitution preview"),
       ).toHaveTextContent("IN · Left BackAaron #21OUTLazar #15");
       expect(
         screen.queryByLabelText("Temporary substitution pitch"),
@@ -484,27 +485,22 @@ describe("live bench dragging", () => {
       expect(savedGame()).toEqual(game);
       pointer(source, "pointerup", 250, 240);
       const next = savedGame();
-      expect(next.assignments.dl).toBe("u12-p12");
-      expect(next.benchIds).toContain("u12-p2");
+      expect(next.assignments).toEqual(game.assignments);
+      expect(next.benchIds).toEqual(game.benchIds);
       expect(next.unavailableIds).toEqual(game.unavailableIds);
-      expect(next.history.at(-1)?.pairs).toEqual([
+      expect(next.history).toEqual(game.history);
+      expect(next.queuedSubstitutions).toEqual([
+        ...(game.queuedSubstitutions ?? []).filter(
+          (pair) =>
+            pair.inPlayerId !== "u12-p12" && pair.outPlayerId !== "u12-p2",
+        ),
         { positionId: "dl", inPlayerId: "u12-p12", outPlayerId: "u12-p2" },
       ]);
-      expect(next.history.at(-1)?.substitutionKind).toBe("immediate");
       expect(validateGame(next, team.sideSize)).toEqual([]);
-      if (planned) {
-        expect(next.queuedSubstitutions!.length).toBeLessThanOrEqual(2);
-        expect(
-          next.queuedSubstitutions!.some(
-            (pair) => pair.inPlayerId === "u12-p2",
-          ),
-        ).toBe(false);
-      } else {
-        expect(next.queuedSubstitutions).toBeUndefined();
-      }
       expect(
-        screen.getByRole("dialog", { name: "Players swapped" }),
+        screen.getByText("Swap added to plan. Lineup unchanged."),
       ).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       fireEvent.click(source, { detail: 1 });
       expect(
         screen.queryByRole("dialog", { name: /Plan (in|out)/ }),
@@ -512,7 +508,7 @@ describe("live bench dragging", () => {
     },
   );
 
-  it("reveals the phone pitch after 125ms, keeps all six bench rows, and sends the drop without scrolling", () => {
+  it("reveals the phone pitch after 125ms, keeps all six bench rows, and plans the drop without scrolling", () => {
     vi.useFakeTimers();
     const { source, game } = setup(390);
     const panel = screen.getByRole("tabpanel");
@@ -557,7 +553,10 @@ describe("live bench dragging", () => {
     expect(
       screen.queryByLabelText("Temporary substitution pitch"),
     ).not.toBeInTheDocument();
-    expect(savedGame().assignments.dl).toBe("u12-p12");
+    expect(savedGame().assignments).toEqual(game.assignments);
+    expect(savedGame().queuedSubstitutions).toEqual([
+      { positionId: "dl", inPlayerId: "u12-p12", outPlayerId: "u12-p2" },
+    ]);
   });
 
   it("allows ordinary phone scrolling before the hold and does not switch tabs", () => {

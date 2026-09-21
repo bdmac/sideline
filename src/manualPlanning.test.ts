@@ -75,7 +75,6 @@ describe("manual planning", () => {
         outgoing,
         team,
         2_000,
-        { manualPlanning: true },
       );
       expect(next.queuedSubstitutions).toEqual(pairs);
       expect(validateGame(next, team.sideSize)).toEqual([]);
@@ -98,7 +97,6 @@ describe("manual planning", () => {
         pairs[1].outPlayerId,
         team,
         2_000,
-        { manualPlanning: true },
       );
       expect(next.queuedSubstitutions).toEqual([pairs[2]]);
       expect(next.history.at(-1)?.beforeQueuedSubstitutions).toEqual(pairs);
@@ -120,7 +118,6 @@ describe("manual planning", () => {
         outgoing,
         team,
         2_000,
-        { manualPlanning: true },
       );
       expect(next.queuedSubstitutions).toEqual(pairs.slice(1));
       expect(validateGame(next, team.sideSize)).toEqual([]);

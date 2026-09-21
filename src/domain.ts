@@ -2141,6 +2141,66 @@ export const suggestSubstitutions = (
   ];
 };
 
+export const areSubstitutionPlansEqual = (
+  first: readonly SubstitutionPair[],
+  second: readonly SubstitutionPair[],
+) => {
+  if (first.length !== second.length) return false;
+  const keys = (pairs: readonly SubstitutionPair[]) =>
+    pairs
+      .map((pair) =>
+        JSON.stringify([
+          pair.positionId,
+          pair.outPlayerId,
+          pair.inPlayerId,
+          pair.keeperHandoff?.playerId,
+          pair.keeperHandoff?.fromPositionId,
+        ]),
+      )
+      .sort();
+  const secondKeys = keys(second);
+  return keys(first).every((key, index) => key === secondKeys[index]);
+};
+
+export const suggestAdditionalSubstitution = (
+  game: ActiveGame,
+  pairs: SubstitutionPair[],
+  team: Team,
+): SubstitutionPair | undefined => {
+  const reservedFieldIds = new Set(
+    pairs.flatMap((pair) => [
+      pair.outPlayerId,
+      ...(pair.keeperHandoff ? [pair.keeperHandoff.playerId] : []),
+    ]),
+  );
+  const selectedInIds = new Set(pairs.map((pair) => pair.inPlayerId));
+  const remaining: ActiveGame = {
+    ...game,
+    assignments: Object.fromEntries(
+      Object.entries(game.assignments).filter(
+        ([, id]) => !reservedFieldIds.has(id),
+      ),
+    ),
+    benchIds: game.benchIds.filter((id) => !selectedInIds.has(id)),
+  };
+  const positions = Object.entries(remaining.assignments);
+  if (!positions.length || !remaining.benchIds.length) return undefined;
+  let pair = suggestSubstitutions(remaining, 1, team, {
+    allowEarlyKeeperChange: positions.length === 1,
+  })[0];
+  // Adding the final available pair is an explicit override, not a new batch.
+  if (!pair && positions.length === 1 && remaining.benchIds.length === 1) {
+    pair = {
+      positionId: positions[0][0],
+      outPlayerId: positions[0][1],
+      inPlayerId: remaining.benchIds[0],
+    };
+  }
+  return pair && !validateSubstitutionPairs(game, [...pairs, pair]).length
+    ? pair
+    : undefined;
+};
+
 export const reassignIncomingSubstitution = (
   game: ActiveGame,
   pairs: SubstitutionPair[],
@@ -2593,7 +2653,6 @@ export const applyImmediateSubstitution = (
   outPlayerId: string,
   team: Team,
   now = Date.now(),
-  options: { manualPlanning?: boolean } = {},
 ): ActiveGame => {
   if (game.teamId !== team.id) {
     throw new Error("The substitution must use the active game's team");
@@ -2603,41 +2662,21 @@ export const applyImmediateSubstitution = (
     kind: "immediate",
   });
   const previousPlan = game.queuedSubstitutions ?? [];
-  const remainingCount = Math.max(0, previousPlan.length - 1);
-  const planningGame = {
-    ...next,
-    benchIds: next.benchIds.filter((id) => id !== outPlayerId),
-  };
-  const count =
-    !options.manualPlanning && remainingCount
-      ? Math.min(
-          remainingCount,
-          getRecommendedSubstitutionCount(planningGame, team),
-        )
-      : 0;
-  const refreshedPairs = options.manualPlanning
-    ? previousPlan.filter(
-        (planned) => validateSubstitutionPairs(next, [planned]).length === 0,
-      )
-    : count
-      ? suggestSubstitutions(planningGame, count, team)
-      : [];
-  const refreshed = refreshedPairs.length
-    ? queueSubstitutions(next, refreshedPairs)
+  const remainingPairs = previousPlan.filter(
+    (planned) => validateSubstitutionPairs(next, [planned]).length === 0,
+  );
+  const planned = remainingPairs.length
+    ? queueSubstitutions(next, remainingPairs)
     : next;
   const note = previousPlan.length
-    ? refreshedPairs.length
-      ? options.manualPlanning
-        ? refreshedPairs.length === previousPlan.length
-          ? "Sent immediately. Unaffected planned swaps were kept."
-          : "Sent immediately. Unaffected planned swaps were kept; conflicting swaps were removed."
-        : `Sent immediately. Refreshed the remaining plan with ${refreshedPairs.length} ${
-            refreshedPairs.length === 1 ? "substitution" : "substitutions"
-          }.`
+    ? remainingPairs.length
+      ? remainingPairs.length === previousPlan.length
+        ? "Sent immediately. Unaffected planned swaps were kept."
+        : "Sent immediately. Unaffected planned swaps were kept; conflicting swaps were removed."
       : "Sent immediately. No substitutions remain in the plan."
     : "Sent immediately. No plan was created.";
   return {
-    ...refreshed,
+    ...planned,
     history: next.history.map((event, index) =>
       index === next.history.length - 1
         ? {

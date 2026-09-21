@@ -251,7 +251,7 @@ describe("immediate single substitutions", () => {
   });
 
   it.each(["u8", "u12"] as const)(
-    "regenerates the %s plan at a smaller size and excludes the newly benched player",
+    "preserves exact unaffected %s pairings without recommending replacements",
     (teamId) => {
       const { team, game, pair } = setup(teamId);
       const planned = queueSubstitutions(
@@ -267,21 +267,13 @@ describe("immediate single substitutions", () => {
         team,
         2_000,
       );
-      const replanningGame = {
-        ...applySubstitutions(planned, [pair], team.sideSize, 2_000, {
-          kind: "immediate",
-        }),
-        benchIds: next.benchIds.filter((id) => id !== pair.outPlayerId),
-      };
-      const count = Math.min(
-        3,
-        getRecommendedSubstitutionCount(replanningGame, team),
+      const expectedPairs = planned.queuedSubstitutions!.filter(
+        (saved) =>
+          saved.inPlayerId !== pair.inPlayerId &&
+          saved.outPlayerId !== pair.outPlayerId,
       );
-      expect(next.queuedSubstitutions).toHaveLength(count);
-      expect(next.queuedSubstitutions).toEqual(
-        suggestSubstitutions(replanningGame, count, team),
-      );
-      expect(count).toBeGreaterThan(0);
+      expect(next.queuedSubstitutions).toEqual(expectedPairs);
+      expect(expectedPairs.length).toBeGreaterThan(0);
       expect(next.queuedSubstitutions!.length).toBeLessThan(4);
       expect(
         next.queuedSubstitutions!.some(
@@ -301,7 +293,7 @@ describe("immediate single substitutions", () => {
     },
   );
 
-  it("reruns recommended sizing rather than always retaining the old size minus one", () => {
+  it("does not resize saved pairings to the current recommendation after a sub", () => {
     const { team, game, pair } = setup();
     team.roster.forEach((player) => {
       player.preferredRoles = ["defender"];
@@ -321,13 +313,19 @@ describe("immediate single substitutions", () => {
       2_000,
     );
     expect(next.queuedSubstitutions!.length).toBeGreaterThan(0);
-    expect(next.queuedSubstitutions).toHaveLength(4);
+    expect(next.queuedSubstitutions).toEqual(
+      planned.queuedSubstitutions!.filter(
+        (saved) =>
+          saved.inPlayerId !== pair.inPlayerId &&
+          saved.outPlayerId !== pair.outPlayerId,
+      ),
+    );
     expect(
       next.queuedSubstitutions!.map((swap) => swap.inPlayerId),
     ).not.toContain(pair.outPlayerId);
   });
 
-  it("clears a one-swap plan even when the immediate pair was not that planned swap", () => {
+  it("keeps a one-swap plan when the immediate pair does not affect it", () => {
     const { team, game, pair } = setup();
     const planned = queueSubstitutions(game, [
       {
@@ -343,15 +341,17 @@ describe("immediate single substitutions", () => {
       team,
       2_000,
     );
-    expect(next.queuedSubstitutions).toBeUndefined();
+    expect(next.queuedSubstitutions).toEqual(planned.queuedSubstitutions);
     expect(next.history.at(-1)?.pairs).toEqual([pair]);
-    expect(next.history.at(-1)?.note).toContain("No substitutions remain");
+    expect(next.history.at(-1)?.note).toContain(
+      "Unaffected planned swaps were kept",
+    );
     expect(undoLastEvent(next, 2_000).queuedSubstitutions).toEqual(
       planned.queuedSubstitutions,
     );
   });
 
-  it("does not preserve a scheduled plan when recomputed sizing reaches the finishing cutoff", () => {
+  it("preserves unaffected scheduled swaps even at the finishing cutoff", () => {
     const { team, game, pair } = setup();
     const late = fastForwardGame(game, 59 * 60, 2_000);
     late.period = { current: 2, startedAtSeconds: 30 * 60 };
@@ -367,7 +367,14 @@ describe("immediate single substitutions", () => {
       team,
       3_000,
     );
-    expect(next.queuedSubstitutions).toBeUndefined();
+    expect(next.queuedSubstitutions).toEqual(
+      planned.queuedSubstitutions!.filter(
+        (saved) =>
+          saved.inPlayerId !== pair.inPlayerId &&
+          saved.outPlayerId !== pair.outPlayerId,
+      ),
+    );
+    expect(next.queuedSubstitutions!.length).toBeGreaterThan(0);
     expect(next.assignments[pair.positionId]).toBe(pair.inPlayerId);
   });
 

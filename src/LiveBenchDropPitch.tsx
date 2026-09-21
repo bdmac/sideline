@@ -45,7 +45,6 @@ export function LiveBenchDropPitch({
   pitchRef,
   fieldRef,
   warning,
-  manualPlanning = false,
   planImpact,
 }: {
   compact: boolean;
@@ -58,7 +57,6 @@ export function LiveBenchDropPitch({
   pitchRef: RefObject<HTMLDivElement | null>;
   fieldRef: RefObject<HTMLDivElement | null>;
   warning?: string;
-  manualPlanning?: boolean;
   planImpact?: string;
 }) {
   const statusRef = useRef<HTMLElement>(null);
@@ -116,9 +114,7 @@ export function LiveBenchDropPitch({
           </div>
         ) : (
           <p className="bench-drop-instruction">
-            {manualPlanning
-              ? `Drop on a player to plan ${incoming.name}'s swap.`
-              : `Drop on a player to send ${incoming.name} in now.`}
+            Drop on a player to plan {incoming.name}'s swap.
           </p>
         )}
       </div>
@@ -139,11 +135,7 @@ export function LiveBenchDropPitch({
       <aside
         ref={statusRef}
         className="bench-drag-status"
-        aria-label={
-          manualPlanning
-            ? "Planned substitution preview"
-            : "Immediate substitution preview"
-        }
+        aria-label="Planned substitution preview"
       >
         {summary}
       </aside>,
