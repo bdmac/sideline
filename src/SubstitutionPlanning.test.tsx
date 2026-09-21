@@ -503,6 +503,11 @@ describe("substitution planning UI", () => {
       within(editor).getByRole("button", { name: "Save plan" }),
     ).toBeEnabled();
     expect(savedGame()).toEqual(late);
+    expect(
+      within(editor).getByText(
+        "No more rotations are planned before the game ends. You can still create a substitution plan.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it.each([

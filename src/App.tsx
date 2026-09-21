@@ -6284,7 +6284,7 @@ function SubstitutionPlanner({
               ? routineRotation.promptRecommended
                 ? "Choose your swaps, then save the plan. Send players in when you're ready."
                 : "Plan for the period break. Save your swaps, then send players in when you're ready."
-              : "No further reminders are scheduled. You can still create a substitution plan.")}
+              : "No more rotations are planned before the game ends. You can still create a substitution plan.")}
         </span>
       }
       onClose={onClose}
