@@ -210,7 +210,9 @@ describe("period and game rotation cutoffs", () => {
     const outfielder = Object.entries(game.assignments).find(
       ([pos]) => pos !== "gk",
     )![1];
-    const injured = markUnavailable(game, outfielder, 9, 1_000);
+    const injured = markUnavailable(game, outfielder, 9, 1_000, {
+      replacementPlayerId: game.benchIds[0],
+    });
     expect(injured.unavailableIds).toContain(outfielder);
     expect(Object.values(injured.assignments)).toHaveLength(9);
     expect(validateGame(injured, 9)).toEqual([]);

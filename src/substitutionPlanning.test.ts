@@ -38,7 +38,7 @@ function plannedGame(teamId: TeamId) {
   return { team, pairs, game: queueSubstitutions(base, pairs) };
 }
 
-describe("manual planning", () => {
+describe("coach-selected substitutions", () => {
   it.each(["u8", "u12"] as const)(
     "queues and sends only chosen %s swaps atomically",
     (teamId) => {
@@ -135,14 +135,12 @@ describe("manual planning", () => {
     ]) {
       expect(() =>
         markUnavailable(game, pairs[0].outPlayerId, 5, 2_000, {
-          manualPlanning: true,
           replacementPlayerId,
         }),
       ).toThrow("Choose an available bench replacement");
       expect(game).toEqual(before);
     }
     const next = markUnavailable(game, pairs[0].outPlayerId, 5, 2_000, {
-      manualPlanning: true,
       replacementPlayerId: game.benchIds[4],
     });
     expect(next.assignments[pairs[0].positionId]).toBe(game.benchIds[4]);
@@ -153,9 +151,7 @@ describe("manual planning", () => {
 
   it("does not require a replacement for a bench removal or with no bench", () => {
     const { game, team } = plannedGame("u8");
-    const next = markUnavailable(game, game.benchIds[0], 5, 2_000, {
-      manualPlanning: true,
-    });
+    const next = markUnavailable(game, game.benchIds[0], 5, 2_000);
     expect(next.assignments).toEqual(game.assignments);
     const short = createGame(
       team,
@@ -168,7 +164,6 @@ describe("manual planning", () => {
       Object.values(short.assignments)[0],
       5,
       2_000,
-      { manualPlanning: true },
     );
     expect(Object.values(removed.assignments)).toHaveLength(4);
     expect(validateGame(removed, 5)).toEqual([]);
@@ -177,7 +172,6 @@ describe("manual planning", () => {
   it("removes an invalid handoff after its moving keeper is taken out", () => {
     const { game, pairs, moverId } = keeperHandoffGame();
     const next = markUnavailable(game, moverId, 5, 2_000, {
-      manualPlanning: true,
       replacementPlayerId: "u8-p10",
     });
     expect(next.queuedSubstitutions).toEqual(pairs.slice(1));

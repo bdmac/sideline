@@ -150,6 +150,7 @@ describe("immediate single substitutions", () => {
         Object.values(immediate.assignments)[3],
         team.sideSize,
         6_000,
+        { replacementPlayerId: immediate.benchIds[0] },
       );
       for (const current of [immediate, removed]) {
         expect(getSubstitutionReminderStatus(current)).toMatchObject({

@@ -2839,7 +2839,7 @@ export const markUnavailable = (
   playerId: string,
   sideSize: number,
   now = Date.now(),
-  options: { manualPlanning?: boolean; replacementPlayerId?: string } = {},
+  options: { replacementPlayerId?: string } = {},
 ): ActiveGame => {
   const current = materializeGame(game, now);
   if (current.unavailableIds.includes(playerId)) return current;
@@ -2856,26 +2856,18 @@ export const markUnavailable = (
   if (fieldPosition) {
     delete assignments[fieldPosition];
     if (
-      options.manualPlanning &&
       benchIds.length > 0 &&
       (!options.replacementPlayerId ||
-        !benchIds.includes(options.replacementPlayerId))
+        !benchIds.includes(options.replacementPlayerId) ||
+        current.unavailableIds.includes(options.replacementPlayerId))
     ) {
       throw new Error(
         "Choose an available bench replacement before removing this player.",
       );
     }
-    const replacement = options.manualPlanning
-      ? benchIds.length
-        ? options.replacementPlayerId
-        : undefined
-      : benchIds
-          .filter((id) => !current.unavailableIds.includes(id))
-          .sort(
-            (a, b) =>
-              (current.totals[b]?.benchSeconds ?? 0) -
-              (current.totals[a]?.benchSeconds ?? 0),
-          )[0];
+    const replacement = benchIds.length
+      ? options.replacementPlayerId
+      : undefined;
     if (replacement) {
       assignments[fieldPosition] = replacement;
       benchIds = benchIds.filter((id) => id !== replacement);
@@ -2884,9 +2876,7 @@ export const markUnavailable = (
         outPlayerId: playerId,
         inPlayerId: replacement,
       });
-      note = options.manualPlanning
-        ? "Player left game; coach-selected bench player entered"
-        : "Player left game; fairest bench player entered";
+      note = "Player left game; coach-selected bench player entered";
     } else {
       note = "Player left game; no replacement available";
     }

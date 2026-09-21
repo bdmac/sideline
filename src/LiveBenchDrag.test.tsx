@@ -256,7 +256,7 @@ describe("live bench dragging", () => {
       fireEvent.click(screen.getByRole("button", { name: "Review plan" }));
       fireEvent.click(
         within(screen.getByRole("dialog")).getByRole("button", {
-          name: "Send players in",
+          name: "Send 'em in",
         }),
       );
       expect(savedGame().queuedSubstitutions).toBeUndefined();

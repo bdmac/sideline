@@ -365,9 +365,7 @@ describe("planned on-field keeper moves", () => {
     expect(
       within(planner).getByRole("button", { name: "Add swap" }),
     ).toBeEnabled();
-    fireEvent.click(
-      within(planner).getByRole("button", { name: "Ready 3 swaps" }),
-    );
+    fireEvent.click(within(planner).getByRole("button", { name: "Save plan" }));
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }),
     );
@@ -453,7 +451,7 @@ describe("planned on-field keeper moves", () => {
     );
     expect(review).not.toHaveTextContent("bench turn before taking over");
     expect(
-      within(review).getByRole("button", { name: "Send players in" }),
+      within(review).getByRole("button", { name: "Send 'em in" }),
     ).toBeEnabled();
   });
 
@@ -486,7 +484,7 @@ describe("planned on-field keeper moves", () => {
         name: "Review planned keeper move for Henry",
       }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Send players in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send 'em in" }));
     expect(
       JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeGame.assignments.gk,
     ).toBe(moverId);

@@ -33,7 +33,6 @@ import {
   Pencil,
   Play,
   Plus,
-  RefreshCw,
   RotateCcw,
   Settings,
   ShieldCheck,
@@ -565,25 +564,6 @@ function SettingsMenu({
               aria-describedby="demo-mode-description"
             />
           </div>
-          <div className="settings-option">
-            <span className="settings-option-icon" aria-hidden="true">
-              <Pencil size={22} strokeWidth={2.2} />
-            </span>
-            <span className="settings-option-copy">
-              <strong id="manual-planning-label">Manual mode</strong>
-              <small id="manual-planning-description">
-                I need more control over who plays where.
-              </small>
-            </span>
-            <ToggleSwitch
-              checked={preferences.manualPlanning}
-              onChange={(enabled) =>
-                onPreferenceChange("manualPlanning", enabled)
-              }
-              aria-labelledby="manual-planning-label"
-              aria-describedby="manual-planning-description"
-            />
-          </div>
         </div>
       </ActionMenu.Overlay>
     </ActionMenu>
@@ -1055,7 +1035,6 @@ function App() {
               team={activeTeam}
               substitutionAlertsEnabled={devicePreferences.substitutionAlerts}
               demoClockEnabled={devicePreferences.demoClock}
-              manualPlanning={devicePreferences.manualPlanning}
               summaryReturnLabel={
                 selectedCoach?.assignments.length === 1
                   ? "Prep for next game"
@@ -2132,7 +2111,6 @@ function LiveGameScreen({
   team,
   substitutionAlertsEnabled,
   demoClockEnabled,
-  manualPlanning,
   summaryReturnLabel,
   onChange,
   onEnd,
@@ -2141,7 +2119,6 @@ function LiveGameScreen({
   team: Team;
   substitutionAlertsEnabled: boolean;
   demoClockEnabled: boolean;
-  manualPlanning: boolean;
   summaryReturnLabel: SummaryReturnLabel;
   onChange: (game: ActiveGame) => void;
   onEnd: (game: ActiveGame) => void;
@@ -2386,7 +2363,7 @@ function LiveGameScreen({
   useRotationDueReview({
     cycleKey: reminderCycleKey,
     due: substitutionReminder.due,
-    eligible: !manualPlanning && rotationDue && game.clock.running,
+    eligible: rotationDue && game.clock.running,
     now,
     onOpen: () => {
       if (queuedPairs.length > 0) setQueuedPlanOpen(true);
@@ -2418,7 +2395,7 @@ function LiveGameScreen({
           playerId,
           team.sideSize,
           Date.now(),
-          { manualPlanning, replacementPlayerId },
+          { replacementPlayerId },
         );
         const event = nextGame.history.at(-1);
         if (event?.type === "unavailable") {
@@ -2535,7 +2512,6 @@ function LiveGameScreen({
       game.assignments,
       game.benchIds,
       game.unavailableIds,
-      manualPlanning,
       game.queuedSubstitutions,
     ]),
     assignments: game.assignments,
@@ -3486,8 +3462,6 @@ function LiveGameScreen({
       )}
       {plannerOpen && (
         <SubstitutionPlanner
-          key={manualPlanning ? "manual" : "assisted"}
-          manualPlanning={manualPlanning}
           game={displayed}
           team={team}
           initialPairs={game.queuedSubstitutions}
@@ -3696,16 +3670,13 @@ function LiveGameScreen({
           title={`Take ${playerName(team, unavailableConfirmPlayerId)} out of game?`}
           body={
             Object.values(game.assignments).includes(unavailableConfirmPlayerId)
-              ? manualPlanning
-                ? `${playerName(team, unavailableConfirmPlayerId)} will be marked unavailable. ${game.benchIds.length ? "Choose who goes on now. Other valid planned swaps will be kept." : "No bench replacement is available."}`
-                : `${playerName(team, unavailableConfirmPlayerId)} will be marked unavailable. Sideline will choose the fairest available bench replacement and show you the change before play continues.`
+              ? `${playerName(team, unavailableConfirmPlayerId)} will be marked unavailable. ${game.benchIds.length ? "Choose who goes on now. Other valid planned swaps will be kept." : "No bench replacement is available."}`
               : `${playerName(team, unavailableConfirmPlayerId)} will be removed from the bench and marked unavailable. You can add them back from Out of game.`
           }
           cancelLabel="Keep player"
           confirmLabel="Remove player"
           confirmIcon={<UserRoundX size={18} aria-hidden="true" />}
           confirmDisabled={
-            manualPlanning &&
             Object.values(game.assignments).includes(
               unavailableConfirmPlayerId,
             ) &&
@@ -3713,7 +3684,6 @@ function LiveGameScreen({
             !game.benchIds.includes(replacementPlayerId)
           }
           footerNotice={
-            manualPlanning &&
             unavailablePosition &&
             selectedReplacement && (
               <>
@@ -3746,17 +3716,15 @@ function LiveGameScreen({
             }
           }}
         >
-          {manualPlanning &&
-            unavailablePosition &&
-            game.benchIds.length > 0 && (
-              <BenchReplacementList
-                game={displayed}
-                team={team}
-                position={unavailablePosition}
-                selectedPlayerId={replacementPlayerId}
-                onSelect={setReplacementPlayerId}
-              />
-            )}
+          {unavailablePosition && game.benchIds.length > 0 && (
+            <BenchReplacementList
+              game={displayed}
+              team={team}
+              position={unavailablePosition}
+              selectedPlayerId={replacementPlayerId}
+              onSelect={setReplacementPlayerId}
+            />
+          )}
         </ConfirmSheet>
       )}
       {confirmedPairs && (
@@ -6108,24 +6076,19 @@ function SubstitutionPlanner({
   initialPairs,
   onClose,
   onConfirm,
-  manualPlanning = false,
 }: {
   game: ActiveGame;
   team: Team;
   initialPairs?: SubstitutionPair[];
   onClose: () => void;
   onConfirm: (pairs: SubstitutionPair[]) => void;
-  manualPlanning?: boolean;
 }) {
   const countLimitId = useId();
   const routineRotation = getRoutineRotationStatus(game);
-  const recommendedCount = manualPlanning
-    ? 0
-    : getRecommendedSubstitutionCount(game, team);
+  const recommendedCount = getRecommendedSubstitutionCount(game, team);
   const suggestedPairs = useMemo(
-    () =>
-      manualPlanning ? [] : suggestSubstitutions(game, recommendedCount, team),
-    [game, team, recommendedCount, manualPlanning],
+    () => suggestSubstitutions(game, recommendedCount, team),
+    [game, team, recommendedCount],
   );
   const [pairs, setPairs] = useState<SubstitutionPair[]>(
     () => initialPairs?.map((pair) => ({ ...pair })) ?? suggestedPairs,
@@ -6204,7 +6167,10 @@ function SubstitutionPlanner({
     "next-rotation",
   );
   const keeperNoticeId = `${countLimitId}-keeper`;
-  const refreshSuggestions = () => {
+  const optimizePlan = () => {
+    if (recommendedCount === 0 || suggestionsUpToDate) {
+      return;
+    }
     const nextPairs = suggestedPairs;
     const errors = validateSubstitutionPairs(game, nextPairs);
     if (!nextPairs.length || errors.length) {
@@ -6219,10 +6185,11 @@ function SubstitutionPlanner({
     setActivePlayerMenuId(null);
     setPairs(nextPairs);
     setSuggestionsMessage(
-      `Refreshed ${nextPairs.length} suggested ${nextPairs.length === 1 ? "swap" : "swaps"}. Review and ready the plan to save.`,
+      `Rebuilt with ${nextPairs.length} suggested ${nextPairs.length === 1 ? "swap" : "swaps"} for fair playing time. Save the plan when you're ready.`,
     );
   };
   const updateIncomingPlayer = (index: number, inPlayerId: string) => {
+    setSuggestionsMessage("");
     setPairs((current) => {
       if (
         current.some(
@@ -6232,23 +6199,23 @@ function SubstitutionPlanner({
       ) {
         return current;
       }
-      return manualPlanning
-        ? current.map((pair, pairIndex) =>
-            pairIndex === index
-              ? { ...pair, inPlayerId }
-              : pair.inPlayerId === inPlayerId
-                ? { ...pair, inPlayerId: current[index].inPlayerId }
-                : pair,
-          )
-        : reassignIncomingSubstitution(game, current, index, inPlayerId, team);
+      return reassignIncomingSubstitution(
+        game,
+        current,
+        index,
+        inPlayerId,
+        team,
+      );
     });
   };
   const updateOutgoingPlayer = (index: number, outPlayerId: string) => {
+    setSuggestionsMessage("");
     setPairs((current) =>
       reassignOutgoingSubstitution(game, current, index, outPlayerId),
     );
   };
   const removePair = (index: number) => {
+    setSuggestionsMessage("");
     const nextPairs = pairs.filter((_, pairIndex) => pairIndex !== index);
     setOverrideError("");
     setActivePlayerMenuId(null);
@@ -6274,10 +6241,7 @@ function SubstitutionPlanner({
   const remainingBenchCount = game.benchIds.length - pairs.length;
   const addPair = () => {
     if (!canAddPair) return;
-    // Empty rows are editor-only; readiness validation prevents saving them.
-    const pair = manualPlanning
-      ? { positionId: "", inPlayerId: "", outPlayerId: "" }
-      : suggestAdditionalSubstitution(game, pairs, team);
+    const pair = suggestAdditionalSubstitution(game, pairs, team);
     if (!pair) {
       setOverrideError(
         "No additional swap can be suggested with the remaining players. Adjust an existing pairing and try again.",
@@ -6286,6 +6250,7 @@ function SubstitutionPlanner({
     }
     setOverrideError("");
     setActivePlayerMenuId(null);
+    setSuggestionsMessage("");
     overrideFocusIndex.current = pairs.length;
     setPairs([...pairs, pair]);
   };
@@ -6313,40 +6278,28 @@ function SubstitutionPlanner({
     <SidelineDialog
       title="Substitution plan"
       description={
-        manualPlanning
-          ? "Choose each swap, then review before sending anyone in. No players are selected automatically."
-          : routineRotation.recommended
-            ? routineRotation.promptRecommended
-              ? "Suggested for fairness. Ready the plan now, then send the players in when the change happens."
-              : "Suggested for the period break. Ready the plan now, then send the players in when the change happens."
-            : "No further reminders are scheduled. You can still create a substitution plan."
+        <span aria-live="polite" aria-atomic="true">
+          {suggestionsMessage ||
+            (routineRotation.recommended
+              ? routineRotation.promptRecommended
+                ? "Choose your swaps, then save the plan. Send players in when you're ready."
+                : "Plan for the period break. Save your swaps, then send players in when you're ready."
+              : "No further reminders are scheduled. You can still create a substitution plan.")}
+        </span>
       }
       onClose={onClose}
       width="720px"
       className="substitution-dialog substitution-sheet"
       headerAction={
-        !manualPlanning ? (
-          <IconButton
-            className="refresh-suggestions"
-            variant="invisible"
-            size="large"
-            icon={RefreshCw}
-            aria-label={
-              suggestionsUpToDate
-                ? "Suggestions are up to date"
-                : "Refresh suggestions"
-            }
-            disabled={recommendedCount === 0 || suggestionsUpToDate}
-            title={
-              recommendedCount === 0
-                ? "No further rotations are recommended. Your plan is unchanged."
-                : suggestionsUpToDate
-                  ? "Suggestions are up to date."
-                  : "Replace this draft with current recommendations, then review before saving."
-            }
-            onClick={refreshSuggestions}
-          />
-        ) : undefined
+        <IconButton
+          className="optimize-plan"
+          variant="invisible"
+          size="large"
+          icon={WandSparkles}
+          aria-label="Optimize plan"
+          disabled={recommendedCount === 0 || suggestionsUpToDate}
+          onClick={optimizePlan}
+        />
       }
       footer={
         <>
@@ -6372,7 +6325,7 @@ function SubstitutionPlanner({
                 ? initialPairs?.length
                   ? "Clear plan"
                   : "Choose a swap"
-                : `Ready ${count} swap${count === 1 ? "" : "s"}`}
+                : "Save plan"}
           </Button>
         </>
       }
@@ -6383,11 +6336,6 @@ function SubstitutionPlanner({
         onPointerDownCapture={dismissMenuOnSelectorPointerDown}
         onClickCapture={consumeDismissalClick}
       >
-        {!manualPlanning && (
-          <span className="sr-only" aria-live="polite">
-            {suggestionsMessage}
-          </span>
-        )}
         <KeeperMoveSummary
           pairs={pairs}
           team={team}
@@ -6414,16 +6362,6 @@ function SubstitutionPlanner({
                 (item) => item.id === pair.positionId,
               );
               const outgoingOptions = outgoingChoices
-                .filter(
-                  ([, id]) =>
-                    !manualPlanning ||
-                    !pairs.some(
-                      (other) =>
-                        other.keeperHandoff &&
-                        (other.outPlayerId === id ||
-                          other.keeperHandoff.playerId === id),
-                    ),
-                )
                 .map(([positionId, playerId]) => {
                   const usedInSwap = pairs.findIndex(
                     (otherPair) =>
@@ -6907,7 +6845,7 @@ function QueuedSubstitutionSummary({
         <>
           {keeperMove
             ? `${pairs.length} substitution${pairs.length === 1 ? "" : "s"} + 1 position move · ${playerName(team, keeperMove.playerId)} stays on at keeper.`
-            : "Send 'em in now or you can send them in later. Your call coach."}
+            : "Send 'em in now or later. Your call coach."}
           <span className="mobile-inline-instruction">
             {" "}
             Swipe a substitution to remove it.
@@ -6938,7 +6876,7 @@ function QueuedSubstitutionSummary({
             aria-describedby={keeperNotice ? keeperNoticeId : undefined}
             onClick={onExecute}
           >
-            Send players in
+            Send 'em in
           </Button>
         </>
       }

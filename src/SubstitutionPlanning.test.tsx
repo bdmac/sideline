@@ -20,7 +20,11 @@ import type { AppState, TeamId } from "./types";
 
 const savedGame = () =>
   (JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState).activeGame!;
-function setup(teamId: TeamId = "u8", planned = false) {
+function setup(
+  teamId: TeamId = "u8",
+  planned = false,
+  legacyManualPlanning?: boolean,
+) {
   const state = structuredClone(INITIAL_STATE);
   const team = state.teams[teamId];
   let game = createGame(
@@ -42,16 +46,10 @@ function setup(teamId: TeamId = "u8", planned = false) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   localStorage.setItem(
     DEVICE_PREFERENCES_STORAGE_KEY,
-    JSON.stringify({ manualPlanning: true }),
+    JSON.stringify({ manualPlanning: legacyManualPlanning }),
   );
   return { state, game, pairs, team };
 }
-function changeMode() {
-  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-  fireEvent.click(screen.getByRole("button", { name: "Manual mode" }));
-  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-}
-
 function openSavedPlanner() {
   fireEvent.click(screen.getByRole("button", { name: "Review plan" }));
   fireEvent.click(
@@ -62,23 +60,31 @@ function openSavedPlanner() {
   return screen.getByRole("dialog", { name: "Substitution plan" });
 }
 
-function chooseSwapPlayer(
-  editor: HTMLElement,
-  row: number,
-  direction: "incoming" | "outgoing",
-  playerId: string,
-) {
+function optimizeDraft(editor: HTMLElement) {
   fireEvent.click(
-    within(editor).getByLabelText(`Swap ${row} ${direction} player`),
+    within(editor).getByRole("button", { name: "Optimize plan" }),
   );
-  fireEvent.click(
-    screen
-      .getAllByRole("menuitemradio")
-      .find((option) => option.getAttribute("data-player-id") === playerId)!,
-  );
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
 }
 
-describe("manual planning UI", () => {
+function expectDisabledOptimization(editor: HTMLElement) {
+  const rows = [...editor.querySelectorAll(".swap-row")].map(
+    (row) => row.textContent,
+  );
+  const description = editor.querySelector(".sheet-header p")!.textContent;
+  expect(
+    within(editor).getByRole("button", { name: "Optimize plan" }),
+  ).toBeDisabled();
+  optimizeDraft(editor);
+  expect(editor.querySelector(".sheet-header p")!.textContent).toBe(
+    description,
+  );
+  expect(
+    [...editor.querySelectorAll(".swap-row")].map((row) => row.textContent),
+  ).toEqual(rows);
+}
+
+describe("substitution planning UI", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
@@ -87,83 +93,51 @@ describe("manual planning UI", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it.each(["u8", "u12"] as const)(
-    "starts with an empty %s editor, adds only explicit swaps, reviews and sends",
-    (teamId) => {
-      const { game, pairs, team } = setup(teamId);
+  it.each([
+    ["u8", undefined],
+    ["u8", true],
+    ["u8", false],
+    ["u12", undefined],
+    ["u12", true],
+    ["u12", false],
+  ] as const)(
+    "starts a fresh %s plan with recommendations, ignoring legacy manual mode %s",
+    (teamId, legacyManualPlanning) => {
+      const { game, team } = setup(teamId, false, legacyManualPlanning);
+      const pairs = suggestSubstitutions(
+        game,
+        getRecommendedSubstitutionCount(game, team),
+        team,
+      );
       render(<App />);
-      expect(screen.queryByText(/Manual mode ·/)).not.toBeInTheDocument();
       fireEvent.click(
         screen.getAllByRole("button", { name: "Create plan" })[0],
       );
       const editor = screen.getByRole("dialog", { name: "Substitution plan" });
       expect(
-        within(editor).queryByRole("button", { name: "Refresh suggestions" }),
-      ).not.toBeInTheDocument();
+        within(editor).getByRole("button", {
+          name: "Optimize plan",
+        }),
+      ).toBeDisabled();
+      expect(editor.querySelectorAll(".swap-row")).toHaveLength(pairs.length);
       expect(editor).not.toHaveTextContent("No swaps yet.");
-      expect(editor.querySelector(".manual-swap-add-row")).toHaveTextContent(
-        `Swap a player. ${game.benchIds.length} left on bench.`,
-      );
       expect(
         within(editor).queryByRole("group", { name: "Players to swap" }),
       ).not.toBeInTheDocument();
-      expect(
-        within(editor).getByRole("button", { name: "Add swap" }),
-      ).toBeEnabled();
-      expect(
-        within(editor).getByRole("button", { name: "Add swap" }),
-      ).not.toHaveClass("primary-action");
-      expect(
-        within(editor)
-          .getByRole("button", { name: "Add swap" })
-          .querySelector(".lucide-user-round-plus"),
-      ).toBeInTheDocument();
       expect(within(editor).queryByRole("combobox")).not.toBeInTheDocument();
-      for (const [index, pair] of pairs.entries()) {
-        fireEvent.click(
-          within(editor).getByRole("button", { name: "Add swap" }),
-        );
-        expect(
-          within(editor).getByLabelText(`Swap ${index + 1} incoming player`),
-        ).toHaveFocus();
-        expect(
-          within(editor).getByLabelText(`Swap ${index + 1} incoming player`),
-        ).toHaveTextContent(/^Choose$/);
-        expect(
-          within(editor).getByLabelText(`Swap ${index + 1} outgoing player`),
-        ).toHaveTextContent(/^Choose$/);
-        expect(
-          within(editor).getByRole("button", { name: "Choose players" }),
-        ).toBeDisabled();
-        expect(editor.querySelector(".manual-swap-add-row")).toHaveTextContent(
-          `${game.benchIds.length - index - 1} left on bench.`,
-        );
-        expect(editor.querySelector(".manual-swap-add-row")).toHaveTextContent(
-          "Swap another player.",
-        );
-        chooseSwapPlayer(editor, index + 1, "incoming", pair.inPlayerId);
-        expect(editor.querySelector(".manual-swap-add-row")).toHaveTextContent(
-          `${game.benchIds.length - index - 1} left on bench.`,
-        );
-        expect(
-          within(editor).getByRole("button", { name: "Choose players" }),
-        ).toBeDisabled();
-        chooseSwapPlayer(editor, index + 1, "outgoing", pair.outPlayerId);
-        expect(editor.querySelector(".manual-swap-add-row")).toHaveTextContent(
-          "Swap another player.",
-        );
-      }
       expect(savedGame()).toEqual(game);
       fireEvent.click(
-        within(editor).getByRole("button", { name: "Ready 2 swaps" }),
+        within(editor).getByRole("button", {
+          name: "Save plan",
+        }),
       );
       const review = screen.getByRole("dialog", {
-        name: "Substitution plan (2)",
+        name: `Substitution plan (${pairs.length})`,
       });
       expect(savedGame().assignments).toEqual(game.assignments);
       expect(savedGame().queuedSubstitutions).toEqual(pairs);
       fireEvent.click(
-        within(review).getByRole("button", { name: "Send players in" }),
+        within(review).getByRole("button", { name: "Send 'em in" }),
       );
       expect(savedGame().history.at(-1)?.pairs).toEqual(pairs);
       expect(savedGame().queuedSubstitutions).toBeUndefined();
@@ -171,150 +145,30 @@ describe("manual planning UI", () => {
     },
   );
 
-  it.each(["u8", "u12"] as const)(
-    "counts unfinished %s rows as reserved bench slots and restores slots on removal",
-    (teamId) => {
-      const { game } = setup(teamId);
-      render(<App />);
-      fireEvent.click(
-        screen.getAllByRole("button", { name: "Create plan" })[0],
-      );
-      const editor = screen.getByRole("dialog", { name: "Substitution plan" });
-      for (let rows = 1; rows <= game.benchIds.length; rows++) {
-        fireEvent.click(
-          within(editor).getByRole("button", { name: "Add swap" }),
-        );
-        if (rows < game.benchIds.length) {
-          expect(
-            editor.querySelector(".manual-swap-add-row"),
-          ).toHaveTextContent(
-            `Swap another player. ${game.benchIds.length - rows} left on bench.`,
-          );
-        } else {
-          expect(
-            editor.querySelector(".manual-swap-add-row"),
-          ).not.toBeInTheDocument();
-        }
-      }
-      for (const picker of within(editor).getAllByLabelText(
-        /incoming player/,
-      )) {
-        expect(picker).toBeEnabled();
-      }
-      for (let rows = game.benchIds.length; rows > 0; rows--) {
-        fireEvent.click(
-          within(editor).getByRole("button", {
-            name: `Remove substitution ${rows}`,
-          }),
-        );
-        expect(editor.querySelector(".manual-swap-add-row")).toHaveTextContent(
-          `Swap ${rows > 1 ? "another" : "a"} player. ${game.benchIds.length - rows + 1} left on bench.`,
-        );
-      }
-      expect(savedGame()).toEqual(game);
-    },
-  );
-
-  it.each(["u8", "u12"] as const)(
-    "hides Add swap when every %s bench player has a row and restores it after removal",
-    (teamId) => {
-      const { game } = setup(teamId);
-      render(<App />);
-      fireEvent.click(
-        screen.getAllByRole("button", { name: "Create plan" })[0],
-      );
-      const editor = screen.getByRole("dialog", { name: "Substitution plan" });
-      const outgoing = Object.values(game.assignments);
-      for (const [index, incoming] of game.benchIds.entries()) {
-        const add = within(editor).getByRole("button", { name: "Add swap" });
-        const addRow = editor.querySelector(".manual-swap-add-row")!;
-        expect(addRow.contains(add)).toBe(true);
-        expect(editor.querySelector(".swap-list")?.lastElementChild).toBe(
-          addRow,
-        );
-        expect(addRow).toHaveTextContent(
-          `Swap ${index ? "another" : "a"} player. ${game.benchIds.length - index} left on bench.`,
-        );
-        fireEvent.click(add);
-        chooseSwapPlayer(editor, index + 1, "outgoing", outgoing[index]);
-        chooseSwapPlayer(editor, index + 1, "incoming", incoming);
-      }
-      expect(editor.querySelectorAll(".swap-row")).toHaveLength(
-        game.benchIds.length,
-      );
+  it.each([true, false])(
+    "removes legacy mode %s without changing the saved game",
+    (legacyManualPlanning) => {
+      const { game } = setup("u8", true, legacyManualPlanning);
+      const first = render(<App />);
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
       expect(
-        within(editor).queryByRole("button", { name: "Add swap" }),
+        screen.queryByRole("button", { name: "Manual mode" }),
       ).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Demo mode" }));
       expect(
-        within(editor).getByRole("button", {
-          name: `Ready ${game.benchIds.length} swaps`,
-        }),
-      ).toBeEnabled();
-      fireEvent.click(
-        within(editor).getByRole("button", { name: /^Remove substitution 1/ }),
-      );
+        JSON.parse(localStorage.getItem(DEVICE_PREFERENCES_STORAGE_KEY)!),
+      ).not.toHaveProperty("manualPlanning");
+      expect(savedGame()).toEqual(game);
+      first.unmount();
+      render(<App />);
+      const editor = openSavedPlanner();
+      expect(editor.querySelectorAll(".swap-row")).toHaveLength(2);
       expect(
-        within(editor).getByRole("button", { name: "Add swap" }),
-      ).toBeEnabled();
-      expect(editor.querySelector(".manual-swap-add-row")).toHaveTextContent(
-        "Swap another player. 1 left on bench.",
-      );
+        within(editor).getByRole("button", { name: "Optimize plan" }),
+      ).toBeVisible();
       expect(savedGame()).toEqual(game);
     },
   );
-
-  it("keeps unfinished rows local and allows removing or cancelling them", () => {
-    const { game } = setup("u8", true);
-    render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Review plan" }));
-    fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
-        name: "Edit plan",
-      }),
-    );
-    const editor = screen.getByRole("dialog", { name: "Substitution plan" });
-    fireEvent.click(within(editor).getByRole("button", { name: "Add swap" }));
-    chooseSwapPlayer(editor, 3, "outgoing", Object.values(game.assignments)[2]);
-    expect(
-      within(editor).getByRole("button", { name: "Choose players" }),
-    ).toBeDisabled();
-    expect(savedGame()).toEqual(game);
-    fireEvent.click(
-      within(editor).getByRole("button", { name: "Remove substitution 3" }),
-    );
-    expect(
-      within(editor).getByRole("button", { name: "Ready 2 swaps" }),
-    ).toBeEnabled();
-    fireEvent.click(within(editor).getByRole("button", { name: "Add swap" }));
-    fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
-    expect(savedGame()).toEqual(game);
-  });
-
-  it("persists the toggle across reload and preserves the saved plan in both directions", () => {
-    const { game } = setup("u8", true);
-    const first = render(<App />);
-    changeMode();
-    expect(
-      JSON.parse(localStorage.getItem(DEVICE_PREFERENCES_STORAGE_KEY)!)
-        .manualPlanning,
-    ).toBe(false);
-    expect(savedGame()).toEqual(game);
-    changeMode();
-    expect(savedGame()).toEqual(game);
-    first.unmount();
-    render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.getByRole("button", { name: "Manual mode" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(
-      screen.getByRole("button", { name: "Manual mode" }),
-    ).toHaveAccessibleDescription(
-      /^\s*I need more control over who plays where\.$/,
-    );
-    expect(savedGame().queuedSubstitutions).toEqual(game.queuedSubstitutions);
-  });
 
   it.each(["u8", "u12"] as const)(
     "adds one suggested %s row without changing existing pairings",
@@ -329,13 +183,18 @@ describe("manual planning UI", () => {
       expect(
         within(editor).queryByText("Players to swap"),
       ).not.toBeInTheDocument();
-      const refresh = within(editor).getByRole("button", {
-        name: "Refresh suggestions",
+      const optimize = within(editor).getByRole("button", {
+        name: "Optimize plan",
       });
       expect(editor.querySelector(".sheet-header-controls")).toContainElement(
-        refresh,
+        optimize,
       );
-      expect(refresh.querySelector(".lucide-refresh-cw")).toBeInTheDocument();
+      expect(
+        optimize.querySelector(".lucide-wand-sparkles"),
+      ).toBeInTheDocument();
+      expect(optimize).not.toHaveAttribute("aria-haspopup");
+      expect(optimize.textContent).toBe("");
+      expect(optimize).not.toHaveAttribute("title");
       const previousRows = [...editor.querySelectorAll(".swap-row")].map(
         (row) => row.textContent,
       );
@@ -368,7 +227,7 @@ describe("manual planning UI", () => {
       );
       expect(savedGame()).toEqual(game);
       fireEvent.click(
-        within(editor).getByRole("button", { name: "Ready 3 swaps" }),
+        within(editor).getByRole("button", { name: "Save plan" }),
       );
       expect(savedGame().queuedSubstitutions).toEqual([...pairs, extra]);
       expect(savedGame().assignments).toEqual(game.assignments);
@@ -459,7 +318,7 @@ describe("manual planning UI", () => {
       fireEvent.click(within(editor).getByRole("button", { name: "Add swap" }));
       fireEvent.click(
         within(editor).getByRole("button", {
-          name: `Ready ${game.benchIds.length} swaps`,
+          name: "Save plan",
         }),
       );
       expect(savedGame().queuedSubstitutions).toHaveLength(
@@ -470,7 +329,7 @@ describe("manual planning UI", () => {
   );
 
   it.each(["u8", "u12"] as const)(
-    "refreshes %s recommendations only on request and saves only after review",
+    "optimizes the %s draft only on request and saves only after review",
     (teamId) => {
       const { game, team } = setup(teamId, true);
       localStorage.setItem(
@@ -489,7 +348,7 @@ describe("manual planning UI", () => {
       };
       let editor = openEditor();
       expect(
-        within(editor).getByRole("button", { name: "Ready 2 swaps" }),
+        within(editor).getByRole("button", { name: "Save plan" }),
       ).toBeEnabled();
       const expected = suggestSubstitutions(
         game,
@@ -497,17 +356,23 @@ describe("manual planning UI", () => {
         team,
       );
       expect(expected).not.toEqual(game.queuedSubstitutions);
-      fireEvent.click(
-        within(editor).getByRole("button", { name: "Refresh suggestions" }),
+      expect(editor.querySelector(".sheet-header p")).toHaveTextContent(
+        "Choose your swaps, then save the plan. Send players in when you're ready.",
       );
+      optimizeDraft(editor);
+      const result = `Rebuilt with ${expected.length} suggested swaps for fair playing time. Save the plan when you're ready.`;
+      expect(
+        editor.querySelector('.sheet-header [aria-live="polite"]'),
+      ).toHaveTextContent(result);
+      expect(within(editor).getByText(result)).toBeVisible();
+      expect(editor.querySelector(".sheet-header p")).not.toHaveTextContent(
+        "Choose your swaps, then save the plan. Send players in when you're ready.",
+      );
+      expect(editor.querySelectorAll('[aria-live="polite"]')).toHaveLength(1);
+      expectDisabledOptimization(editor);
       expect(
         within(editor).getByRole("button", {
-          name: "Suggestions are up to date",
-        }),
-      ).toBeDisabled();
-      expect(
-        within(editor).getByRole("button", {
-          name: `Ready ${expected.length} swaps`,
+          name: "Save plan",
         }),
       ).toBeEnabled();
       expect(savedGame()).toEqual(game);
@@ -516,14 +381,15 @@ describe("manual planning UI", () => {
 
       editor = openEditor();
       expect(
-        within(editor).getByRole("button", { name: "Ready 2 swaps" }),
+        within(editor).getByRole("button", { name: "Save plan" }),
       ).toBeEnabled();
-      fireEvent.click(
-        within(editor).getByRole("button", { name: "Refresh suggestions" }),
+      expect(editor.querySelector(".sheet-header p")).toHaveTextContent(
+        "Choose your swaps, then save the plan. Send players in when you're ready.",
       );
+      optimizeDraft(editor);
       fireEvent.click(
         within(editor).getByRole("button", {
-          name: `Ready ${expected.length} swaps`,
+          name: "Save plan",
         }),
       );
       expect(savedGame()).toEqual({ ...game, queuedSubstitutions: expected });
@@ -533,7 +399,7 @@ describe("manual planning UI", () => {
       fireEvent.click(screen.getByRole("button", { name: "Review plan" }));
       fireEvent.click(
         within(screen.getByRole("dialog")).getByRole("button", {
-          name: "Send players in",
+          name: "Send 'em in",
         }),
       );
       expect(savedGame().history.at(-1)?.pairs).toEqual(expected);
@@ -543,7 +409,7 @@ describe("manual planning UI", () => {
   );
 
   it.each(["u8", "u12"] as const)(
-    "disables %s refresh when only row order differs and enables it after a draft edit",
+    "leaves %s row order alone when recommendations match and rebuilds after a draft edit",
     (teamId) => {
       const { state, game, team } = setup(teamId);
       const recommendations = suggestSubstitutions(
@@ -561,27 +427,26 @@ describe("manual planning UI", () => {
       render(<App />);
       const editor = openSavedPlanner();
       const upToDate = within(editor).getByRole("button", {
-        name: "Suggestions are up to date",
+        name: "Optimize plan",
       });
       expect(upToDate).toBeDisabled();
-      expect(upToDate).toHaveAttribute("title", "Suggestions are up to date.");
-      fireEvent.click(upToDate);
+      expect(upToDate).not.toHaveAttribute("title");
+      expectDisabledOptimization(editor);
       expect(savedGame()).toEqual(planned);
       fireEvent.click(
         within(editor).getAllByRole("button", {
           name: /^Remove substitution/,
         })[0],
       );
-      const refresh = within(editor).getByRole("button", {
-        name: "Refresh suggestions",
+      expect(editor.querySelector(".sheet-header p")).toHaveTextContent(
+        "Choose your swaps, then save the plan. Send players in when you're ready.",
+      );
+      const optimize = within(editor).getByRole("button", {
+        name: "Optimize plan",
       });
-      expect(refresh).toBeEnabled();
-      fireEvent.click(refresh);
-      expect(
-        within(editor).getByRole("button", {
-          name: "Suggestions are up to date",
-        }),
-      ).toBeDisabled();
+      expect(optimize).toBeEnabled();
+      optimizeDraft(editor);
+      expectDisabledOptimization(editor);
       expect(editor.querySelectorAll(".swap-row")).toHaveLength(
         recommendations.length,
       );
@@ -589,7 +454,7 @@ describe("manual planning UI", () => {
     },
   );
 
-  it("starts a fresh automatic plan with refresh already disabled", () => {
+  it("disables optimization for a fresh recommended plan without changing it", () => {
     setup("u8");
     localStorage.setItem(
       DEVICE_PREFERENCES_STORAGE_KEY,
@@ -597,9 +462,9 @@ describe("manual planning UI", () => {
     );
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
-    expect(
-      screen.getByRole("button", { name: "Suggestions are up to date" }),
-    ).toBeDisabled();
+    expectDisabledOptimization(
+      screen.getByRole("dialog", { name: "Substitution plan" }),
+    );
   });
 
   it("does not clear a saved plan when no more automatic rotations are recommended", () => {
@@ -633,11 +498,9 @@ describe("manual planning UI", () => {
       }),
     );
     const editor = screen.getByRole("dialog", { name: "Substitution plan" });
+    expectDisabledOptimization(editor);
     expect(
-      within(editor).getByRole("button", { name: "Refresh suggestions" }),
-    ).toBeDisabled();
-    expect(
-      within(editor).getByRole("button", { name: "Ready 2 swaps" }),
+      within(editor).getByRole("button", { name: "Save plan" }),
     ).toBeEnabled();
     expect(savedGame()).toEqual(late);
   });
@@ -693,7 +556,7 @@ describe("manual planning UI", () => {
       expect(freed).not.toHaveAttribute("aria-disabled", "true");
       fireEvent.click(freed);
       fireEvent.click(
-        within(editor).getByRole("button", { name: "Ready 1 swap" }),
+        within(editor).getByRole("button", { name: "Save plan" }),
       );
       expect(savedGame().queuedSubstitutions).toEqual([
         { ...pairs[0], inPlayerId: pairs[1].inPlayerId },
@@ -806,23 +669,6 @@ describe("manual planning UI", () => {
     },
   );
 
-  it("omits the planned separator when a new row has no players selected", () => {
-    setup();
-    render(<App />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Create plan" })[0]);
-    const editor = screen.getByRole("dialog", { name: "Substitution plan" });
-    fireEvent.click(within(editor).getByRole("button", { name: "Add swap" }));
-    for (const direction of ["incoming", "outgoing"] as const) {
-      fireEvent.click(
-        within(editor).getByLabelText(`Swap 1 ${direction} player`),
-      );
-      expect(
-        document.querySelector(".scheduled-choices-header"),
-      ).not.toBeInTheDocument();
-      fireEvent.keyDown(document, { key: "Escape" });
-    }
-  });
-
   it("keeps keeper preference warnings when choosing an injury replacement", () => {
     const { game, team } = setup();
     render(<App />);
@@ -842,26 +688,35 @@ describe("manual planning UI", () => {
     expect(savedGame()).toEqual(game);
   });
 
-  it("keeps rotation reminders advisory without opening a suggested plan", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(1_000);
-    const { game } = setup();
-    const running = setClockRunning(
-      fastForwardGame(game, 374, 1_000),
-      true,
-      1_000,
-    );
-    const state = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
-    state.activeGame = running;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    render(<App />);
-    act(() => vi.advanceTimersByTime(2_000));
-    expect(
-      screen.getByRole("status", { name: "Substitution reminder" }),
-    ).toBeVisible();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(savedGame().queuedSubstitutions).toBeUndefined();
-  });
+  it.each([false, true])(
+    "opens the planner when rotation becomes due (saved plan: %s)",
+    (planned) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_000);
+      const { game } = setup("u8", planned, true);
+      const running = setClockRunning(
+        fastForwardGame(game, 374, 1_000),
+        true,
+        1_000,
+      );
+      const state = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+      state.activeGame = running;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render(<App />);
+      act(() => vi.advanceTimersByTime(2_000));
+      if (!planned) {
+        expect(
+          screen.getByRole("status", { name: "Substitution reminder" }),
+        ).toBeVisible();
+      }
+      expect(
+        screen.getByRole("dialog", {
+          name: planned ? "Substitution plan (2)" : "Substitution plan",
+        }),
+      ).toBeVisible();
+      expect(savedGame().queuedSubstitutions).toEqual(game.queuedSubstitutions);
+    },
+  );
 
   it("uses Sub now without rebuilding the other planned swaps", () => {
     const { game, pairs, team } = setup("u8", true);
@@ -1028,7 +883,7 @@ describe("manual planning UI", () => {
     },
   );
 
-  it("can remove the last saved swap and clear the manual plan without auto-filling", () => {
+  it("can remove the last saved swap and clear the plan without auto-filling", () => {
     const { state, game, pairs } = setup("u8");
     state.activeGame = queueSubstitutions(game, [pairs[0]]);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -1048,7 +903,7 @@ describe("manual planning UI", () => {
     expect(savedGame().assignments).toEqual(game.assignments);
   });
 
-  it("preserves and allows explicit removal of a linked keeper change from assisted mode", () => {
+  it("preserves and allows explicit removal of a linked keeper change from a legacy manual install", () => {
     const { state, pairs } = keeperHandoffGame();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     localStorage.setItem(
@@ -1074,9 +929,7 @@ describe("manual planning UI", () => {
     expect(
       within(editor).getByRole("button", { name: "Add swap" }),
     ).toBeEnabled();
-    fireEvent.click(
-      within(editor).getByRole("button", { name: "Ready 3 swaps" }),
-    );
+    fireEvent.click(within(editor).getByRole("button", { name: "Save plan" }));
     expect(savedGame().queuedSubstitutions).toEqual(pairs.slice(1));
   });
 });

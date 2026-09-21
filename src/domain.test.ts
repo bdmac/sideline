@@ -341,7 +341,9 @@ describe("minimum playing-time pace", () => {
       expect(getPlayingTimePaceWarning(game, guest.id)).toBeNull();
       expect(validateGame(game, team.sideSize)).toEqual([]);
       for (const playerId of [...game.presentIds]) {
-        game = markUnavailable(game, playerId, team.sideSize, 1_000);
+        game = markUnavailable(game, playerId, team.sideSize, 1_000, {
+          replacementPlayerId: game.benchIds[0],
+        });
       }
       expect(getMinimumPlayingTimePace(game)).toBeNull();
       expect(getPlayingTimePaceWarning(game, id)).toBeNull();
@@ -1582,7 +1584,7 @@ describe("substitutions", () => {
   });
 
   it.each(["u8", "u12"] as const)(
-    "preserves the %s deadline after an automatic replacement",
+    "preserves the %s deadline after a coach-selected injury replacement",
     (teamId) => {
       const team = INITIAL_TEAMS[teamId];
       let game = createGame(
@@ -1599,6 +1601,7 @@ describe("substitutions", () => {
         Object.values(game.assignments)[0],
         team.sideSize,
         2_000,
+        { replacementPlayerId: game.benchIds[0] },
       );
 
       expect(game.history.at(-1)?.pairs).toHaveLength(1);
@@ -1650,6 +1653,7 @@ describe("substitutions", () => {
         Object.values(game.assignments)[0],
         team.sideSize,
         3_000,
+        { replacementPlayerId: game.benchIds[0] },
       );
       expect(getSubstitutionReminderStatus(game)).toMatchObject({
         cycleKey: planned.cycleKey,
@@ -2769,6 +2773,7 @@ describe("substitutions", () => {
       originalOutfieldPlayerId,
       team.sideSize,
       2_000,
+      { replacementPlayerId: reserveGoalkeeperId },
     );
     game.clock.elapsedSeconds = getGoalkeeperStintSeconds(game);
 

@@ -18,14 +18,12 @@ describe("device preferences", () => {
       keepScreenAwake: true,
       substitutionAlerts: true,
       demoClock: true,
-      manualPlanning: true,
     });
 
     expect(loadDevicePreferences()).toEqual({
       keepScreenAwake: true,
       substitutionAlerts: true,
       demoClock: true,
-      manualPlanning: true,
     });
   });
 
@@ -41,7 +39,6 @@ describe("device preferences", () => {
       keepScreenAwake: false,
       substitutionAlerts: true,
       demoClock: false,
-      manualPlanning: false,
     });
 
     const consoleError = vi
@@ -53,13 +50,23 @@ describe("device preferences", () => {
     consoleError.mockRestore();
   });
 
-  it("defaults existing installs to assisted planning and ignores invalid mode values", () => {
-    for (const saved of [{ demoClock: true }, { manualPlanning: "yes" }]) {
+  it.each([true, false, "yes"])(
+    "discards retired manual mode %s while preserving supported preferences",
+    (manualPlanning) => {
+      const saved = {
+        keepScreenAwake: true,
+        substitutionAlerts: true,
+        demoClock: true,
+      };
       localStorage.setItem(
         DEVICE_PREFERENCES_STORAGE_KEY,
-        JSON.stringify(saved),
+        JSON.stringify({ ...saved, manualPlanning }),
       );
-      expect(loadDevicePreferences().manualPlanning).toBe(false);
-    }
-  });
+      expect(loadDevicePreferences()).toEqual(saved);
+      saveDevicePreferences(loadDevicePreferences());
+      expect(
+        JSON.parse(localStorage.getItem(DEVICE_PREFERENCES_STORAGE_KEY)!),
+      ).toEqual(saved);
+    },
+  );
 });

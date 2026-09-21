@@ -594,7 +594,6 @@ describe("Sideline app", () => {
       keepScreenAwake: true,
       substitutionAlerts: true,
       demoClock: false,
-      manualPlanning: false,
     });
     expect(wakeLockRequest).not.toHaveBeenCalled();
     expect(
@@ -694,7 +693,6 @@ describe("Sideline app", () => {
       keepScreenAwake: false,
       substitutionAlerts: false,
       demoClock: true,
-      manualPlanning: false,
     });
     expect(
       screen.getByRole("button", { name: "Fast-forward game clock" }),
@@ -1129,7 +1127,7 @@ describe("Sideline app", () => {
             screen.getByRole("dialog", {
               name: "Substitution plan (5)",
             }),
-          ).getByRole("button", { name: "Send players in" }),
+          ).getByRole("button", { name: "Send 'em in" }),
         );
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       }
@@ -1216,14 +1214,14 @@ describe("Sideline app", () => {
         expect(planner.querySelector(".error-message")).toBeNull();
         setPlannerSize(planner, 1);
         fireEvent.click(
-          within(planner).getByRole("button", { name: "Ready 1 swap" }),
+          within(planner).getByRole("button", { name: "Save plan" }),
         );
       }
       const review = screen.getByRole("dialog", {
         name: "Substitution plan (1)",
       });
       fireEvent.click(
-        within(review).getByRole("button", { name: "Send players in" }),
+        within(review).getByRole("button", { name: "Send 'em in" }),
       );
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
       expect(saved.activeGame?.history).toHaveLength(game.history.length + 1);
@@ -1338,6 +1336,11 @@ describe("Sideline app", () => {
         screen.getByRole("button", { name: `Take ${name} out of game` }),
       );
       fireEvent.click(
+        within(
+          screen.getByRole("group", { name: "Bench replacements" }),
+        ).getAllByRole("button")[0],
+      );
+      fireEvent.click(
         within(screen.getByRole("alertdialog")).getByRole("button", {
           name: "Remove player",
         }),
@@ -1388,7 +1391,7 @@ describe("Sideline app", () => {
       name: /^Substitution plan \([0-9]+\)$/,
     });
     fireEvent.click(
-      within(review).getByRole("button", { name: "Send players in" }),
+      within(review).getByRole("button", { name: "Send 'em in" }),
     );
     const confirmation = screen.queryByRole("dialog");
     if (confirmation) {
@@ -3173,7 +3176,7 @@ describe("Sideline app", () => {
     expect(incomingPlayers[1]).not.toHaveTextContent(firstIncomingName);
     expect(incomingPlayers[0]).toHaveTextContent(firstIncomingName);
     fireEvent.keyDown(document, { key: "Escape" });
-    const queueButton = screen.getByRole("button", { name: "Ready 3 swaps" });
+    const queueButton = screen.getByRole("button", { name: "Save plan" });
     expect(queueButton).toHaveClass("primary-action");
     fireEvent.click(queueButton);
 
@@ -3181,7 +3184,7 @@ describe("Sideline app", () => {
       name: "Substitution plan (3)",
     });
     expect(
-      within(summary).getByRole("button", { name: "Send players in" }),
+      within(summary).getByRole("button", { name: "Send 'em in" }),
     ).toHaveClass("primary-action");
 
     expect(summary).toHaveTextContent("OUT");
@@ -3212,7 +3215,7 @@ describe("Sideline app", () => {
     });
 
     fireEvent.click(
-      within(summary).getByRole("button", { name: "Send players in" }),
+      within(summary).getByRole("button", { name: "Send 'em in" }),
     );
     expect(
       screen.getByRole("button", { name: "Plan substitution for Dylan" }),
@@ -3261,7 +3264,7 @@ describe("Sideline app", () => {
       }),
     ).toHaveLength(2);
     expect(
-      within(planner).getByRole("button", { name: "Ready 2 swaps" }),
+      within(planner).getByRole("button", { name: "Save plan" }),
     ).toBeEnabled();
   });
 
@@ -3315,7 +3318,7 @@ describe("Sideline app", () => {
       within(review).queryByText(targetPosition.shortLabel),
     ).not.toBeInTheDocument();
     expect(
-      within(review).getByRole("button", { name: "Send players in" }),
+      within(review).getByRole("button", { name: "Send 'em in" }),
     ).toBeEnabled();
     expect(
       within(review).queryByText("Plan needs attention"),
@@ -3367,7 +3370,7 @@ describe("Sideline app", () => {
       ),
     ).toHaveLength(5);
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.getByRole("button", { name: "Ready 5 swaps" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save plan" })).toBeEnabled();
   });
 
   it("prompts default U8 halves after six minutes fifteen seconds without a swap", () => {
@@ -3454,14 +3457,14 @@ describe("Sideline app", () => {
       const count = savedPlan ? 3 : 6;
       expect(planner.querySelectorAll(".swap-row")).toHaveLength(count);
       expect(
-        within(planner).getByRole("button", { name: `Ready ${count} swaps` }),
+        within(planner).getByRole("button", { name: "Save plan" }),
       ).toBeEnabled();
       const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
       expect(stored.activeGame?.assignments).toEqual(game.assignments);
       expect(stored.activeGame?.history).toEqual(game.history);
       if (!savedPlan) {
         fireEvent.click(
-          within(planner).getByRole("button", { name: "Ready 6 swaps" }),
+          within(planner).getByRole("button", { name: "Save plan" }),
         );
         const review = screen.getByRole("dialog", {
           name: "Substitution plan (6)",
@@ -3537,7 +3540,7 @@ describe("Sideline app", () => {
         within(planner).queryByRole("group", { name: "Players to swap" }),
       ).not.toBeInTheDocument();
       fireEvent.click(
-        within(planner).getByRole("button", { name: /Ready \d swaps?/ }),
+        within(planner).getByRole("button", { name: "Save plan" }),
       );
       const review = screen.getByRole("dialog", {
         name: /^Substitution plan \([0-9]+\)$/,
@@ -3552,7 +3555,7 @@ describe("Sideline app", () => {
         "Lazar has not had their recommended 15:00 bench turn before taking over.",
       );
       const send = within(review).getByRole("button", {
-        name: "Send players in",
+        name: "Send 'em in",
       });
       expect(send).toBeEnabled();
       expect(send).toHaveAccessibleDescription(/Wait on this rotation/);
@@ -3600,7 +3603,7 @@ describe("Sideline app", () => {
       const planner = screen.getByRole("dialog", { name: "Substitution plan" });
       expect(planner.querySelector(".keeper-change-warning")).toBeNull();
       fireEvent.click(
-        within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+        within(planner).getByRole("button", { name: "Save plan" }),
       );
       fireEvent.click(
         screen.getByRole("button", { name: "Review substitutions" }),
@@ -3614,7 +3617,7 @@ describe("Sideline app", () => {
       act(() => vi.advanceTimersByTime(300_000));
       expect(review.querySelector(".keeper-change-warning")).toBeNull();
       fireEvent.click(
-        within(review).getByRole("button", { name: "Send players in" }),
+        within(review).getByRole("button", { name: "Send 'em in" }),
       );
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
       expect(saved.activeGame!.clock.elapsedSeconds).toBe(2_100);
@@ -3696,7 +3699,7 @@ describe("Sideline app", () => {
         setPlannerSize(planner, count);
         expect(
           within(planner).getByRole("button", {
-            name: `Ready ${count} swap${count === 1 ? "" : "s"}`,
+            name: "Save plan",
           }),
         ).toBeEnabled();
       }
@@ -3844,7 +3847,7 @@ describe("Sideline app", () => {
       fireEvent.click(keeperIncoming);
       expect(screen.queryByRole("menuitemradio")).not.toBeInTheDocument();
       fireEvent.click(
-        within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+        within(planner).getByRole("button", { name: "Save plan" }),
       );
       const stored: AppState = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
       expect(stored.activeGame!.queuedSubstitutions).toEqual(expectedPairs);
@@ -3891,7 +3894,7 @@ describe("Sideline app", () => {
       "does not typically play goalkeeper",
     );
     expect(
-      within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+      within(planner).getByRole("button", { name: "Save plan" }),
     ).toBeEnabled();
   });
 
@@ -3923,7 +3926,7 @@ describe("Sideline app", () => {
       within(planner).getByRole("button", { name: "Add swap" }),
     ).toBeEnabled();
     expect(
-      within(planner).getByRole("button", { name: "Ready 4 swaps" }),
+      within(planner).getByRole("button", { name: "Save plan" }),
     ).toBeEnabled();
   });
 
@@ -3957,12 +3960,10 @@ describe("Sideline app", () => {
       setPlannerSize(planner, count);
       expect(planner.querySelectorAll(".swap-row")).toHaveLength(count);
       expect(
-        within(planner).getByRole("button", { name: `Ready ${count} swaps` }),
+        within(planner).getByRole("button", { name: "Save plan" }),
       ).toBeEnabled();
     }
-    fireEvent.click(
-      within(planner).getByRole("button", { name: "Ready 5 swaps" }),
-    );
+    fireEvent.click(within(planner).getByRole("button", { name: "Save plan" }));
     const stored: AppState = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(stored.activeGame?.queuedSubstitutions).toEqual(pairs);
   });
@@ -3976,11 +3977,9 @@ describe("Sideline app", () => {
     fireEvent.click(within(planner).getByRole("button", { name: "Add swap" }));
     expect(planner.querySelectorAll(".swap-row")).toHaveLength(5);
     expect(
-      within(planner).getByRole("button", { name: "Ready 5 swaps" }),
+      within(planner).getByRole("button", { name: "Save plan" }),
     ).toBeEnabled();
-    fireEvent.click(
-      within(planner).getByRole("button", { name: "Ready 5 swaps" }),
-    );
+    fireEvent.click(within(planner).getByRole("button", { name: "Save plan" }));
     const stored: AppState = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     const game = stored.activeGame!;
     expect(game.clock.elapsedSeconds).toBe(0);
@@ -4010,7 +4009,7 @@ describe("Sideline app", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Ready 1 swap" }),
+      screen.getByRole("button", { name: "Save plan" }),
     ).toBeInTheDocument();
   });
 
@@ -4248,7 +4247,7 @@ describe("Sideline app", () => {
         screen.getByRole("dialog", { name: "Substitution plan" }),
         3,
       );
-      fireEvent.click(screen.getByRole("button", { name: "Ready 3 swaps" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
       const review = screen.getByRole("dialog", {
         name: "Substitution plan (3)",
       });
@@ -4272,7 +4271,7 @@ describe("Sideline app", () => {
         within(readyBanner).getByLabelText("Next reminder due in 6:15"),
       ).toBeVisible();
       expect(
-        within(readyBanner).queryByRole("button", { name: "Send players in" }),
+        within(readyBanner).queryByRole("button", { name: "Send 'em in" }),
       ).not.toBeInTheDocument();
       fireEvent.click(
         within(readyBanner).getByRole("button", {
@@ -4288,7 +4287,7 @@ describe("Sideline app", () => {
           name: `Substitution plan (${count})`,
         });
         expect(review).toHaveAccessibleDescription(
-          /Send 'em in now or you can send them in later\. Your call coach\./,
+          /Send 'em in now or later\. Your call coach\./,
         );
         fireEvent.click(
           within(review).getAllByRole("button", {
@@ -4326,7 +4325,7 @@ describe("Sideline app", () => {
       screen.getByRole("dialog", { name: "Substitution plan" }),
       3,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Ready 3 swaps" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
 
     const summary = screen.getByRole("dialog", {
       name: "Substitution plan (3)",
@@ -4367,7 +4366,7 @@ describe("Sideline app", () => {
       name: "Substitution plan",
     });
     expect(
-      within(planner).getByRole("button", { name: "Ready 2 swaps" }),
+      within(planner).getByRole("button", { name: "Save plan" }),
     ).toBeEnabled();
     expect(within(planner).getAllByLabelText(/outgoing player/)).toHaveLength(
       2,
@@ -4383,7 +4382,7 @@ describe("Sideline app", () => {
       screen.getByRole("dialog", { name: "Substitution plan" }),
       1,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Ready 1 swap" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
 
     const summary = screen.getByRole("dialog", {
       name: "Substitution plan (1)",
@@ -5806,9 +5805,7 @@ describe("Sideline app", () => {
     expect(
       within(planner).queryByRole("button", { name: "Add swap" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(
-      within(planner).getByRole("button", { name: "Ready 4 swaps" }),
-    );
+    fireEvent.click(within(planner).getByRole("button", { name: "Save plan" }));
     const stored: AppState = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     const updatedGame = stored.activeGame!;
     const updatedPairs = updatedGame.queuedSubstitutions!;
@@ -6802,6 +6799,12 @@ describe("Sideline app", () => {
     expect(
       screen.queryByRole("dialog", { name: "Players are in" }),
     ).not.toBeInTheDocument();
+    expect(
+      within(confirmation).getByRole("button", { name: "Remove player" }),
+    ).toBeDisabled();
+    fireEvent.click(
+      within(confirmation).getByRole("button", { name: /^Malik #/ }),
+    );
     fireEvent.click(
       within(confirmation).getByRole("button", {
         name: "Remove player",
