@@ -14,6 +14,20 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 
 The editable set of upcoming pairings is a **Substitution plan**. **Create plan**, **Add to plan**, and **Update plan** edit those instructions; **In this plan** describes a player's pairing. **Send players in** executes the reviewed set. **Next reminder** describes the timing prompt, not an automatic substitution or permission from the referee. Individual immediate substitutions retain the explicit **Sub now** action.
 
+### Manual planning
+
+**Settings → Manual planning** is a persisted device preference, off by default. When enabled, every live swap is coach-selected: bench drops incrementally save pairings without changing assignments, time, or history. The **Add swap** icon in the last row beneath the swaps inserts an empty row using the existing IN / OUT player pickers, with focus on the incoming picker. That add row disappears when all bench slots or available outgoing slots are accounted for, including players reserved by a linked keeper move. Incomplete rows remain local drafts and cannot be readied; both players must be chosen, or the row removed. There are no generated recommendations or count selector. Existing pairings remain editable and removable down to an empty plan. Tap and keyboard planning remain available.
+
+Review and **Send players in** retain their atomic behavior. Manual drops replace ordinary existing pairings immediately without a confirmation dialog, preserving unrelated pairings and leaving the lineup, time, and history unchanged. Linked keeper conflicts still open the full editor without splitting the handoff. **Sub now** executes immediately, discarding only conflicting pairings and preserving the rest exactly. Undo restores the pre-swap plan. Taking a field player out requires an explicit available bench replacement, or proceeds short-sided if no bench exists. Keeper and preference notices remain advisory.
+
+Position, keeper, playing-time, and rotation reminders remain active, but reaching a deadline never automatically opens the manual planner. Changing modes preserves saved plans, assignments, and clocks. Starter selection and returning players filling short-sided vacancies are unchanged. Automatic recommendation, immediate-drag, and plan-regeneration behavior described below applies to assisted mode (Manual planning off).
+
+### Shared and assisted behavior
+
+- During live bench dragging, pitch cards show the queued incoming player's name with the substitution icon in both modes, on the temporary compact pitch and the existing desktop pitch. Linked keeper changes show the moving outfielder at goal with the Move icon, and the bench replacement at that outfielder's source position. These are saved-plan annotations, not the hovered drop preview or newly generated suggestions. They do not alter assignments; compact drop targets retain their size and position.
+
+- Manual and assisted planners group already-selected players after unused choices in both row pickers, including the row currently being edited. **Already going in / Already going out** and **Already included in the plan.** distinguish the groups. These choices remain selectable, preserving the existing duplicate-free reassignment behavior.
+
 - Starting both goalkeeper options is valid. Setup does not require a benched reserve or show "No backup goalkeeper" warnings or "GK option" labels. Saved goalkeeper preferences remain visible in player pickers; live rotation planning prepares the next keeper when needed.
 
 - Starter drag feedback appears only while dragging over a valid destination, inset inside the top of the pitch near the opposing goal without moving its positions. It shows proposed role fit for affected players, without bench-reserve warnings. No generic drop instruction appears over empty space. The small name preview remains centered on the pointer independently.

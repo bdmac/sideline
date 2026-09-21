@@ -577,6 +577,7 @@ describe("Sideline app", () => {
       keepScreenAwake: true,
       substitutionAlerts: true,
       demoClock: false,
+      manualPlanning: false,
     });
     expect(wakeLockRequest).not.toHaveBeenCalled();
     expect(
@@ -676,6 +677,7 @@ describe("Sideline app", () => {
       keepScreenAwake: false,
       substitutionAlerts: false,
       demoClock: true,
+      manualPlanning: false,
     });
     expect(
       screen.getByRole("button", { name: "Fast-forward game clock" }),
@@ -4183,9 +4185,8 @@ describe("Sideline app", () => {
       (player) => player.name === selectedIncomingName,
     )!;
     const formation = getFormation(game.formationId);
-    const unavailableOutgoingNames = within(planner)
+    const plannedOutgoingNames = within(planner)
       .getAllByLabelText(/outgoing player/)
-      .slice(1)
       .map((button) => button.textContent?.trim());
     const expectedOutgoingOptions = Object.entries(game.assignments)
       .map(([positionId, playerId]) => {
@@ -4197,9 +4198,7 @@ describe("Sideline app", () => {
         );
         return {
           playerId,
-          alreadyPlanned: unavailableOutgoingNames.includes(
-            playerName(playerId),
-          ),
+          alreadyPlanned: plannedOutgoingNames.includes(playerName(playerId)),
           preferenceIndex:
             preferenceIndex < 0 ? Number.POSITIVE_INFINITY : preferenceIndex,
           currentFieldSeconds: getCurrentFieldSeconds(game, playerId),

@@ -41,6 +41,7 @@ import {
   SunMedium,
   Trash2,
   UsersRound,
+  UserRoundPlus,
   UserRoundX,
   WandSparkles,
   X,
@@ -136,7 +137,8 @@ import { type ColorMode, loadColorMode, saveColorMode } from "./theme";
 import { useRotationDueReview } from "./useRotationDueReview";
 import { StarterLineup } from "./StarterLineup";
 import { PlayerDragPreview } from "./PlayerDragPreview";
-import { LiveBenchDropPitch } from "./LiveBenchDropPitch";
+import { LiveBenchDropPitch, PlannedPitchIncoming } from "./LiveBenchDropPitch";
+import { getPlannedPositionChange } from "./benchDropModel";
 import {
   useLiveBenchDrag,
   type LiveBenchDragBindings,
@@ -544,6 +546,25 @@ function SettingsMenu({
               onChange={(enabled) => onPreferenceChange("demoClock", enabled)}
               aria-labelledby="demo-mode-label"
               aria-describedby="demo-mode-description"
+            />
+          </div>
+          <div className="settings-option">
+            <span className="settings-option-icon" aria-hidden="true">
+              <Pencil size={22} strokeWidth={2.2} />
+            </span>
+            <span className="settings-option-copy">
+              <strong id="manual-planning-label">Manual planning</strong>
+              <small id="manual-planning-description">
+                Choose your own adventure.
+              </small>
+            </span>
+            <ToggleSwitch
+              checked={preferences.manualPlanning}
+              onChange={(enabled) =>
+                onPreferenceChange("manualPlanning", enabled)
+              }
+              aria-labelledby="manual-planning-label"
+              aria-describedby="manual-planning-description"
             />
           </div>
         </div>
@@ -1017,6 +1038,7 @@ function App() {
               team={activeTeam}
               substitutionAlertsEnabled={devicePreferences.substitutionAlerts}
               demoClockEnabled={devicePreferences.demoClock}
+              manualPlanning={devicePreferences.manualPlanning}
               summaryReturnLabel={
                 selectedCoach?.assignments.length === 1
                   ? "Prep for next game"
@@ -2093,6 +2115,7 @@ function LiveGameScreen({
   team,
   substitutionAlertsEnabled,
   demoClockEnabled,
+  manualPlanning,
   summaryReturnLabel,
   onChange,
   onEnd,
@@ -2101,6 +2124,7 @@ function LiveGameScreen({
   team: Team;
   substitutionAlertsEnabled: boolean;
   demoClockEnabled: boolean;
+  manualPlanning: boolean;
   summaryReturnLabel: SummaryReturnLabel;
   onChange: (game: ActiveGame) => void;
   onEnd: (game: ActiveGame) => void;
@@ -2126,6 +2150,7 @@ function LiveGameScreen({
     inPlayerId: string;
     outPlayerId: string;
   } | null>(null);
+  const [replacementPlayerId, setReplacementPlayerId] = useState("");
   const [rosterView, setRosterView] = useState<"field" | "bench">("bench");
   const [confirmedPairs, setConfirmedPairs] = useState<
     SubstitutionPair[] | null
@@ -2344,7 +2369,7 @@ function LiveGameScreen({
   useRotationDueReview({
     cycleKey: reminderCycleKey,
     due: substitutionReminder.due,
-    eligible: rotationDue && game.clock.running,
+    eligible: !manualPlanning && rotationDue && game.clock.running,
     now,
     onOpen: () => {
       if (queuedPairs.length > 0) setQueuedPlanOpen(true);
@@ -2376,6 +2401,7 @@ function LiveGameScreen({
           playerId,
           team.sideSize,
           Date.now(),
+          { manualPlanning, replacementPlayerId },
         );
         const event = nextGame.history.at(-1);
         if (event?.type === "unavailable") {
@@ -2441,6 +2467,7 @@ function LiveGameScreen({
         outPlayerId,
         team,
         Date.now(),
+        { manualPlanning },
       );
       const event = next.history.at(-1);
       if (event?.type !== "substitution") {
@@ -2458,7 +2485,11 @@ function LiveGameScreen({
   };
 
   const sendSingleSubstitution = (inPlayerId: string, outPlayerId: string) => {
-    if (queuedKeeperMove) {
+    if (
+      queuedKeeperMove &&
+      (!manualPlanning ||
+        getQueuedKeeperHandoffConflict(game, inPlayerId, outPlayerId))
+    ) {
       setBenchQueuePlayerId(null);
       setFieldQueuePlayerId(null);
       setImmediatePlanOverride({ inPlayerId, outPlayerId });
@@ -2473,16 +2504,32 @@ function LiveGameScreen({
     setPlannerOpen(true);
   };
 
+  const planBenchDrop = (inPlayerId: string, outPlayerId: string) => {
+    if (getQueuedKeeperHandoffConflict(game, inPlayerId, outPlayerId)) {
+      setError(
+        "This swap conflicts with the linked keeper change. Edit or remove that change first.",
+      );
+      setPlannerOpen(true);
+      return false;
+    }
+    return safeChange(() =>
+      queueBenchSubstitution(game, inPlayerId, outPlayerId),
+    );
+  };
+
   const benchDrag = useLiveBenchDrag({
     lineupKey: JSON.stringify([
       game.id,
       game.assignments,
       game.benchIds,
       game.unavailableIds,
+      manualPlanning,
+      game.queuedSubstitutions,
     ]),
     assignments: game.assignments,
     benchIds: game.benchIds,
-    onDrop: sendSingleSubstitution,
+    onDrop: manualPlanning ? planBenchDrop : sendSingleSubstitution,
+    manualPlanning,
   });
   const activeBenchDrag = benchDrag.drag?.active ? benchDrag.drag : null;
   const draggedBenchPlayer = activeBenchDrag
@@ -2500,6 +2547,42 @@ function LiveGameScreen({
             inPlayerId: draggedBenchPlayer.id,
             outPlayerId: game.assignments[benchDropPositionId],
             positionId: benchDropPositionId,
+          },
+        ]
+      : [],
+    manualPlanning ? "next-rotation" : "now",
+    { warnAboutRest: false, compact: true },
+  );
+  const dropOutgoingId = game.assignments[benchDropPositionId ?? ""];
+  const dropPlanImpact =
+    manualPlanning && draggedBenchPlayer && dropOutgoingId
+      ? getQueuedKeeperHandoffConflict(
+          game,
+          draggedBenchPlayer.id,
+          dropOutgoingId,
+        )
+        ? "Keeper plan conflict. Drop to edit."
+        : previewBenchSubstitution(game, draggedBenchPlayer.id, dropOutgoingId)
+              .removedPlayerIds.length
+          ? "Replaces planned swaps."
+          : undefined
+      : undefined;
+
+  const unavailablePosition = formation.positions.find(
+    (position) => game.assignments[position.id] === unavailableConfirmPlayerId,
+  );
+  const selectedReplacement = team.roster.find(
+    (player) => player.id === replacementPlayerId,
+  );
+  const replacementNotice = getKeeperChangeNotice(
+    displayed,
+    team,
+    unavailablePosition && unavailableConfirmPlayerId && selectedReplacement
+      ? [
+          {
+            positionId: unavailablePosition.id,
+            outPlayerId: unavailableConfirmPlayerId,
+            inPlayerId: selectedReplacement.id,
           },
         ]
       : [],
@@ -3057,6 +3140,9 @@ function LiveGameScreen({
               team={team}
               game={displayed}
               showPlayerTimes={showFieldPlayerTimes}
+              showPlannedIncoming={Boolean(
+                activeBenchDrag && !activeBenchDrag.compact,
+              )}
               onPlanSubstitution={openFieldPlan}
               onAddGuestAtPosition={setGuestPositionId}
               onMovePlayer={(playerId, positionId) =>
@@ -3166,7 +3252,10 @@ function LiveGameScreen({
                         canQueue={game.benchIds.length > 0}
                         onQueue={() => openFieldPlan(id)}
                         onChangePosition={() => setPositionEditorPlayerId(id)}
-                        onUnavailable={() => setUnavailableConfirmPlayerId(id)}
+                        onUnavailable={() => {
+                          setReplacementPlayerId("");
+                          setUnavailableConfirmPlayerId(id);
+                        }}
                       />
                     );
                   })}
@@ -3244,7 +3333,10 @@ function LiveGameScreen({
                             : undefined
                         }
                         onQueue={() => openBenchPlan(id)}
-                        onUnavailable={() => setUnavailableConfirmPlayerId(id)}
+                        onUnavailable={() => {
+                          setReplacementPlayerId("");
+                          setUnavailableConfirmPlayerId(id);
+                        }}
                       />
                     );
                   })}
@@ -3365,12 +3457,15 @@ function LiveGameScreen({
             compact={activeBenchDrag.compact}
             formation={formation}
             assignments={game.assignments}
+            queuedSubstitutions={game.queuedSubstitutions}
             players={team.roster}
             incoming={draggedBenchPlayer}
             targetPositionId={activeBenchDrag.targetPositionId}
             pitchRef={benchDrag.compactPitchRef}
             fieldRef={benchDrag.pitchRef}
             warning={benchDropNotice?.message}
+            manualPlanning={manualPlanning}
+            planImpact={dropPlanImpact}
           />
           <PlayerDragPreview
             name={draggedBenchPlayer.name}
@@ -3381,14 +3476,22 @@ function LiveGameScreen({
       )}
       {plannerOpen && (
         <SubstitutionPlanner
+          key={manualPlanning ? "manual" : "assisted"}
+          manualPlanning={manualPlanning}
           game={displayed}
           team={team}
           initialPairs={game.queuedSubstitutions}
           onClose={() => setPlannerOpen(false)}
           onConfirm={(pairs) => {
-            if (safeChange(() => queueSubstitutions(game, pairs))) {
+            if (
+              safeChange(() =>
+                pairs.length
+                  ? queueSubstitutions(game, pairs)
+                  : cancelQueuedSubstitutions(game),
+              )
+            ) {
               setPlannerOpen(false);
-              setQueuedPlanOpen(true);
+              setQueuedPlanOpen(pairs.length > 0);
             }
           }}
         />
@@ -3500,6 +3603,7 @@ function LiveGameScreen({
       )}
       {benchQueuePlayerId && (
         <BenchSubstitutionPicker
+          manualPlanning={manualPlanning}
           playerId={benchQueuePlayerId}
           game={displayed}
           team={team}
@@ -3530,6 +3634,7 @@ function LiveGameScreen({
       )}
       {fieldQueuePlayerId && (
         <FieldSubstitutionPicker
+          manualPlanning={manualPlanning}
           playerId={fieldQueuePlayerId}
           game={displayed}
           team={team}
@@ -3561,9 +3666,13 @@ function LiveGameScreen({
       {immediatePlanOverride && (
         <ConfirmSheet
           title="Override the keeper plan?"
-          body={`${playerName(team, immediatePlanOverride.inPlayerId)} will replace ${playerName(team, immediatePlanOverride.outPlayerId)} now. This overrides the saved ${queuedKeeperMove ? `${playerName(team, queuedKeeperMove.playerId)} to Keeper` : "keeper"} change and recalculates the remaining substitutions. Review the new plan before sending it.`}
+          body={`${playerName(team, immediatePlanOverride.inPlayerId)} will replace ${playerName(team, immediatePlanOverride.outPlayerId)} now. ${manualPlanning ? "This removes the conflicting keeper change. Other valid planned swaps will stay unchanged." : `This overrides the saved ${queuedKeeperMove ? `${playerName(team, queuedKeeperMove.playerId)} to Keeper` : "keeper"} change and recalculates the remaining substitutions. Review the new plan before sending it.`}`}
           cancelLabel="Keep current plan"
-          confirmLabel="Sub now and replan"
+          confirmLabel={
+            manualPlanning
+              ? "Sub now and remove conflict"
+              : "Sub now and replan"
+          }
           confirmIcon={<ArrowRightLeft size={18} aria-hidden="true" />}
           onCancel={() => setImmediatePlanOverride(null)}
           onConfirm={() => {
@@ -3583,19 +3692,81 @@ function LiveGameScreen({
           title={`Take ${playerName(team, unavailableConfirmPlayerId)} out of game?`}
           body={
             Object.values(game.assignments).includes(unavailableConfirmPlayerId)
-              ? `${playerName(team, unavailableConfirmPlayerId)} will be marked unavailable. Sideline will choose the fairest available bench replacement and show you the change before play continues.`
+              ? manualPlanning
+                ? `${playerName(team, unavailableConfirmPlayerId)} will be marked unavailable. ${game.benchIds.length ? "Choose who goes on now. Other valid planned swaps will be kept." : "No bench replacement is available."}`
+                : `${playerName(team, unavailableConfirmPlayerId)} will be marked unavailable. Sideline will choose the fairest available bench replacement and show you the change before play continues.`
               : `${playerName(team, unavailableConfirmPlayerId)} will be removed from the bench and marked unavailable. You can add them back from Out of game.`
           }
           cancelLabel="Keep player"
           confirmLabel="Remove player"
           confirmIcon={<UserRoundX size={18} aria-hidden="true" />}
+          confirmDisabled={
+            manualPlanning &&
+            Object.values(game.assignments).includes(
+              unavailableConfirmPlayerId,
+            ) &&
+            game.benchIds.length > 0 &&
+            !game.benchIds.includes(replacementPlayerId)
+          }
           onCancel={() => setUnavailableConfirmPlayerId(null)}
           onConfirm={() => {
             if (handleUnavailable(unavailableConfirmPlayerId)) {
               setUnavailableConfirmPlayerId(null);
             }
           }}
-        />
+        >
+          {manualPlanning &&
+            Object.values(game.assignments).includes(
+              unavailableConfirmPlayerId,
+            ) &&
+            game.benchIds.length > 0 && (
+              <>
+                <label className="manual-replacement">
+                  Bench replacement
+                  <select
+                    value={replacementPlayerId}
+                    onChange={(event) =>
+                      setReplacementPlayerId(event.target.value)
+                    }
+                  >
+                    <option value="">Choose a player</option>
+                    {game.benchIds.map((id) => (
+                      <option key={id} value={id}>
+                        {playerName(team, id)} ·{" "}
+                        {team.roster
+                          .find((player) => player.id === id)
+                          ?.preferredRoles.map(preferredRoleLabel)
+                          .join(" / ") || "Positions not set"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <KeeperChangeNotice
+                  notice={replacementNotice}
+                  id="replacement-keeper-notice"
+                />
+                {unavailablePosition &&
+                  selectedReplacement &&
+                  unavailablePosition.role !== "goalkeeper" &&
+                  !selectedReplacement.preferredRoles.includes(
+                    unavailablePosition.role,
+                  ) && (
+                    <InlineMessage variant="warning" role="status">
+                      {selectedReplacement.name} at{" "}
+                      {unavailablePosition.mediumLabel}: outside preferences.
+                    </InlineMessage>
+                  )}
+                {selectedReplacement && (
+                  <PlannedPairingImpact
+                    game={game}
+                    team={team}
+                    inPlayerId={selectedReplacement.id}
+                    outPlayerId={unavailableConfirmPlayerId}
+                  />
+                )}
+              </>
+            )}
+        </ConfirmSheet>
       )}
       {confirmedPairs && (
         <SubstitutionSummary
@@ -3675,6 +3846,7 @@ function Pitch({
   team,
   game,
   showPlayerTimes,
+  showPlannedIncoming = false,
   onPlanSubstitution,
   onAddGuestAtPosition,
   onMovePlayer,
@@ -3686,6 +3858,7 @@ function Pitch({
   team: Team;
   game: ActiveGame;
   showPlayerTimes: boolean;
+  showPlannedIncoming?: boolean;
   onPlanSubstitution: (playerId: string) => void;
   onAddGuestAtPosition: (positionId: string) => void;
   onMovePlayer: (playerId: string, positionId: string) => void;
@@ -3961,6 +4134,16 @@ function Pitch({
               )
             ) : (
               <small>{position.label}</small>
+            )}
+            {showPlannedIncoming && (
+              <PlannedPitchIncoming
+                change={getPlannedPositionChange(
+                  position.id,
+                  assignments,
+                  game.queuedSubstitutions,
+                )}
+                players={team.roster}
+              />
             )}
           </>
         );
@@ -4428,6 +4611,7 @@ function SingleSubstitutionActions({
   editing,
   onEditKeeperPlan,
   replacing = false,
+  manualPlanning = false,
 }: {
   game: ActiveGame;
   team: Team;
@@ -4438,6 +4622,7 @@ function SingleSubstitutionActions({
   editing: boolean;
   onEditKeeperPlan: () => void;
   replacing?: boolean;
+  manualPlanning?: boolean;
 }) {
   const noticeId = useId();
   const conflictId = useId();
@@ -4459,7 +4644,8 @@ function SingleSubstitutionActions({
           <span>
             This conflicts with{" "}
             {playerName(team, conflict.keeperHandoff.playerId)}'s move to
-            Keeper. Edit the keeper plan, or use Sub now to override and replan.
+            Keeper. Edit the keeper plan, or use Sub now to{" "}
+            {manualPlanning ? "override this change." : "override and replan."}
           </span>
         </InlineMessage>
       )}
@@ -4574,6 +4760,7 @@ function BenchSubstitutionPicker({
   onSendImmediately,
   onRemove,
   onEditKeeperPlan,
+  manualPlanning = false,
 }: {
   playerId: string;
   game: ActiveGame;
@@ -4583,6 +4770,7 @@ function BenchSubstitutionPicker({
   onSendImmediately: (outPlayerId: string) => void;
   onRemove: () => void;
   onEditKeeperPlan: () => void;
+  manualPlanning?: boolean;
 }) {
   const currentPair = game.queuedSubstitutions?.find(
     (pair) => pair.inPlayerId === playerId,
@@ -4656,6 +4844,7 @@ function BenchSubstitutionPicker({
       onClose={onClose}
       footer={
         <SingleSubstitutionActions
+          manualPlanning={manualPlanning}
           game={game}
           team={team}
           pair={
@@ -4847,6 +5036,7 @@ function FieldSubstitutionPicker({
   onSendImmediately,
   onRemove,
   onEditKeeperPlan,
+  manualPlanning = false,
 }: {
   playerId: string;
   game: ActiveGame;
@@ -4856,6 +5046,7 @@ function FieldSubstitutionPicker({
   onSendImmediately: (inPlayerId: string) => void;
   onRemove: () => void;
   onEditKeeperPlan: () => void;
+  manualPlanning?: boolean;
 }) {
   const currentPair = game.queuedSubstitutions?.find(
     (pair) => pair.outPlayerId === playerId,
@@ -4927,6 +5118,7 @@ function FieldSubstitutionPicker({
       onClose={onClose}
       footer={
         <SingleSubstitutionActions
+          manualPlanning={manualPlanning}
           game={game}
           team={team}
           pair={
@@ -5562,6 +5754,7 @@ function PlayerActionMenu({
   options,
   align,
   menuTitle,
+  direction,
   showPreferenceFit = true,
   activeMenuId,
   onActiveMenuChange,
@@ -5573,12 +5766,15 @@ function PlayerActionMenu({
   options: PlayerActionMenuOption[];
   align: "start" | "end";
   menuTitle: string;
+  direction: "in" | "out";
   showPreferenceFit?: boolean;
   activeMenuId: string | null;
   onActiveMenuChange: (menuId: string | null) => void;
   onChange: (value: string) => void;
 }) {
   const selected = options.find((option) => option.id === value);
+  const plannedHeading =
+    direction === "in" ? "Already going in" : "Already going out";
 
   return (
     <ActionMenu
@@ -5597,7 +5793,7 @@ function PlayerActionMenu({
           aria-label={label}
           data-player-menu-id={id}
         >
-          {selected?.label ?? "Choose player"}
+          {selected?.label ?? "Choose"}
         </Button>
       </ActionMenu.Anchor>
       <ActionMenu.Overlay
@@ -5615,93 +5811,118 @@ function PlayerActionMenu({
           selectionVariant="single"
           className="sideline-player-action-list"
         >
-          {options.map((option) => {
-            const selected = option.id === value;
+          {[false, true].map((planned) => {
+            const groupOptions = options.filter(
+              (option) => Boolean(option.statusText) === planned,
+            );
+            if (!groupOptions.length) return null;
             return (
-              <ActionList.Item
-                className="sideline-player-action-item"
-                key={option.id}
-                data-player-id={option.id}
-                selected={selected}
-                size="large"
-                onSelect={() => onChange(option.id)}
+              <ActionList.Group
+                key={String(planned)}
+                aria-label={planned ? plannedHeading : "Available players"}
               >
-                <span
-                  className={`player-action-menu-row ${showPreferenceFit ? "" : "preference-fit-hidden"}`}
-                >
-                  <span className="replacement-player-summary">
-                    <GoalMarkedPlayerName
-                      label={option.label}
-                      number={option.number}
-                      goalCount={option.goalCount}
-                    />
-                    {!showPreferenceFit && selected && (
-                      <Check
-                        className="replacement-selected-icon"
-                        size={15}
-                        aria-label="Selected"
-                      />
-                    )}
-                  </span>
-                  {showPreferenceFit &&
-                    option.preferenceIndex !== undefined && (
+                {planned && (
+                  <ActionList.GroupHeading className="scheduled-choices-header">
+                    <span className="scheduled-choices-heading">
+                      {plannedHeading}
+                    </span>
+                    <span className="scheduled-choices-description">
+                      Already included in the plan.
+                    </span>
+                  </ActionList.GroupHeading>
+                )}
+                {groupOptions.map((option) => {
+                  const selected = option.id === value;
+                  return (
+                    <ActionList.Item
+                      className="sideline-player-action-item"
+                      key={option.id}
+                      data-player-id={option.id}
+                      selected={selected}
+                      size="large"
+                      onSelect={() => onChange(option.id)}
+                    >
                       <span
-                        className={preferenceFitClassName(
-                          option.preferenceIndex,
-                        )}
+                        className={`player-action-menu-row ${showPreferenceFit ? "" : "preference-fit-hidden"}`}
                       >
-                        {selected && (
-                          <Check
-                            className="replacement-selected-icon"
-                            size={15}
-                            aria-hidden="true"
+                        <span className="replacement-player-summary">
+                          <GoalMarkedPlayerName
+                            label={option.label}
+                            number={option.number}
+                            goalCount={option.goalCount}
                           />
-                        )}
-                        <span>
-                          {preferenceFitLabel(option.preferenceIndex)}
+                          {!showPreferenceFit && selected && (
+                            <Check
+                              className="replacement-selected-icon"
+                              size={15}
+                              aria-label="Selected"
+                            />
+                          )}
                         </span>
+                        {showPreferenceFit &&
+                          option.preferenceIndex !== undefined && (
+                            <span
+                              className={preferenceFitClassName(
+                                option.preferenceIndex,
+                              )}
+                            >
+                              {selected && (
+                                <Check
+                                  className="replacement-selected-icon"
+                                  size={15}
+                                  aria-hidden="true"
+                                />
+                              )}
+                              <span>
+                                {preferenceFitLabel(option.preferenceIndex)}
+                              </span>
+                            </span>
+                          )}
+                        {option.positionLabel && (
+                          <span className="replacement-player-position">
+                            {option.positionLabel}
+                          </span>
+                        )}
+                        {option.preferredRoles && (
+                          <span
+                            className="replacement-player-preferences"
+                            aria-label={`Preferred roles: ${option.preferredRoles
+                              .map(preferredRoleLabel)
+                              .join(" and ")}`}
+                          >
+                            <span>Prefers</span>
+                            <strong>
+                              {compactPreferredRolesLabel(
+                                option.preferredRoles,
+                              )}
+                            </strong>
+                          </span>
+                        )}
+                        <span className="replacement-player-times">
+                          {option.times.map((time) => (
+                            <span key={time.label}>
+                              <span>{time.label}</span>
+                              <strong>{time.value}</strong>
+                            </span>
+                          ))}
+                        </span>
+                        {option.statusText && (
+                          <span
+                            className={`player-action-menu-status ${
+                              option.statusDirection === "outgoing"
+                                ? "outgoing-status"
+                                : "incoming-status"
+                            }`}
+                          >
+                            <ArrowRightLeft size={13} aria-hidden="true" />
+                            {option.statusText}
+                          </span>
+                        )}
                       </span>
-                    )}
-                  {option.positionLabel && (
-                    <span className="replacement-player-position">
-                      {option.positionLabel}
-                    </span>
-                  )}
-                  {option.preferredRoles && (
-                    <span
-                      className="replacement-player-preferences"
-                      aria-label={`Preferred roles: ${option.preferredRoles
-                        .map(preferredRoleLabel)
-                        .join(" and ")}`}
-                    >
-                      <span>Prefers</span>
-                      <strong>
-                        {compactPreferredRolesLabel(option.preferredRoles)}
-                      </strong>
-                    </span>
-                  )}
-                  <span className="replacement-player-times">
-                    {option.times.map((time) => (
-                      <span key={time.label}>
-                        <span>{time.label}</span>
-                        <strong>{time.value}</strong>
-                      </span>
-                    ))}
-                  </span>
-                  {option.statusText && (
-                    <span
-                      className={`player-action-menu-status ${
-                        option.statusDirection === "outgoing"
-                          ? "outgoing-status"
-                          : "incoming-status"
-                      }`}
-                    >
-                      <ArrowRightLeft size={13} aria-hidden="true" />
-                      {option.statusText}
-                    </span>
-                  )}
-                </span>
-              </ActionList.Item>
+                    </ActionList.Item>
+                  );
+                })}
+              </ActionList.Group>
             );
           })}
         </ActionList>
@@ -5803,22 +6024,28 @@ function SubstitutionPlanner({
   initialPairs,
   onClose,
   onConfirm,
+  manualPlanning = false,
 }: {
   game: ActiveGame;
   team: Team;
   initialPairs?: SubstitutionPair[];
   onClose: () => void;
   onConfirm: (pairs: SubstitutionPair[]) => void;
+  manualPlanning?: boolean;
 }) {
   const countLimitId = useId();
   const routineRotation = getRoutineRotationStatus(game);
-  const recommendedCount = getRecommendedSubstitutionCount(game, team);
+  const recommendedCount = manualPlanning
+    ? 0
+    : getRecommendedSubstitutionCount(game, team);
   const initialCount = initialPairs?.length ?? recommendedCount;
   const [count, setCount] = useState(initialCount);
   const [pairs, setPairs] = useState<SubstitutionPair[]>(
     () =>
       initialPairs?.map((pair) => ({ ...pair })) ??
-      suggestSubstitutions(game, recommendedCount, team),
+      (manualPlanning
+        ? []
+        : suggestSubstitutions(game, recommendedCount, team)),
   );
   const [hasCoachSelections, setHasCoachSelections] = useState(
     Boolean(initialPairs?.length),
@@ -5895,9 +6122,11 @@ function SubstitutionPlanner({
       ),
     };
   };
-  const availableCount = hasCoachSelections
-    ? pairs.length + getMaxSubstitutionCount(getRemainingGame(pairs), team)
-    : getMaxSubstitutionCount(game, team);
+  const availableCount = manualPlanning
+    ? Math.min(game.benchIds.length, Object.keys(game.assignments).length)
+    : hasCoachSelections
+      ? pairs.length + getMaxSubstitutionCount(getRemainingGame(pairs), team)
+      : getMaxSubstitutionCount(game, team);
   const maxCount = Math.min(
     game.benchIds.length,
     Object.keys(game.assignments).length,
@@ -5918,7 +6147,7 @@ function SubstitutionPlanner({
   const keeperNotice = getKeeperChangeNotice(
     game,
     team,
-    pairs,
+    pairs.filter((pair) => pair.inPlayerId && pair.outPlayerId),
     "next-rotation",
   );
   const showCountLimit = Boolean(
@@ -6031,7 +6260,15 @@ function SubstitutionPlanner({
   const updateIncomingPlayer = (index: number, inPlayerId: string) => {
     setHasCoachSelections(true);
     setPairs((current) =>
-      reassignIncomingSubstitution(game, current, index, inPlayerId, team),
+      manualPlanning
+        ? current.map((pair, pairIndex) =>
+            pairIndex === index
+              ? { ...pair, inPlayerId }
+              : pair.inPlayerId === inPlayerId
+                ? { ...pair, inPlayerId: current[index].inPlayerId }
+                : pair,
+          )
+        : reassignIncomingSubstitution(game, current, index, inPlayerId, team),
     );
   };
   const updateOutgoingPlayer = (index: number, outPlayerId: string) => {
@@ -6041,7 +6278,7 @@ function SubstitutionPlanner({
     );
   };
   const removePair = (index: number) => {
-    if (pairs.length <= 1) return;
+    if (!manualPlanning && pairs.length <= 1) return;
     const nextPairs = pairs.filter((_, pairIndex) => pairIndex !== index);
     setHasCoachSelections(true);
     setActivePlayerMenuId(null);
@@ -6052,14 +6289,40 @@ function SubstitutionPlanner({
     new Set(pairs.map((pair) => pair.outPlayerId)).size !== pairs.length;
   const duplicateIns =
     new Set(pairs.map((pair) => pair.inPlayerId)).size !== pairs.length;
-  const pairErrors = validateSubstitutionPairs(game, pairs);
+  const hasIncompleteSwaps = pairs.some(
+    (pair) => !pair.inPlayerId || !pair.outPlayerId,
+  );
+  const pairErrors =
+    manualPlanning && (pairs.length === 0 || hasIncompleteSwaps)
+      ? []
+      : validateSubstitutionPairs(game, pairs);
   const waitingForManualCount =
-    !routineRotation.recommended && pairs.length === 0;
+    !manualPlanning && !routineRotation.recommended && pairs.length === 0;
   const valid =
     pairs.length === count &&
+    !hasIncompleteSwaps &&
     !duplicateOuts &&
     !duplicateIns &&
     pairErrors.length === 0;
+  const canAddManualPair =
+    manualPlanning &&
+    pairs.length < game.benchIds.length &&
+    pairs.length + pairs.filter((pair) => pair.keeperHandoff).length <
+      Object.keys(game.assignments).length;
+  const remainingBenchCount = game.benchIds.length - pairs.length;
+  const addManualPair = () => {
+    if (!canAddManualPair) return;
+    // Empty rows are editor-only; readiness validation prevents saving them.
+    const nextPairs = [
+      ...pairs,
+      { positionId: "", inPlayerId: "", outPlayerId: "" },
+    ];
+    setOverrideError("");
+    setActivePlayerMenuId(null);
+    overrideFocusIndex.current = pairs.length;
+    setPairs(nextPairs);
+    setCount(nextPairs.length);
+  };
   const timeBandSeconds = getSubstitutionTimeBandSize(game);
   const rotationIntervalSeconds =
     getSubstitutionReminderStatus(game).intervalSeconds;
@@ -6084,11 +6347,13 @@ function SubstitutionPlanner({
     <SidelineDialog
       title="Substitution plan"
       description={
-        routineRotation.recommended
-          ? routineRotation.promptRecommended
-            ? "Suggested for fairness. Ready the plan now, then send the players in when the change happens."
-            : "Suggested for the period break. Ready the plan now, then send the players in when the change happens."
-          : "No further reminders are scheduled. You can still create a substitution plan."
+        manualPlanning
+          ? "Choose each swap, then review before sending anyone in. No players are selected automatically."
+          : routineRotation.recommended
+            ? routineRotation.promptRecommended
+              ? "Suggested for fairness. Ready the plan now, then send the players in when the change happens."
+              : "Suggested for the period break. Ready the plan now, then send the players in when the change happens."
+            : "No further reminders are scheduled. You can still create a substitution plan."
       }
       onClose={onClose}
       width="720px"
@@ -6108,12 +6373,21 @@ function SubstitutionPlanner({
             variant="primary"
             size="large"
             leadingVisual={Check}
-            disabled={!valid}
+            disabled={
+              !valid ||
+              (manualPlanning && pairs.length === 0 && !initialPairs?.length)
+            }
             onClick={() => onConfirm(pairs)}
           >
-            {waitingForManualCount
-              ? "Choose a swap count"
-              : `Ready ${count} swap${count === 1 ? "" : "s"}`}
+            {hasIncompleteSwaps
+              ? "Choose players"
+              : manualPlanning && pairs.length === 0
+                ? initialPairs?.length
+                  ? "Clear plan"
+                  : "Choose a swap"
+                : waitingForManualCount
+                  ? "Choose a swap count"
+                  : `Ready ${count} swap${count === 1 ? "" : "s"}`}
           </Button>
         </>
       }
@@ -6124,36 +6398,38 @@ function SubstitutionPlanner({
         onPointerDownCapture={dismissMenuOnSelectorPointerDown}
         onClickCapture={consumeDismissalClick}
       >
-        <div className="sub-count">
-          <span>Players to swap</span>
-          <div
-            className="stepper"
-            role="group"
-            aria-label="Players to swap"
-            aria-describedby={
-              showCountLimit
-                ? countLimitId
-                : keeperNotice
-                  ? keeperNoticeId
-                  : undefined
-            }
-          >
-            {Array.from({ length: maxCount }, (_, index) => index + 1).map(
-              (value) => (
-                <button
-                  type="button"
-                  key={value}
-                  className={count === value ? "active" : ""}
-                  aria-pressed={count === value}
-                  disabled={value > availableCount && !canOverrideKeeper}
-                  onClick={() => changeCount(value)}
-                >
-                  {value}
-                </button>
-              ),
-            )}
+        {!manualPlanning && (
+          <div className="sub-count">
+            <span>Players to swap</span>
+            <div
+              className="stepper"
+              role="group"
+              aria-label="Players to swap"
+              aria-describedby={
+                showCountLimit
+                  ? countLimitId
+                  : keeperNotice
+                    ? keeperNoticeId
+                    : undefined
+              }
+            >
+              {Array.from({ length: maxCount }, (_, index) => index + 1).map(
+                (value) => (
+                  <button
+                    type="button"
+                    key={value}
+                    className={count === value ? "active" : ""}
+                    aria-pressed={count === value}
+                    disabled={value > availableCount && !canOverrideKeeper}
+                    onClick={() => changeCount(value)}
+                  >
+                    {value}
+                  </button>
+                ),
+              )}
+            </div>
           </div>
-        </div>
+        )}
         <KeeperMoveSummary
           pairs={pairs}
           team={team}
@@ -6168,22 +6444,33 @@ function SubstitutionPlanner({
         <KeeperChangeNotice notice={keeperNotice} id={keeperNoticeId} />
 
         <div className="swap-list">
-          <div className="swap-column-headings" aria-hidden="true">
-            <span className="in-label">IN</span>
-            <span className="out-label">OUT</span>
-          </div>
+          {pairs.length > 0 && (
+            <div className="swap-column-headings" aria-hidden="true">
+              <span className="in-label">IN</span>
+              <span className="out-label">OUT</span>
+            </div>
+          )}
           {orderSubstitutionPairsForDisplay(pairs).map(
             ({ pair, index: originalIndex }, displayIndex) => {
               const position = formation.positions.find(
                 (item) => item.id === pair.positionId,
               );
               const outgoingOptions = outgoingChoices
+                .filter(
+                  ([, id]) =>
+                    !manualPlanning ||
+                    !pairs.some(
+                      (other) =>
+                        other.keeperHandoff &&
+                        (other.outPlayerId === id ||
+                          other.keeperHandoff.playerId === id),
+                    ),
+                )
                 .map(([positionId, playerId]) => {
                   const usedInSwap = pairs.findIndex(
-                    (otherPair, pairIndex) =>
-                      pairIndex !== originalIndex &&
-                      (otherPair.outPlayerId === playerId ||
-                        otherPair.keeperHandoff?.playerId === playerId),
+                    (otherPair) =>
+                      otherPair.outPlayerId === playerId ||
+                      otherPair.keeperHandoff?.playerId === playerId,
                   );
                   const candidatePosition = formation.positions.find(
                     (item) => item.id === positionId,
@@ -6237,10 +6524,9 @@ function SubstitutionPlanner({
                     ],
                     statusText:
                       usedInSwap >= 0
-                        ? `Scheduled out for ${playerName(
-                            team,
-                            pairs[usedInSwap].inPlayerId,
-                          )}`
+                        ? pairs[usedInSwap].inPlayerId
+                          ? `Scheduled out for ${playerName(team, pairs[usedInSwap].inPlayerId)}`
+                          : "Already in another swap"
                         : undefined,
                     statusDirection: "outgoing" as const,
                   };
@@ -6249,9 +6535,7 @@ function SubstitutionPlanner({
               const incomingOptions = movePlannedOptionsLast(
                 incomingChoices.map((playerId) => {
                   const usedInSwap = pairs.findIndex(
-                    (otherPair, pairIndex) =>
-                      pairIndex !== originalIndex &&
-                      otherPair.inPlayerId === playerId,
+                    (otherPair) => otherPair.inPlayerId === playerId,
                   );
                   const player = team.roster.find(
                     (item) => item.id === playerId,
@@ -6279,10 +6563,9 @@ function SubstitutionPlanner({
                     ],
                     statusText:
                       usedInSwap >= 0
-                        ? `Scheduled in for ${playerName(
-                            team,
-                            pairs[usedInSwap].outPlayerId,
-                          )}`
+                        ? pairs[usedInSwap].outPlayerId
+                          ? `Scheduled in for ${playerName(team, pairs[usedInSwap].outPlayerId)}`
+                          : "Already in another swap"
                         : undefined,
                   };
                 }),
@@ -6295,6 +6578,7 @@ function SubstitutionPlanner({
                   options={incomingOptions}
                   align="start"
                   menuTitle="Who should go in?"
+                  direction="in"
                   showPreferenceFit={false}
                   activeMenuId={activePlayerMenuId}
                   onActiveMenuChange={setActivePlayerMenuId}
@@ -6307,6 +6591,10 @@ function SubstitutionPlanner({
                 <div
                   className={`swap-row ${
                     pair.keeperHandoff ? "keeper-handoff-row" : ""
+                  } ${
+                    !pair.inPlayerId || !pair.outPlayerId
+                      ? "incomplete-swap"
+                      : ""
                   }`}
                   key={originalIndex}
                 >
@@ -6335,10 +6623,13 @@ function SubstitutionPlanner({
                           value={pair.outPlayerId}
                           options={outgoingOptions}
                           align="end"
-                          menuTitle={`Who should ${playerName(
-                            team,
-                            pair.inPlayerId,
-                          )} replace?`}
+                          direction="out"
+                          menuTitle={
+                            pair.inPlayerId
+                              ? `Who should ${playerName(team, pair.inPlayerId)} replace?`
+                              : "Who should go out?"
+                          }
+                          showPreferenceFit={Boolean(pair.inPlayerId)}
                           activeMenuId={activePlayerMenuId}
                           onActiveMenuChange={setActivePlayerMenuId}
                           onChange={(playerId) =>
@@ -6353,22 +6644,42 @@ function SubstitutionPlanner({
                     variant="invisible"
                     size="large"
                     icon={Trash2}
-                    aria-label={`Remove substitution ${
-                      displayIndex + 1
-                    }: ${playerName(team, pair.inPlayerId)} for ${playerName(
-                      team,
-                      pair.outPlayerId,
-                    )}`}
-                    disabled={pairs.length <= 1}
+                    aria-label={
+                      !pair.inPlayerId || !pair.outPlayerId
+                        ? `Remove substitution ${displayIndex + 1}`
+                        : `Remove substitution ${
+                            displayIndex + 1
+                          }: ${playerName(team, pair.inPlayerId)} for ${playerName(
+                            team,
+                            pair.outPlayerId,
+                          )}`
+                    }
+                    disabled={!manualPlanning && pairs.length <= 1}
                     onClick={() => removePair(originalIndex)}
                   />
                 </div>
               );
             },
           )}
+          {canAddManualPair && (
+            <div className="manual-swap-add-row">
+              <span>
+                {pairs.length ? "Swap another player." : "Swap a player."}{" "}
+                {remainingBenchCount} left on bench.
+              </span>
+              <IconButton
+                className="manual-swap-add"
+                variant="invisible"
+                size="large"
+                icon={UserRoundPlus}
+                aria-label="Add swap"
+                onClick={addManualPair}
+              />
+            </div>
+          )}
         </div>
 
-        {!valid && !waitingForManualCount && (
+        {!valid && !hasIncompleteSwaps && !waitingForManualCount && (
           <p className="error-message">
             {pairErrors[0] ??
               "Choose a different outgoing and incoming player for every swap."}
@@ -7480,6 +7791,7 @@ function ConfirmSheet({
   confirmIcon = <Square size={18} aria-hidden="true" />,
   confirmClassName = "danger-action",
   showClose = false,
+  confirmDisabled = false,
   onCancel,
   onConfirm,
 }: {
@@ -7491,6 +7803,7 @@ function ConfirmSheet({
   confirmIcon?: ElementType | ReactElement;
   confirmClassName?: "primary-action" | "danger-action";
   showClose?: boolean;
+  confirmDisabled?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -7521,6 +7834,7 @@ function ConfirmSheet({
             size="large"
             leadingVisual={confirmIcon}
             onClick={onConfirm}
+            disabled={confirmDisabled}
           >
             {confirmLabel}
           </Button>

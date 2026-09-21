@@ -54,9 +54,15 @@ U8 also remembers one game's kickoff lineup on this device. Automatic starter se
 
 The header settings menu can keep the screen awake during an active visible game and play a chime plus supported vibration when a substitution reminder becomes due. Both features are optional and depend on browser/device capabilities.
 
+**Settings → Manual planning** turns off automatic live rotation selection on this device; it is off by default. Bench drops build or update a saved plan instead of sending players in. Tapping players and **Create plan** provide keyboard-accessible alternatives. In the editor, the **Add swap** person-plus icon below the swaps adds a row with IN / OUT player pickers; the add row disappears when the plan is full. Choose both players or remove an unfinished row before readying the plan. Review the OUT / IN checklist, then **Send players in** when ready. Replacing ordinary pairings by drag updates the plan immediately without confirmation; a drop that conflicts with a linked keeper change opens its editor instead. Warnings and reminders remain, but a deadline does not automatically open the planner.
+
+In manual planning, **Sub now** still executes immediately and keeps unaffected planned swaps without generating replacements. Taking a field player out requires choosing their bench replacement, unless no bench is available. Switching modes preserves the saved plan, lineup, and timers. Starter selection and filling a short-sided vacancy when a player returns remain unchanged. The automatic replanning and immediate-drag behavior described below applies when Manual planning is off.
+
 Drag a live bench player onto a field player to send that substitution immediately. On touchscreens, hold briefly (125ms) before dragging; phones show a temporary pitch so you do not have to scroll while holding a player. Release away from a player to cancel. Tapping a row still opens the keyboard-accessible planner, and Bench / On field tabs use taps rather than swipes.
 
 With no bench players available, tapping a pitch card explains that a player must be added or returned before making a substitution. Position changes and player removal remain available in **On field**, and pitch dragging still works.
+
+In both planning modes, the drag pitch shows each queued incoming player beneath the current player with a substitution icon. For a linked keeper handoff, goal shows the moving outfielder with a Move icon, while their old position shows the bench replacement. This context reflects the saved plan; hovering does not rewrite it.
 
 Immediate swaps and taking a player out leave the team rotation timer running toward its existing deadline. Only sending a planned rotation, including a partial batch, restarts that interval. Each player's playing and bench times still update for every change.
 

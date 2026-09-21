@@ -28,6 +28,7 @@ type Options = {
   benchIds: string[];
   assignments: Record<string, string>;
   onDrop: (incomingId: string, outgoingId: string) => boolean;
+  manualPlanning?: boolean;
 };
 
 export function useLiveBenchDrag(options: Options) {
@@ -258,7 +259,11 @@ export function useLiveBenchDrag(options: Options) {
         currentOptions.current.benchIds.includes(current.playerId)
       ) {
         if (currentOptions.current.onDrop(current.playerId, outgoingId)) {
-          setMessage("Substitution sent immediately.");
+          setMessage(
+            currentOptions.current.manualPlanning
+              ? "Swap added to plan. Lineup unchanged."
+              : "Substitution sent immediately.",
+          );
         }
       } else {
         setMessage("Substitution cancelled. Lineup unchanged.");

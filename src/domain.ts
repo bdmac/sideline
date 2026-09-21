@@ -2593,6 +2593,7 @@ export const applyImmediateSubstitution = (
   outPlayerId: string,
   team: Team,
   now = Date.now(),
+  options: { manualPlanning?: boolean } = {},
 ): ActiveGame => {
   if (game.teamId !== team.id) {
     throw new Error("The substitution must use the active game's team");
@@ -2607,23 +2608,32 @@ export const applyImmediateSubstitution = (
     ...next,
     benchIds: next.benchIds.filter((id) => id !== outPlayerId),
   };
-  const count = remainingCount
-    ? Math.min(
-        remainingCount,
-        getRecommendedSubstitutionCount(planningGame, team),
+  const count =
+    !options.manualPlanning && remainingCount
+      ? Math.min(
+          remainingCount,
+          getRecommendedSubstitutionCount(planningGame, team),
+        )
+      : 0;
+  const refreshedPairs = options.manualPlanning
+    ? previousPlan.filter(
+        (planned) => validateSubstitutionPairs(next, [planned]).length === 0,
       )
-    : 0;
-  const refreshedPairs = count
-    ? suggestSubstitutions(planningGame, count, team)
-    : [];
+    : count
+      ? suggestSubstitutions(planningGame, count, team)
+      : [];
   const refreshed = refreshedPairs.length
     ? queueSubstitutions(next, refreshedPairs)
     : next;
   const note = previousPlan.length
     ? refreshedPairs.length
-      ? `Sent immediately. Refreshed the remaining plan with ${refreshedPairs.length} ${
-          refreshedPairs.length === 1 ? "substitution" : "substitutions"
-        }.`
+      ? options.manualPlanning
+        ? refreshedPairs.length === previousPlan.length
+          ? "Sent immediately. Unaffected planned swaps were kept."
+          : "Sent immediately. Unaffected planned swaps were kept; conflicting swaps were removed."
+        : `Sent immediately. Refreshed the remaining plan with ${refreshedPairs.length} ${
+            refreshedPairs.length === 1 ? "substitution" : "substitutions"
+          }.`
       : "Sent immediately. No substitutions remain in the plan."
     : "Sent immediately. No plan was created.";
   return {
@@ -2790,6 +2800,7 @@ export const markUnavailable = (
   playerId: string,
   sideSize: number,
   now = Date.now(),
+  options: { manualPlanning?: boolean; replacementPlayerId?: string } = {},
 ): ActiveGame => {
   const current = materializeGame(game, now);
   if (current.unavailableIds.includes(playerId)) return current;
@@ -2805,13 +2816,27 @@ export const markUnavailable = (
   const pairs: SubstitutionPair[] = [];
   if (fieldPosition) {
     delete assignments[fieldPosition];
-    const replacement = benchIds
-      .filter((id) => !current.unavailableIds.includes(id))
-      .sort(
-        (a, b) =>
-          (current.totals[b]?.benchSeconds ?? 0) -
-          (current.totals[a]?.benchSeconds ?? 0),
-      )[0];
+    if (
+      options.manualPlanning &&
+      benchIds.length > 0 &&
+      (!options.replacementPlayerId ||
+        !benchIds.includes(options.replacementPlayerId))
+    ) {
+      throw new Error(
+        "Choose an available bench replacement before removing this player.",
+      );
+    }
+    const replacement = options.manualPlanning
+      ? benchIds.length
+        ? options.replacementPlayerId
+        : undefined
+      : benchIds
+          .filter((id) => !current.unavailableIds.includes(id))
+          .sort(
+            (a, b) =>
+              (current.totals[b]?.benchSeconds ?? 0) -
+              (current.totals[a]?.benchSeconds ?? 0),
+          )[0];
     if (replacement) {
       assignments[fieldPosition] = replacement;
       benchIds = benchIds.filter((id) => id !== replacement);
@@ -2820,7 +2845,9 @@ export const markUnavailable = (
         outPlayerId: playerId,
         inPlayerId: replacement,
       });
-      note = "Player left game; fairest bench player entered";
+      note = options.manualPlanning
+        ? "Player left game; coach-selected bench player entered"
+        : "Player left game; fairest bench player entered";
     } else {
       note = "Player left game; no replacement available";
     }
@@ -2829,7 +2856,10 @@ export const markUnavailable = (
     ?.filter(
       (pair) =>
         benchIds.includes(pair.inPlayerId) &&
-        assignments[pair.positionId] === pair.outPlayerId,
+        assignments[pair.positionId] === pair.outPlayerId &&
+        (!pair.keeperHandoff ||
+          assignments[pair.keeperHandoff.fromPositionId] ===
+            pair.keeperHandoff.playerId),
     )
     .map((pair) => ({ ...pair }));
   const next: ActiveGame = {

@@ -1,32 +1,65 @@
-import { ArrowRightLeft, CircleAlert } from "lucide-react";
+import { ArrowRightLeft, CircleAlert, Move } from "lucide-react";
 import type { RefObject } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import type { Formation, Player } from "./types";
-import { getCompactDropPositions } from "./benchDropModel";
+import type { Formation, Player, SubstitutionPair } from "./types";
+import {
+  getCompactDropPositions,
+  getPlannedPositionChange,
+} from "./benchDropModel";
 import { preferredRoleLabel } from "./playerLabels";
 import { PlayerIdentity } from "./PlayerIdentity";
+
+export function PlannedPitchIncoming({
+  change,
+  players,
+}: {
+  change: ReturnType<typeof getPlannedPositionChange>;
+  players: Player[];
+}) {
+  if (!change) return null;
+  const name =
+    players.find((player) => player.id === change.playerId)?.name ??
+    "Unknown player";
+  const Icon = change.kind === "move" ? Move : ArrowRightLeft;
+  return (
+    <span
+      className="planned-pitch-incoming"
+      aria-label={`${change.kind === "move" ? "Planned move" : "Planned in"}: ${name}`}
+      title={`${change.kind === "move" ? "Planned move" : "Planned in"}: ${name}`}
+    >
+      <Icon size={12} aria-hidden="true" />
+      <span>{name}</span>
+    </span>
+  );
+}
 
 export function LiveBenchDropPitch({
   compact,
   formation,
   assignments,
+  queuedSubstitutions,
   players,
   incoming,
   targetPositionId,
   pitchRef,
   fieldRef,
   warning,
+  manualPlanning = false,
+  planImpact,
 }: {
   compact: boolean;
   formation: Formation;
   assignments: Record<string, string>;
+  queuedSubstitutions?: SubstitutionPair[];
   players: Player[];
   incoming: Player;
   targetPositionId: string | null;
   pitchRef: RefObject<HTMLDivElement | null>;
   fieldRef: RefObject<HTMLDivElement | null>;
   warning?: string;
+  manualPlanning?: boolean;
+  planImpact?: string;
 }) {
   const statusRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
@@ -83,15 +116,17 @@ export function LiveBenchDropPitch({
           </div>
         ) : (
           <p className="bench-drop-instruction">
-            Drop on a player to send {incoming.name} in now.
+            {manualPlanning
+              ? `Drop on a player to plan ${incoming.name}'s swap.`
+              : `Drop on a player to send ${incoming.name} in now.`}
           </p>
         )}
       </div>
       <div className="bench-drop-notice">
-        {warning && (
+        {(warning || planImpact) && (
           <p className="bench-drop-warning">
             <CircleAlert size={15} aria-hidden="true" />
-            {warning}
+            {warning || planImpact}
           </p>
         )}
       </div>
@@ -104,7 +139,11 @@ export function LiveBenchDropPitch({
       <aside
         ref={statusRef}
         className="bench-drag-status"
-        aria-label="Immediate substitution preview"
+        aria-label={
+          manualPlanning
+            ? "Planned substitution preview"
+            : "Immediate substitution preview"
+        }
       >
         {summary}
       </aside>,
@@ -132,10 +171,15 @@ export function LiveBenchDropPitch({
               (candidate) => candidate.id === assignments[item.id],
             );
             const positionLabel = item.mediumLabel;
+            const plannedChange = getPlannedPositionChange(
+              item.id,
+              assignments,
+              queuedSubstitutions,
+            );
             return (
               <div
                 key={item.id}
-                className={`bench-drop-target ${item.id === targetPositionId ? "selected" : ""} ${player ? "" : "empty"}`}
+                className={`bench-drop-target ${item.id === targetPositionId ? "selected" : ""} ${player ? "" : "empty"} ${plannedChange ? "has-planned-change" : ""}`}
                 data-position-id={item.id}
                 style={{ left: `${item.x}%`, top: `${item.y}%` }}
               >
@@ -146,6 +190,10 @@ export function LiveBenchDropPitch({
                   />
                 </strong>
                 <small>{positionLabel}</small>
+                <PlannedPitchIncoming
+                  change={plannedChange}
+                  players={players}
+                />
               </div>
             );
           })}

@@ -1,4 +1,27 @@
-import type { Formation, Position } from "./types";
+import type { Formation, Position, SubstitutionPair } from "./types";
+
+export function getPlannedPositionChange(
+  positionId: string,
+  assignments: Record<string, string>,
+  queuedSubstitutions: readonly SubstitutionPair[] = [],
+): { playerId: string; kind: "substitution" | "move" } | undefined {
+  for (const pair of queuedSubstitutions) {
+    if (assignments[pair.positionId] !== pair.outPlayerId) continue;
+    const handoff = pair.keeperHandoff;
+    if (handoff && assignments[handoff.fromPositionId] !== handoff.playerId) {
+      continue;
+    }
+    if (pair.positionId === positionId) {
+      return {
+        playerId: handoff?.playerId ?? pair.inPlayerId,
+        kind: handoff ? "move" : "substitution",
+      };
+    }
+    if (handoff?.fromPositionId === positionId) {
+      return { playerId: pair.inPlayerId, kind: "substitution" };
+    }
+  }
+}
 
 export function getCompactDropPositions(formation: Formation): Position[] {
   const lines: Position[][] = [];

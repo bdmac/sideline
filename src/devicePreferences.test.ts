@@ -18,12 +18,14 @@ describe("device preferences", () => {
       keepScreenAwake: true,
       substitutionAlerts: true,
       demoClock: true,
+      manualPlanning: true,
     });
 
     expect(loadDevicePreferences()).toEqual({
       keepScreenAwake: true,
       substitutionAlerts: true,
       demoClock: true,
+      manualPlanning: true,
     });
   });
 
@@ -39,6 +41,7 @@ describe("device preferences", () => {
       keepScreenAwake: false,
       substitutionAlerts: true,
       demoClock: false,
+      manualPlanning: false,
     });
 
     const consoleError = vi
@@ -48,5 +51,15 @@ describe("device preferences", () => {
     expect(loadDevicePreferences()).toEqual(DEFAULT_DEVICE_PREFERENCES);
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+
+  it("defaults existing installs to assisted planning and ignores invalid mode values", () => {
+    for (const saved of [{ demoClock: true }, { manualPlanning: "yes" }]) {
+      localStorage.setItem(
+        DEVICE_PREFERENCES_STORAGE_KEY,
+        JSON.stringify(saved),
+      );
+      expect(loadDevicePreferences().manualPlanning).toBe(false);
+    }
   });
 });

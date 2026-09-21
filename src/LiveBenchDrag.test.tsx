@@ -3,8 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRef } from "react";
 import App from "./App";
 import { LiveBenchDropPitch } from "./LiveBenchDropPitch";
-import { getCompactDropPositions } from "./benchDropModel";
+import {
+  getCompactDropPositions,
+  getPlannedPositionChange,
+} from "./benchDropModel";
 import { COACH_ID_STORAGE_KEY } from "./coaches";
+import { DEVICE_PREFERENCES_STORAGE_KEY } from "./devicePreferences";
 import {
   createGame,
   FORMATIONS,
@@ -107,6 +111,242 @@ describe("live bench dragging", () => {
     vi.restoreAllMocks();
   });
 
+  it.each([
+    { width: 390, manualPlanning: false },
+    { width: 390, manualPlanning: true },
+    { width: 1024, manualPlanning: false },
+    { width: 1024, manualPlanning: true },
+  ])(
+    "shows saved incoming players during dragging at $width (manual: $manualPlanning)",
+    ({ width, manualPlanning }) => {
+      localStorage.setItem(
+        DEVICE_PREFERENCES_STORAGE_KEY,
+        JSON.stringify({ manualPlanning }),
+      );
+      const { game, team, source } = setup(width, true);
+      pointer(source, "pointerdown", 750, 500);
+      pointer(source, "pointermove", 250, 240);
+      const pitch =
+        width <= 760
+          ? screen.getByLabelText("Temporary substitution pitch")
+          : document.querySelector(".live-pitch-frame .pitch")!;
+      for (const pair of game.queuedSubstitutions!) {
+        expect(pair.keeperHandoff).toBeUndefined();
+        const target = pitch.querySelector(
+          `[data-position-id="${pair.positionId}"]`,
+        )!;
+        const name = team.roster.find(
+          (player) => player.id === pair.inPlayerId,
+        )!.name;
+        const marker = within(target as HTMLElement).getByLabelText(
+          `Planned in: ${name}`,
+        );
+        expect(marker).toHaveTextContent(name);
+        expect(
+          marker.querySelector(".lucide-arrow-right-left"),
+        ).toBeInTheDocument();
+      }
+      const pair = game.queuedSubstitutions![0];
+      const target = pitch.querySelector(
+        `[data-position-id="${pair.positionId}"]`,
+      )!;
+      bounds(target);
+      pointer(source, "pointermove", 250, 240);
+      expect(target.querySelector(".planned-pitch-incoming")).toHaveTextContent(
+        team.roster.find((player) => player.id === pair.inPlayerId)!.name,
+      );
+      expect(savedGame()).toEqual(game);
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(
+        document.querySelector(".planned-pitch-incoming"),
+      ).not.toBeInTheDocument();
+      expect(savedGame()).toEqual(game);
+    },
+  );
+
+  it.each(["u8", "u12"] as const)(
+    "shows the correct arrivals at both ends of a %s linked keeper move",
+    (teamId) => {
+      const { state, game, team, pairs, moverId, fromPositionId } =
+        keeperHandoffGame(teamId);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      window.innerWidth = 390;
+      render(<App />);
+      const benchId = game.benchIds.find(
+        (id) => !pairs.some((pair) => pair.inPlayerId === id),
+      )!;
+      const source = document.querySelector(
+        `[data-live-bench-player-id="${benchId}"]`,
+      )!;
+      pointer(source, "pointerdown", 90, 620);
+      pointer(source, "pointermove", 110, 580);
+      const pitch = screen.getByLabelText("Temporary substitution pitch");
+      const keeper = pitch.querySelector(
+        `[data-position-id="${pairs[0].positionId}"]`,
+      )!;
+      const outfield = pitch.querySelector(
+        `[data-position-id="${fromPositionId}"]`,
+      )!;
+      const moverName = team.roster.find(
+        (player) => player.id === moverId,
+      )!.name;
+      const benchName = team.roster.find(
+        (player) => player.id === pairs[0].inPlayerId,
+      )!.name;
+      const keeperMarker = within(keeper as HTMLElement).getByLabelText(
+        `Planned move: ${moverName}`,
+      );
+      expect(keeperMarker.querySelector(".lucide-move")).toBeInTheDocument();
+      expect(keeperMarker).not.toHaveTextContent(benchName);
+      const benchMarker = within(outfield as HTMLElement).getByLabelText(
+        `Planned in: ${benchName}`,
+      );
+      expect(
+        benchMarker.querySelector(".lucide-arrow-right-left"),
+      ).toBeInTheDocument();
+      expect(savedGame()).toEqual(game);
+    },
+  );
+
+  it.each([390, 1024])(
+    "builds a manual plan with successive bench drops at width %s without sending anyone in",
+    (width) => {
+      localStorage.setItem(
+        DEVICE_PREFERENCES_STORAGE_KEY,
+        JSON.stringify({ manualPlanning: true }),
+      );
+      const { game, source, target } = setup(width);
+      const drop = (incoming: Element, outgoing: Element) => {
+        bounds(outgoing);
+        pointer(incoming, "pointerdown", 750, 500);
+        pointer(incoming, "pointermove", 250, 240);
+        if (width <= 760) {
+          const compactTarget = document.querySelector(
+            `[data-position-id="${outgoing.getAttribute("data-position-id")}"].bench-drop-target`,
+          )!;
+          bounds(compactTarget);
+          pointer(incoming, "pointermove", 250, 240);
+        }
+        pointer(incoming, "pointerup", 250, 240);
+      };
+      drop(source, target);
+      expect(savedGame().queuedSubstitutions).toEqual([
+        { positionId: "dl", inPlayerId: "u12-p12", outPlayerId: "u12-p2" },
+      ]);
+      expect(savedGame().assignments).toEqual(game.assignments);
+      expect(savedGame().totals).toEqual(game.totals);
+      expect(savedGame().history).toEqual(game.history);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      const secondSource = document.querySelector(
+        '[data-live-bench-player-id="u12-p13"]',
+      )!;
+      const secondTarget = screen.getByRole("button", {
+        name: /^Plan substitution for Nikola/,
+      });
+      vi.mocked(target.getBoundingClientRect).mockRestore();
+      drop(secondSource, secondTarget);
+      expect(savedGame().queuedSubstitutions).toHaveLength(2);
+      expect(savedGame().assignments).toEqual(game.assignments);
+      expect(savedGame().history).toEqual(game.history);
+      fireEvent.click(screen.getByRole("button", { name: "Review plan" }));
+      fireEvent.click(
+        within(screen.getByRole("dialog")).getByRole("button", {
+          name: "Send players in",
+        }),
+      );
+      expect(savedGame().queuedSubstitutions).toBeUndefined();
+      expect(savedGame().assignments.dl).toBe("u12-p12");
+      expect(savedGame().history.at(-1)?.pairs).toHaveLength(2);
+    },
+  );
+
+  it("updates a manual pairing immediately on drop without changing the lineup", () => {
+    localStorage.setItem(
+      DEVICE_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({ manualPlanning: true }),
+    );
+    const { source } = setup();
+    const drop = (incoming: Element) => {
+      pointer(incoming, "pointerdown", 750, 500);
+      pointer(incoming, "pointermove", 250, 240);
+      pointer(incoming, "pointerup", 250, 240);
+    };
+    drop(source);
+    const before = savedGame();
+    const replacement = document.querySelector(
+      '[data-live-bench-player-id="u12-p13"]',
+    )!;
+    drop(replacement);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(savedGame().queuedSubstitutions).toEqual([
+      { positionId: "dl", inPlayerId: "u12-p13", outPlayerId: "u12-p2" },
+    ]);
+    expect(savedGame().assignments).toEqual(before.assignments);
+    expect(savedGame().totals).toEqual(before.totals);
+    expect(savedGame().history).toEqual(before.history);
+  });
+
+  it("replaces overlapping manual pairings on drop while preserving unrelated swaps", () => {
+    localStorage.setItem(
+      DEVICE_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({ manualPlanning: true }),
+    );
+    const { game } = setup(1024, true);
+    const pairs = game.queuedSubstitutions!;
+    const source = document.querySelector(
+      `[data-live-bench-player-id="${pairs[0].inPlayerId}"]`,
+    )!;
+    const target = document.querySelector(
+      `.pitch [data-position-id="${pairs[1].positionId}"]`,
+    )!;
+    bounds(target, 420, 320);
+    pointer(source, "pointerdown", 750, 500);
+    pointer(source, "pointermove", 420, 320);
+    expect(
+      screen.getByLabelText("Planned substitution preview"),
+    ).toHaveTextContent("Replaces planned swaps.");
+    pointer(source, "pointerup", 420, 320);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(savedGame().queuedSubstitutions).toEqual([
+      pairs[2],
+      { ...pairs[1], inPlayerId: pairs[0].inPlayerId },
+    ]);
+    expect(savedGame().assignments).toEqual(game.assignments);
+    expect(savedGame().history).toEqual(game.history);
+  });
+
+  it("routes a manual drop involving a linked keeper to editing without changing the lineup or plan", () => {
+    const { state, game } = keeperHandoffGame();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(
+      DEVICE_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({ manualPlanning: true }),
+    );
+    Object.defineProperty(window, "innerWidth", {
+      value: 1024,
+      configurable: true,
+      writable: true,
+    });
+    render(<App />);
+    const source = document.querySelector(
+      '[data-live-bench-player-id="u8-p10"]',
+    )!;
+    const target = screen.getByRole("button", {
+      name: "Review planned keeper move for Henry",
+    });
+    bounds(target);
+    pointer(source, "pointerdown", 750, 500);
+    pointer(source, "pointermove", 250, 240);
+    expect(
+      screen.getByLabelText("Planned substitution preview"),
+    ).toHaveTextContent("Keeper plan conflict");
+    pointer(source, "pointerup", 250, 240);
+    expect(
+      screen.getByRole("dialog", { name: "Substitution plan" }),
+    ).toHaveTextContent("Henry stays on");
+    expect(savedGame()).toEqual(game);
+  });
+
   it("asks before a bench drop replaces a saved keeper handoff", () => {
     Object.defineProperty(window, "innerWidth", {
       value: 1024,
@@ -159,6 +399,7 @@ describe("live bench dragging", () => {
         60,
       );
       const props = {
+        manualPlanning: true,
         compact: true,
         formation,
         assignments: game.assignments,
@@ -175,6 +416,9 @@ describe("live bench dragging", () => {
       const previewSlot = board.querySelector(".bench-drop-preview");
       const positionsSlot = board.querySelector(".bench-drop-positions");
       const noticeSlot = board.querySelector(".bench-drop-notice");
+      expect(
+        board.querySelector(".planned-pitch-incoming"),
+      ).not.toBeInTheDocument();
       expect(
         board.querySelector(".bench-drop-summary")?.firstElementChild,
       ).toBe(positionsSlot);
@@ -194,6 +438,21 @@ describe("live bench dragging", () => {
       expect(
         within(board).getByText("Early keeper change."),
       ).toBeInTheDocument();
+      expect(board).not.toHaveTextContent("Adds to plan");
+      rerender(
+        <LiveBenchDropPitch
+          {...props}
+          targetPositionId="gk"
+          warning="Early keeper change."
+          planImpact="Keeper plan conflict. Drop to edit."
+        />,
+      );
+      expect(board.querySelector(".bench-drop-notice")).toHaveTextContent(
+        "Early keeper change.",
+      );
+      expect(board.querySelector(".bench-drop-notice")).not.toHaveTextContent(
+        "Keeper plan conflict",
+      );
       for (const targetPositionId of ["dl", null]) {
         rerender(
           <LiveBenchDropPitch {...props} targetPositionId={targetPositionId} />,
@@ -503,6 +762,35 @@ describe("live bench dragging", () => {
       expect(validateGame(swapped, team.sideSize)).toEqual([]);
     },
   );
+});
+
+describe("planned drop-pitch changes", () => {
+  it("does not show arrivals for empty or stale position assignments", () => {
+    const { game, pairs, moverId, fromPositionId } = keeperHandoffGame();
+    const goalkeeperPosition = pairs[0].positionId;
+    expect(
+      getPlannedPositionChange(goalkeeperPosition, game.assignments),
+    ).toBeUndefined();
+    const changed = {
+      ...game.assignments,
+      [fromPositionId]: "different-player",
+    };
+    expect(
+      getPlannedPositionChange(goalkeeperPosition, changed, pairs),
+    ).toBeUndefined();
+    expect(
+      getPlannedPositionChange(fromPositionId, changed, pairs),
+    ).toBeUndefined();
+    expect(
+      getPlannedPositionChange(goalkeeperPosition, game.assignments, pairs),
+    ).toEqual({
+      playerId: moverId,
+      kind: "move",
+    });
+    expect(
+      getPlannedPositionChange(pairs[1].positionId, {}, pairs),
+    ).toBeUndefined();
+  });
 });
 
 describe("compact drop-pitch formation geometry", () => {

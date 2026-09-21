@@ -2971,6 +2971,54 @@ select:hover {
   opacity: 0.45;
 }
 
+.bench-drop-target.has-planned-change {
+  gap: 0;
+  padding-block: 0.1rem;
+}
+
+.bench-drop-target.has-planned-change > strong {
+  line-height: 1.1;
+}
+
+.bench-drop-target.has-planned-change > small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.planned-pitch-incoming {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--warm-dark);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.planned-pitch-incoming svg {
+  flex: none;
+}
+
+.planned-pitch-incoming > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pitch-player .planned-pitch-incoming {
+  grid-column: 1 / -1;
+  grid-row: 3;
+}
+
+.pitch-player.keeper-move-planned .planned-pitch-incoming {
+  grid-row: 4;
+}
+
 .bench-drop-summary {
   min-width: 0;
   min-height: 0;
@@ -4323,6 +4371,28 @@ select:hover {
   line-height: 1.4;
 }
 
+.sideline-player-action-list [data-component="GroupHeadingWrap"] {
+  padding: 0;
+  margin-inline: 0.5rem;
+}
+
+.sideline-player-action-list [data-component="ActionList.Group"],
+.sideline-player-action-list [role="group"] {
+  margin-block: 0;
+}
+
+.sideline-player-action-list .scheduled-choices-header,
+.sideline-player-action-list .scheduled-choices-header > span {
+  display: block;
+}
+
+.sideline-player-action-list .scheduled-choices-header {
+  height: auto;
+  width: 100%;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
 .planned-pairing-impact {
   display: block;
   margin-top: 0.25rem;
@@ -4332,6 +4402,37 @@ select:hover {
 
 .plan-impact-note {
   margin: 0 0 1rem;
+}
+
+.manual-swap-add-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+.manual-swap-add {
+  flex: none;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  color: var(--turf-dark);
+}
+
+.manual-swap-add:hover:not(:disabled) {
+  color: var(--turf-dark);
+  background: var(--turf-pale);
+}
+
+.manual-replacement select {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
 }
 
 .bench-replacement-list button {
@@ -5470,6 +5571,21 @@ select:hover {
 
   .sheet-actions > * {
     flex: 1;
+  }
+}
+
+@media (max-width: 360px) {
+  .swap-row.incomplete-swap {
+    grid-template-columns: 24px minmax(0, 1fr) 32px minmax(0, 1fr) 44px;
+  }
+
+  .incomplete-swap .player-action-menu-trigger {
+    padding-inline: 0.35rem;
+  }
+
+  .incomplete-swap .swap-transfer small {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 
