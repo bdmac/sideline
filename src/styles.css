@@ -3628,6 +3628,7 @@ select:hover {
 
 .swap-player-choice {
   display: grid;
+  align-self: center;
   gap: 0.35rem;
   min-width: 0;
 }
