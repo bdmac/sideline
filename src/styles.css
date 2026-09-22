@@ -4019,7 +4019,8 @@ select:hover {
   color: var(--turf-dark);
 }
 
-.swap-number {
+.swap-number,
+.ready-swap-number {
   width: 30px;
   height: 44px;
   display: grid;
@@ -4058,11 +4059,6 @@ select:hover {
 .ready-swap-remove:hover:not(:disabled) {
   color: var(--danger-dark);
   background: var(--danger-pale);
-}
-
-.ready-swap-number {
-  font-weight: 900;
-  color: var(--ink-soft);
 }
 
 .substitution-ready-sheet .sheet-header {
@@ -5552,7 +5548,8 @@ select:hover {
     padding: 0.8rem 0;
   }
 
-  .swap-number {
+  .swap-number,
+  .ready-swap-number {
     width: 24px;
   }
 
