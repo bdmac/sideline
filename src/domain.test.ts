@@ -751,7 +751,7 @@ describe("team rosters", () => {
       INITIAL_TEAMS.u12.roster
         .filter((player) => player.preferredRoles.includes("goalkeeper"))
         .map((player) => player.name),
-    ).toEqual(["Jackson", "William", "Matt", "Rayek", "Jack"]);
+    ).toEqual(["Jackson", "William", "Obasi", "Matt", "Rayek", "Jack"]);
     expect(
       INITIAL_TEAMS.u12.roster.find((player) => player.name === "Jack")
         ?.preferredRoles,

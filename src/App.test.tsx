@@ -2299,12 +2299,12 @@ describe("Sideline app", () => {
       fireEvent.click(screen.getByRole("button", { name: "Formation" }));
       fireEvent.click(screen.getByRole("button", { name: "Starters" }));
       const striker = screen.getByRole("button", {
-        name: "Change John at Striker",
+        name: "Change Nikola at Striker",
       });
       expect(striker.querySelector(".starter-player-warning")).toBeNull();
       expect(
         screen.getByRole("button", {
-          name: "Place Aaron on the starting pitch",
+          name: "Place John on the starting pitch",
         }),
       ).toBeInTheDocument();
       const lineupLabels = () =>
@@ -2315,7 +2315,7 @@ describe("Sideline app", () => {
       fireEvent.click(screen.getByRole("button", { name: "Reset" }));
       fireEvent.click(screen.getByRole("button", { name: "Auto-fill" }));
       expect(
-        screen.getByRole("button", { name: "Change John at Striker" }),
+        screen.getByRole("button", { name: "Change Nikola at Striker" }),
       ).toBeInTheDocument();
       expect(lineupLabels()).toEqual(initialLineup);
     },

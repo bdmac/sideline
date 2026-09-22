@@ -9,10 +9,34 @@ import {
   getSubstitutionReminderStatus,
   suggestSubstitutions,
 } from "../domain";
+import type { Player } from "../types";
 
 export const u12ThirdRotation = () => {
   const state = structuredClone(INITIAL_STATE);
   const team = state.teams.u12;
+  // Preserve the preferences from the recorded game, not today's roster.
+  const recordedPreferences: Record<string, Player["preferredRoles"]> = {
+    Jackson: ["goalkeeper", "defender", "midfielder"],
+    Lazar: ["defender", "midfielder"],
+    Nikola: ["defender", "midfielder"],
+    Kai: ["midfielder", "defender"],
+    Elliott: ["midfielder", "defender"],
+    William: ["midfielder", "forward", "goalkeeper", "defender"],
+    Obasi: ["defender", "midfielder"],
+    Andrew: ["midfielder", "forward"],
+    Matt: ["forward", "midfielder", "goalkeeper"],
+    John: ["forward", "midfielder", "defender"],
+    Eli: ["midfielder", "forward"],
+    Aaron: ["midfielder", "defender", "forward"],
+    Rayek: ["goalkeeper", "forward", "defender", "midfielder"],
+    Jack: ["defender", "midfielder", "goalkeeper"],
+    Ryan: ["defender", "midfielder"],
+  };
+  team.roster.forEach((player) => {
+    const roles = recordedPreferences[player.name];
+    if (!roles) throw new Error(`Missing fixture preferences: ${player.name}`);
+    player.preferredRoles = [...roles];
+  });
   const playerId = (name: string) => {
     const player = team.roster.find((item) => item.name === name);
     if (!player) throw new Error(`Missing fixture player: ${name}`);

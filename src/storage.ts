@@ -266,7 +266,8 @@ const migratePriorState = (parsed: StoredState): AppState => {
     parsed.version === 22 ||
     parsed.version === 23 ||
     parsed.version === 24 ||
-    parsed.version === 25
+    parsed.version === 25 ||
+    parsed.version === 26
   ) {
     return {
       ...(parsed as AppState),
@@ -348,7 +349,7 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
       },
     };
   }
-  if (previousVersion !== undefined && previousVersion <= 22) {
+  if (previousVersion !== undefined && previousVersion <= 25) {
     state = {
       ...state,
       teams: applyCurrentRosterPreferences(state.teams, ["u12"]),
