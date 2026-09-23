@@ -26,6 +26,9 @@ import type { TeamId } from "./types";
 
 function setup(teamId: TeamId = "u12") {
   const team = structuredClone(INITIAL_TEAMS[teamId]);
+  team.roster.forEach((player) => {
+    player.active = true;
+  });
   const game = createGame(
     team,
     team.defaultFormationId,

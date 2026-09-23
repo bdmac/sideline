@@ -289,7 +289,8 @@ const makeRoster = (teamId: TeamId, names: string[]): Player[] =>
     name,
     number: rosterNumbers[teamId][index],
     preferredRoles: rosterPreferences[teamId][index],
-    active: true,
+    // Keep retired players' IDs and names available to existing games.
+    active: `${teamId}-p${index + 1}` !== "u12-p12",
   }));
 
 export const INITIAL_TEAMS: Record<TeamId, Team> = {
@@ -316,7 +317,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 26,
+  version: 27,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };

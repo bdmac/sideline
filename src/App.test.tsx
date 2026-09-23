@@ -1585,7 +1585,6 @@ describe("Sideline app", () => {
       teamId: "u12" as const,
       name: "Fireballers",
       expected: [
-        "Aaron",
         "Andrew",
         "Eli",
         "Elliott",
@@ -2299,12 +2298,12 @@ describe("Sideline app", () => {
       fireEvent.click(screen.getByRole("button", { name: "Formation" }));
       fireEvent.click(screen.getByRole("button", { name: "Starters" }));
       const striker = screen.getByRole("button", {
-        name: "Change Nikola at Striker",
+        name: "Change John at Striker",
       });
       expect(striker.querySelector(".starter-player-warning")).toBeNull();
       expect(
         screen.getByRole("button", {
-          name: "Place John on the starting pitch",
+          name: "Place Eli on the starting pitch",
         }),
       ).toBeInTheDocument();
       const lineupLabels = () =>
@@ -2315,7 +2314,7 @@ describe("Sideline app", () => {
       fireEvent.click(screen.getByRole("button", { name: "Reset" }));
       fireEvent.click(screen.getByRole("button", { name: "Auto-fill" }));
       expect(
-        screen.getByRole("button", { name: "Change Nikola at Striker" }),
+        screen.getByRole("button", { name: "Change John at Striker" }),
       ).toBeInTheDocument();
       expect(lineupLabels()).toEqual(initialLineup);
     },
@@ -3334,11 +3333,11 @@ describe("Sideline app", () => {
     const planner = screen.getByRole("dialog", {
       name: "Substitution plan",
     });
-    setPlannerSize(planner, 6);
+    setPlannerSize(planner, 5);
 
     const incomingPlayers =
       within(planner).getAllByLabelText(/incoming player/);
-    expect(incomingPlayers).toHaveLength(6);
+    expect(incomingPlayers).toHaveLength(5);
     for (const identity of incomingPlayers) {
       expect(identity.tagName).toBe("SPAN");
       expect(
@@ -3363,12 +3362,12 @@ describe("Sideline app", () => {
     }
     fireEvent.click(within(planner).getAllByLabelText(/incoming player/)[1]);
     const choices = screen.getAllByRole("menuitemradio");
-    expect(choices).toHaveLength(6);
+    expect(choices).toHaveLength(5);
     expect(
       choices.filter(
         (choice) => choice.getAttribute("aria-disabled") === "true",
       ),
-    ).toHaveLength(5);
+    ).toHaveLength(4);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByRole("button", { name: "Save plan" })).toBeEnabled();
   });
@@ -5453,6 +5452,9 @@ describe("Sideline app", () => {
     ({ teamId, count, elapsed, played, floor, warning }) => {
       const state = structuredClone(INITIAL_STATE);
       const team = state.teams[teamId];
+      team.roster.forEach((player) => {
+        player.active = true;
+      });
       const game = createGame(
         team,
         team.defaultFormationId,

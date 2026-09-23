@@ -56,7 +56,10 @@ import {
 describe("minimum playing-time pace", () => {
   const createPaceGame = (teamId: TeamId, count: number, duration?: number) => {
     const source = INITIAL_TEAMS[teamId];
-    const team = { ...source, roster: [...source.roster] };
+    const team = {
+      ...source,
+      roster: source.roster.map((player) => ({ ...player, active: true })),
+    };
     while (team.roster.length < count) {
       team.roster.push({
         ...source.roster[0],
@@ -1883,6 +1886,7 @@ describe("substitutions", () => {
   it("includes both fairness groups when both will be rested at the next rotation", () => {
     const team = structuredClone(INITIAL_TEAMS.u12);
     team.roster.forEach((player) => {
+      player.active = true;
       player.preferredRoles = player.preferredRoles.filter(
         (role) => role !== "goalkeeper",
       );
@@ -2447,6 +2451,7 @@ describe("substitutions", () => {
   it("spreads near-equal substitutions across lines", () => {
     const team = structuredClone(INITIAL_TEAMS.u12);
     team.roster.forEach((player) => {
+      player.active = true;
       player.preferredRoles = player.preferredRoles.filter(
         (role) => role !== "goalkeeper",
       );
@@ -2481,6 +2486,7 @@ describe("substitutions", () => {
   it("still favors more of an overdue line when its fairness gap is substantial", () => {
     const team = structuredClone(INITIAL_TEAMS.u12);
     team.roster.forEach((player) => {
+      player.active = true;
       player.preferredRoles = player.preferredRoles.filter(
         (role) => role !== "goalkeeper",
       );
@@ -2674,6 +2680,9 @@ describe("substitutions", () => {
 
   it("returns Rayek outfield when the same rotation rests another keeper option", () => {
     const team = structuredClone(INITIAL_TEAMS.u12);
+    team.roster.forEach((player) => {
+      player.active = true;
+    });
     let game = createGame(
       team,
       "9-3-1-3-1",

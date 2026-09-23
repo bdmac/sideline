@@ -139,7 +139,7 @@ Fireballers default to the 3-1-3-1 formation; coaches can still select another l
 
 The fixed U8 roster is Simon, Noah, Maddox, Ollie, Malik, Dylan, Henry, Haru, Evan, and Collier. Collier's provisional jersey number is 56 and his ordered position preferences are defender, midfielder, and forward. Existing active games retain their attendance and assignments when he is added to the permanent roster.
 
-The fixed U12 roster is Jackson, Lazar, Nikola, Kai, Elliott, William, Obasi, Andrew, Matt, John, Eli, Aaron, Rayek, Jack, and Ryan.
+The active U12 roster is Jackson, Lazar, Nikola, Kai, Elliott, William, Obasi, Andrew, Matt, John, Eli, Rayek, Jack, and Ryan. Aaron was removed on September 23, 2026. Version 27 marks his stable record (`u12-p12`) inactive in new and saved rosters: he is excluded from attendance and new games, while existing games retain his participation, assignments, plans, timing, and history. Other player IDs and metadata remain unchanged.
 
 Player records include jersey numbers for substitution staging. Confirmed Golden Dragons numbers are Simon 10, Ollie 23, Henry 12, and Haru 49. Confirmed Fireballers numbers are Jackson 82, William 78, Andrew 11, Matt 18, John 90, and Jack 5. Remaining numbers are provisional fixed metadata until the coach supplies the official assignments. Regular roster, setup, pitch, and timing views continue to prioritize player names rather than repeating numbers throughout the interface.
 

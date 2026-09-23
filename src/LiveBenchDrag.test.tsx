@@ -72,6 +72,7 @@ function setup(width = 1024, planned = false) {
   });
   const state = structuredClone(INITIAL_STATE);
   const team = state.teams.u12;
+  team.roster.find((player) => player.id === "u12-p12")!.active = true;
   const base = createGame(
     team,
     "9-3-3-2",

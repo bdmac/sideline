@@ -36,6 +36,7 @@ export const u12ThirdRotation = () => {
     const roles = recordedPreferences[player.name];
     if (!roles) throw new Error(`Missing fixture preferences: ${player.name}`);
     player.preferredRoles = [...roles];
+    player.active = true;
   });
   const playerId = (name: string) => {
     const player = team.roster.find((item) => item.name === name);

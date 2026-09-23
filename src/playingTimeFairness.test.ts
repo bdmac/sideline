@@ -282,7 +282,10 @@ describe("availability-aware playing-time safeguards", () => {
     "keeps ordinary %s alternating rotations quiet",
     (teamId) => {
       const source = INITIAL_TEAMS[teamId];
-      const team = { ...source, roster: [...source.roster] };
+      const team = {
+        ...source,
+        roster: source.roster.map((player) => ({ ...player, active: true })),
+      };
       while (team.roster.length < team.sideSize * 2) {
         team.roster.push({
           ...source.roster[0],

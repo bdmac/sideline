@@ -36,6 +36,9 @@ export const lateArrivalNearMinimumGame = (
 ) => {
   const state = structuredClone(INITIAL_STATE);
   const team = state.teams[teamId];
+  team.roster.forEach((player) => {
+    player.active = true;
+  });
   const player =
     teamId === "u8"
       ? team.roster.find((item) => item.name === "Haru")!

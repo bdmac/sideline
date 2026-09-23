@@ -109,7 +109,14 @@ const normalizeActiveGame = (game: ActiveGame): ActiveGame => {
     (player) => player.guest && player.active,
   );
   const rosterIds = [
-    ...team.roster.filter((player) => player.active).map((player) => player.id),
+    ...team.roster
+      .filter(
+        (player) =>
+          player.active ||
+          game.presentIds.includes(player.id) ||
+          game.unavailableIds?.includes(player.id),
+      )
+      .map((player) => player.id),
     ...guestPlayers.map((player) => player.id),
   ];
   const rosterIdSet = new Set(rosterIds);
@@ -267,7 +274,8 @@ const migratePriorState = (parsed: StoredState): AppState => {
     parsed.version === 23 ||
     parsed.version === 24 ||
     parsed.version === 25 ||
-    parsed.version === 26
+    parsed.version === 26 ||
+    parsed.version === 27
   ) {
     return {
       ...(parsed as AppState),
@@ -326,6 +334,20 @@ const restoreStartingHistory = (state: AppState): AppState => {
 export const migrateStoredState = (parsed: StoredState): AppState => {
   let state = restoreStartingHistory(migratePriorState(parsed));
   const previousVersion = parsed.version;
+  if (previousVersion !== undefined && previousVersion <= 26) {
+    state = {
+      ...state,
+      teams: {
+        ...state.teams,
+        u12: {
+          ...state.teams.u12,
+          roster: state.teams.u12.roster.map((player) =>
+            player.id === "u12-p12" ? { ...player, active: false } : player,
+          ),
+        },
+      },
+    };
+  }
   if (previousVersion !== undefined && previousVersion <= 21) {
     const preferences = new Map(
       INITIAL_STATE.teams.u8.roster

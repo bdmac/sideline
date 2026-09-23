@@ -50,7 +50,7 @@ describe("persistence migrations", () => {
   it("starts fresh U8 games with two 25-minute halves and leaves U12 defaults unchanged", () => {
     const state = loadState();
     expect(state).toEqual(INITIAL_STATE);
-    expect(state.version).toBe(26);
+    expect(state.version).toBe(27);
     expect(state.teams.u8).toMatchObject({
       defaultDurationMinutes: 50,
       defaultPeriodCount: 2,
@@ -98,7 +98,7 @@ describe("persistence migrations", () => {
       const migrated = loadState();
       expect(migrated).toEqual({
         ...saved,
-        version: 26,
+        version: 27,
         teams: {
           ...saved.teams,
           u8: {
@@ -174,7 +174,7 @@ describe("persistence migrations", () => {
       const migrated = migrateStoredState(saved);
       expect(migrated).toEqual({
         ...saved,
-        version: 26,
+        version: 27,
         teams: {
           ...teams,
           u12: {
@@ -278,7 +278,7 @@ describe("persistence migrations", () => {
       const migrated = migrateStoredState(saved);
       expect(migrated).toEqual({
         ...saved,
-        version: 26,
+        version: 27,
         teams: {
           ...teams,
           u12: {
