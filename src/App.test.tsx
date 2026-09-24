@@ -122,7 +122,7 @@ const prepareU12KeeperHandoff = () => {
     Date.now(),
     2,
   );
-  game = fastForwardGame(game, 900, Date.now());
+  game = fastForwardGame(game, 600, Date.now());
   game = applySubstitutions(
     game,
     suggestSubstitutions(game, 1, team),
@@ -3403,27 +3403,33 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the time remaining until the next rotation reminder", () => {
-    const state = structuredClone(INITIAL_STATE);
-    const team = state.teams.u8;
-    const game = createGame(
-      team,
-      "5-1-2-1",
-      team.roster.map((player) => player.id),
-      team.defaultDurationMinutes,
-      1_000,
-      2,
-    );
-    game.clock.elapsedSeconds = 120;
-    state.activeGame = game;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  it.each([
+    ["u8", "4:15"],
+    ["u12", "8:00"],
+  ] as const)(
+    "shows the time remaining until the next %s rotation reminder",
+    (teamId, remaining) => {
+      const state = structuredClone(INITIAL_STATE);
+      const team = state.teams[teamId];
+      const game = createGame(
+        team,
+        team.defaultFormationId,
+        team.roster.map((player) => player.id),
+        team.defaultDurationMinutes,
+        1_000,
+        2,
+      );
+      game.clock.elapsedSeconds = 120;
+      state.activeGame = game;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
-    render(<App />);
+      render(<App />);
 
-    expect(screen.getByLabelText("Next reminder")).toHaveTextContent(
-      "Next reminderDue in 4:15",
-    );
-  });
+      expect(screen.getByLabelText("Next reminder")).toHaveTextContent(
+        `Next reminderDue in ${remaining}`,
+      );
+    },
+  );
 
   it.each([false, true])(
     "prioritizes a rested six-player return while preserving saved smaller plans (%s)",
@@ -3473,8 +3479,8 @@ describe("Sideline app", () => {
           "6 substitutions ready",
         );
         expect(
-          screen.queryByRole("status", { name: "Goalkeeper preparation" }),
-        ).not.toBeInTheDocument();
+          screen.getByRole("status", { name: "Goalkeeper preparation" }),
+        ).toHaveTextContent("William is lined up outfield");
         expect(
           document.querySelector(".goalkeeper-preparation-banner"),
         ).toBeNull();
@@ -3515,8 +3521,8 @@ describe("Sideline app", () => {
     ).toBeEnabled();
   });
 
-  it.each(["early", "at a minute-29 stoppage", "on time"] as const)(
-    "keeps a minute-30 keeper plan quiet at minute 15 and rechecks when sending %s",
+  it.each(["early", "at a minute-19 stoppage", "on time"] as const)(
+    "keeps a minute-20 keeper plan quiet at minute 10 and rechecks when sending %s",
     (execution) => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-09-16T15:30:00Z"));
@@ -3548,10 +3554,10 @@ describe("Sideline app", () => {
         name: "Wait on this rotation",
       });
       expect(warning).toHaveTextContent(
-        "Sending now would end Jackson's turn before the recommended 30:00.",
+        "Sending now would end Jackson's turn before the recommended 20:00.",
       );
       expect(warning).toHaveTextContent(
-        "Lazar has not had their recommended 15:00 bench turn before taking over.",
+        "Lazar has not had their recommended 10:00 bench turn before taking over.",
       );
       const send = within(review).getByRole("button", {
         name: "Send 'em in",
@@ -3562,9 +3568,9 @@ describe("Sideline app", () => {
       expect(queued.activeGame?.assignments.gk).toBe(keeper.id);
       expect(queued.activeGame?.history).toHaveLength(game.history.length);
       const executionSeconds =
-        execution === "early" ? 900 : execution === "on time" ? 1_800 : 1_740;
+        execution === "early" ? 600 : execution === "on time" ? 1_200 : 1_140;
       if (execution !== "early") {
-        act(() => vi.advanceTimersByTime((executionSeconds - 900) * 1_000));
+        act(() => vi.advanceTimersByTime((executionSeconds - 600) * 1_000));
         expect(
           within(review).queryByRole("status", {
             name: "Wait on this rotation",

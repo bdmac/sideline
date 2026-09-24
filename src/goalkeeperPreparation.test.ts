@@ -68,8 +68,8 @@ describe("goalkeeper preparation", () => {
   it.each([
     ["u8", 4, 300, 600],
     ["u8", 2, 300, 600],
-    ["u12", 4, 900, 1_800],
-    ["u12", 2, 900, 1_800],
+    ["u12", 4, 600, 1_200],
+    ["u12", 2, 600, 1_200],
   ] as const)(
     "uses two reminder intervals for the keeper target for %s with %s periods",
     (id, periods, interval, target) => {
@@ -215,8 +215,8 @@ describe("goalkeeper preparation", () => {
   it.each([
     ["u8", 7, 4, 60],
     ["u8", 7, 2, 60],
-    ["u12", 12, 2, 180],
-    ["u12", 12, 4, 180],
+    ["u12", 12, 2, 120],
+    ["u12", 12, 4, 120],
   ] as const)(
     "allows timing grace for %s with %i attending and %i periods (%i seconds)",
     (teamId, count, periods, grace) => {
@@ -262,14 +262,14 @@ describe("goalkeeper preparation", () => {
 
   it("does not waive a genuinely short bench rest just because the keeper is ready", () => {
     const { team, keeper, successor, game: initial } = fixture(12, "u12", 2);
-    let game = advance(initial, 960);
+    let game = advance(initial, 660);
     game = applySubstitutions(
       game,
       suggestSubstitutions(game, 1, team),
       team.sideSize,
       1_000,
     );
-    game = advance(game, 660);
+    game = advance(game, 420);
     const pairs = [
       { positionId: "gk", outPlayerId: keeper, inPlayerId: successor },
     ];
@@ -287,7 +287,7 @@ describe("goalkeeper preparation", () => {
 
   it("plans a minute-29 keeper handoff for halftime while allowing the earlier stoppage", () => {
     const { team, keeper, successor, game: initial } = fixture(12, "u12", 2);
-    let game = advance(initial, 840);
+    let game = advance(initial, 19 * 60);
     const rest = suggestSubstitutions(game, 1, team);
     expect(rest[0].outPlayerId).toBe(successor);
     game = applySubstitutions(game, rest, team.sideSize, 1_000);
@@ -321,15 +321,15 @@ describe("goalkeeper preparation", () => {
     const nextPairs = [
       { positionId: "gk", outPlayerId: replacement, inPlayerId: keeper },
     ];
-    expect(getNextSubstitutionSeconds(game)).toBe(1_800);
+    expect(getNextSubstitutionSeconds(game)).toBe(1_500);
     expect(
       getGoalkeeperChangeStatus(
         game,
         nextPairs,
         getNextSubstitutionSeconds(game),
       ),
-    ).toMatchObject({ early: true, needsRest: false, targetSeconds: 1_800 });
-    expect(getGoalkeeperChangeStatus(game, nextPairs, 2_700)).toMatchObject({
+    ).toMatchObject({ early: true, needsRest: false, targetSeconds: 1_200 });
+    expect(getGoalkeeperChangeStatus(game, nextPairs, 2_100)).toMatchObject({
       early: false,
       needsRest: false,
     });

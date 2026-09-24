@@ -237,7 +237,7 @@ describe("minimum playing-time pace", () => {
       teamId: "u12",
       count: 15,
       duration: 60,
-      elapsed: 900,
+      elapsed: 600,
       played: 0,
       warn: false,
     },
@@ -245,7 +245,7 @@ describe("minimum playing-time pace", () => {
       teamId: "u12",
       count: 15,
       duration: 60,
-      elapsed: 960,
+      elapsed: 660,
       played: 0,
       warn: false,
     },
@@ -253,7 +253,7 @@ describe("minimum playing-time pace", () => {
       teamId: "u12",
       count: 15,
       duration: 60,
-      elapsed: 961,
+      elapsed: 661,
       played: 0,
       warn: true,
     },
@@ -506,7 +506,7 @@ describe("substitution destination sorting", () => {
     );
 
     expect(getSubstitutionTimeBandSize(u8Game)).toBe(2 * 60);
-    expect(getSubstitutionTimeBandSize(u12Game)).toBe(3 * 60);
+    expect(getSubstitutionTimeBandSize(u12Game)).toBe(2 * 60);
   });
 
   it("uses displayed timing bands before role fit and exact timing", () => {
@@ -1542,11 +1542,11 @@ describe("substitutions", () => {
     ["u8", 60, 2, 450],
     ["u8", 60, 4, 450],
     ["u8", 41, 2, 308],
-    ["u12", 40, 2, 600],
-    ["u12", 40, 4, 600],
-    ["u12", 48, 2, 720],
-    ["u12", 60, 2, 900],
-    ["u12", 60, 4, 900],
+    ["u12", 40, 2, 400],
+    ["u12", 40, 4, 400],
+    ["u12", 48, 2, 480],
+    ["u12", 60, 2, 600],
+    ["u12", 60, 4, 600],
   ] as const)(
     "uses the configured cadence for %s, %i minutes, %i periods",
     (teamId, duration, periods, interval) => {
@@ -1573,7 +1573,7 @@ describe("substitutions", () => {
     },
   );
 
-  it("uses a quarter-game cadence for the longer U12 interval", () => {
+  it("uses a sixth-game cadence for ten-minute U12 rotations", () => {
     const team = INITIAL_TEAMS.u12;
     const game = createGame(
       team,
@@ -1583,7 +1583,7 @@ describe("substitutions", () => {
       1_000,
     );
 
-    expect(getSubstitutionReminderStatus(game).intervalSeconds).toBe(900);
+    expect(getSubstitutionReminderStatus(game).intervalSeconds).toBe(600);
   });
 
   it.each(["u8", "u12"] as const)(
@@ -2467,7 +2467,7 @@ describe("substitutions", () => {
     formation.positions.forEach((position) => {
       game.totals[game.assignments[position.id]].fieldSeconds =
         position.role === "defender"
-          ? 600
+          ? 590
           : position.role === "midfielder"
             ? 550
             : 0;

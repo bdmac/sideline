@@ -5,6 +5,7 @@ import {
   applySubstitutions,
   createGame,
   getPlayingTimeWarnings,
+  getSubstitutionReminderStatus,
   markAvailable,
   markUnavailable,
   materializeGame,
@@ -300,7 +301,7 @@ describe("availability-aware playing-time safeguards", () => {
         1_000,
         2,
       );
-      const interval = game.durationSeconds / (teamId === "u8" ? 8 : 4);
+      const interval = getSubstitutionReminderStatus(game).intervalSeconds;
       for (let seconds = 15; seconds <= game.durationSeconds; seconds += 15) {
         game = advanceMatchTo(game, seconds);
         expect(getPlayingTimeWarnings(game)).toEqual([]);

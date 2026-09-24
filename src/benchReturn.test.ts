@@ -71,7 +71,9 @@ describe("rested bench return priority", () => {
     );
     expect(validateSubstitutionPairs(game, pairs)).toEqual([]);
     const queued = queueSubstitutions(game, pairs);
-    expect(getGoalkeeperPreparationWarning(queued, team)).toBeNull();
+    expect(getGoalkeeperPreparationWarning(queued, team)).toContain(
+      "William is lined up outfield",
+    );
     expect(queued.queuedSubstitutions).toEqual(pairs);
     const missedWindow = fastForwardGame(queued, 239, 1_000);
     expect(getGoalkeeperPreparationWarning(missedWindow, team)).not.toBeNull();

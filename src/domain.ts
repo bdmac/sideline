@@ -658,7 +658,7 @@ export const isImmediateSubstitution = (event: GameEvent) =>
       event.note?.startsWith("Sent immediately.") === true));
 
 export const getSubstitutionReminderStatus = (game: ActiveGame) => {
-  const rotations = game.teamId === "u8" ? 8 : 4;
+  const rotations = game.teamId === "u8" ? 8 : 6;
   const intervalSeconds = Math.round(game.durationSeconds / rotations);
   const lastExecutedSubstitution = game.history
     .filter(

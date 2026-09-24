@@ -72,8 +72,8 @@ describe("period and game rotation cutoffs", () => {
     ["u8", 4, 2, 120],
     ["u8", 4, 3, 120],
     ["u8", 2, 1, 120],
-    ["u12", 2, 1, 180],
-    ["u12", 4, 2, 180],
+    ["u12", 2, 1, 120],
+    ["u12", 4, 2, 120],
   ] as const)(
     "defers within the exact buffer for %s with %i periods at period %i, including earlier added time",
     (id, periods, current, buffer) => {
@@ -118,8 +118,8 @@ describe("period and game rotation cutoffs", () => {
   it.each([
     ["u8", 4, 120],
     ["u8", 2, 120],
-    ["u12", 2, 180],
-    ["u12", 4, 180],
+    ["u12", 2, 120],
+    ["u12", 4, 120],
   ] as const)(
     "uses a finish buffer for %s with %i periods (%i seconds)",
     (id, periods, buffer) => {
@@ -160,7 +160,7 @@ describe("period and game rotation cutoffs", () => {
       1_000,
       2,
     );
-    game = fastForwardGame(game, 44 * 60, 1_000);
+    game = fastForwardGame(game, 49 * 60, 1_000);
     game.period = { current: 2, startedAtSeconds: 1_800 };
     expect(getRoutineRotationStatus(game).recommended).toBe(true);
     const positionId = Object.keys(game.assignments).find((id) => id !== "gk")!;
@@ -234,7 +234,7 @@ describe("period and game rotation cutoffs", () => {
 
   it.each([
     ["u8", 60, 120],
-    ["u12", 80, 240],
+    ["u12", 80, 180],
   ] as const)(
     "scales the buffer for a custom %s duration of %i minutes",
     (id, minutes, buffer) => {
