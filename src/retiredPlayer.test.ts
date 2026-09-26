@@ -103,7 +103,7 @@ describe("retired U12 player", () => {
       const migrated = migrateStoredState(saved);
       expect(migrated).toEqual({
         ...saved,
-        version: 27,
+        version: 28,
         teams: {
           ...saved.teams,
           u12: {

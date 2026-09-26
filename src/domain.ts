@@ -270,15 +270,15 @@ const rosterPreferences: Record<TeamId, PositionRole[][]> = {
     ["forward", "midfielder", "defender"],
     ["defender", "midfielder"],
     ["midfielder", "defender", "forward"],
-    ["midfielder", "defender", "goalkeeper"],
+    ["midfielder", "defender"],
     ["defender", "midfielder", "goalkeeper"],
     ["midfielder", "forward"],
-    ["forward", "midfielder", "goalkeeper"],
+    ["forward", "midfielder"],
     ["forward", "midfielder", "defender"],
     ["defender", "midfielder", "forward"],
     ["midfielder", "defender", "forward"],
-    ["defender", "forward", "goalkeeper", "midfielder"],
-    ["defender", "midfielder", "goalkeeper"],
+    ["defender", "forward", "midfielder"],
+    ["defender", "midfielder"],
     ["defender", "midfielder", "forward"],
   ],
 };
@@ -317,7 +317,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 27,
+  version: 28,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };

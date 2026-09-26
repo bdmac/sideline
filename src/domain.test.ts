@@ -754,11 +754,11 @@ describe("team rosters", () => {
       INITIAL_TEAMS.u12.roster
         .filter((player) => player.preferredRoles.includes("goalkeeper"))
         .map((player) => player.name),
-    ).toEqual(["Jackson", "William", "Obasi", "Matt", "Rayek", "Jack"]);
+    ).toEqual(["Jackson", "Obasi"]);
     expect(
       INITIAL_TEAMS.u12.roster.find((player) => player.name === "Jack")
         ?.preferredRoles,
-    ).toEqual(["defender", "midfielder", "goalkeeper"]);
+    ).toEqual(["defender", "midfielder"]);
     expect(u8Numbers).toMatchObject({
       Simon: 10,
       Ollie: 23,
@@ -2260,6 +2260,12 @@ describe("substitutions", () => {
 
   it("uses outside-preference destinations only as a fallback", () => {
     const team = structuredClone(INITIAL_TEAMS.u12);
+    team.roster.forEach((player) => {
+      if (player.id !== "u12-p1")
+        player.preferredRoles = player.preferredRoles.filter(
+          (role) => role !== "goalkeeper",
+        );
+    });
     const game = createGame(
       team,
       "9-3-1-3-1",
@@ -2682,6 +2688,15 @@ describe("substitutions", () => {
     const team = structuredClone(INITIAL_TEAMS.u12);
     team.roster.forEach((player) => {
       player.active = true;
+      if (["u12-p6", "u12-p9", "u12-p14"].includes(player.id))
+        player.preferredRoles.push("goalkeeper");
+      if (player.id === "u12-p13")
+        player.preferredRoles = [
+          "defender",
+          "forward",
+          "goalkeeper",
+          "midfielder",
+        ];
     });
     let game = createGame(
       team,

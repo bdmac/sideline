@@ -275,7 +275,8 @@ const migratePriorState = (parsed: StoredState): AppState => {
     parsed.version === 24 ||
     parsed.version === 25 ||
     parsed.version === 26 ||
-    parsed.version === 27
+    parsed.version === 27 ||
+    parsed.version === 28
   ) {
     return {
       ...(parsed as AppState),
@@ -375,6 +376,27 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
     state = {
       ...state,
       teams: applyCurrentRosterPreferences(state.teams, ["u12"]),
+    };
+  }
+  if (previousVersion !== undefined && previousVersion <= 27) {
+    state = {
+      ...state,
+      teams: {
+        ...state.teams,
+        u12: {
+          ...state.teams.u12,
+          roster: state.teams.u12.roster.map((player) =>
+            ["u12-p6", "u12-p9", "u12-p13", "u12-p14"].includes(player.id)
+              ? {
+                  ...player,
+                  preferredRoles: player.preferredRoles.filter(
+                    (role) => role !== "goalkeeper",
+                  ),
+                }
+              : player,
+          ),
+        },
+      },
     };
   }
   if (previousVersion !== undefined && previousVersion <= 23) {
