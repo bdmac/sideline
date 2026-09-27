@@ -633,14 +633,20 @@ h3 {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.5rem 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .page-heading.setup-page-heading h1 {
   margin-bottom: 0;
 }
 
-.page-heading.setup-page-heading > p {
+.setup-heading-details {
   grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 1rem;
 }
 
 .resume-strip {
@@ -707,6 +713,16 @@ h3 {
 
 .team-ledger {
   border-top: 2px solid var(--rule-strong);
+}
+
+.last-game-button {
+  min-height: 44px;
+  margin-block: 0.25rem 0.75rem;
+}
+
+.setup-heading-details > .last-game-button {
+  margin: 0;
+  padding-inline: 0;
 }
 
 .coach-ledger {

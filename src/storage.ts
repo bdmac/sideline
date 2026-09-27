@@ -15,14 +15,14 @@ type StoredState = Omit<Partial<AppState>, "version"> & {
 const applyCurrentRosterPreferences = (
   teams: AppState["teams"],
   teamIds: readonly TeamId[] = ["u8", "u12"],
+  activePlayersOnly = false,
 ): AppState["teams"] => {
   const nextTeams = structuredClone(teams);
   teamIds.forEach((teamId) => {
     const currentPreferences = new Map(
-      INITIAL_STATE.teams[teamId].roster.map((player) => [
-        player.id,
-        player.preferredRoles,
-      ]),
+      INITIAL_STATE.teams[teamId].roster
+        .filter((player) => !activePlayersOnly || player.active)
+        .map((player) => [player.id, player.preferredRoles]),
     );
     nextTeams[teamId].roster = nextTeams[teamId].roster.map((player) => ({
       ...player,
@@ -276,7 +276,8 @@ const migratePriorState = (parsed: StoredState): AppState => {
     parsed.version === 25 ||
     parsed.version === 26 ||
     parsed.version === 27 ||
-    parsed.version === 28
+    parsed.version === 28 ||
+    parsed.version === 29
   ) {
     return {
       ...(parsed as AppState),
@@ -399,6 +400,12 @@ export const migrateStoredState = (parsed: StoredState): AppState => {
       },
     };
   }
+  if (previousVersion !== undefined && previousVersion <= 28) {
+    state = {
+      ...state,
+      teams: applyCurrentRosterPreferences(state.teams, ["u12"], true),
+    };
+  }
   if (previousVersion !== undefined && previousVersion <= 23) {
     state = {
       ...state,
@@ -471,7 +478,12 @@ export const loadState = (): AppState => {
 
   if (!state.activeGame) {
     const recoveryGame = readActiveGameRecovery();
-    if (recoveryGame) state.activeGame = recoveryGame;
+    if (
+      recoveryGame &&
+      state.lastCompletedGames?.[recoveryGame.teamId]?.game.id !==
+        recoveryGame.id
+    )
+      state.activeGame = recoveryGame;
   }
   return restoreStartingHistory(state);
 };

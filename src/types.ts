@@ -2,11 +2,18 @@ export type TeamId = "u8" | "u12";
 
 export type PositionRole = "goalkeeper" | "defender" | "midfielder" | "forward";
 
+export type PositionPreference =
+  | PositionRole
+  | "center-back"
+  | "outside-back"
+  | "central-midfield"
+  | "wide-midfield";
+
 export type Player = {
   id: string;
   name: string;
   number?: number;
-  preferredRoles: PositionRole[];
+  preferredRoles: PositionPreference[];
   active: boolean;
   guest?: boolean;
 };
@@ -36,6 +43,7 @@ export type Position = {
   x: number;
   y: number;
   role: PositionRole;
+  preferenceGroup?: PositionPreference;
 };
 
 export type Formation = {
@@ -138,8 +146,16 @@ export type ActiveGame = {
   startingLineup?: StartingLineup;
 };
 
+export type CompletedGame = {
+  game: ActiveGame;
+  team: Team;
+  endedAt: number;
+};
+
 export type AppState = {
-  version: 28;
+  version: 29;
   teams: Record<TeamId, Team>;
   activeGame: ActiveGame | null;
+  lastCompletedGames?: Partial<Record<TeamId, CompletedGame>>;
+  openSummaryTeamId?: TeamId;
 };

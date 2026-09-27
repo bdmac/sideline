@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { closeCompletedSummary, saveCompletedGame } from "./completedGames";
 import { COACH_ID_STORAGE_KEY } from "./coaches";
 import {
   applySubstitutions,
@@ -30,7 +31,7 @@ import {
   validateSubstitutionPairs,
 } from "./domain";
 import { DEVICE_PREFERENCES_STORAGE_KEY } from "./devicePreferences";
-import { STORAGE_KEY } from "./storage";
+import { saveState, STORAGE_KEY } from "./storage";
 import { THEME_STORAGE_KEY } from "./theme";
 import type { AppState } from "./types";
 import {
@@ -2215,6 +2216,7 @@ describe("Sideline app", () => {
     expect(read().activeGame).toBeNull();
     app.unmount();
     render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Return to teams" }));
     fireEvent.click(screen.getByText("Golden Dragons"));
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
@@ -2298,12 +2300,12 @@ describe("Sideline app", () => {
       fireEvent.click(screen.getByRole("button", { name: "Formation" }));
       fireEvent.click(screen.getByRole("button", { name: "Starters" }));
       const striker = screen.getByRole("button", {
-        name: "Change John at Striker",
+        name: "Change William at Striker",
       });
       expect(striker.querySelector(".starter-player-warning")).toBeNull();
       expect(
         screen.getByRole("button", {
-          name: "Place Eli on the starting pitch",
+          name: "Place John on the starting pitch",
         }),
       ).toBeInTheDocument();
       const lineupLabels = () =>
@@ -2314,7 +2316,7 @@ describe("Sideline app", () => {
       fireEvent.click(screen.getByRole("button", { name: "Reset" }));
       fireEvent.click(screen.getByRole("button", { name: "Auto-fill" }));
       expect(
-        screen.getByRole("button", { name: "Change John at Striker" }),
+        screen.getByRole("button", { name: "Change William at Striker" }),
       ).toBeInTheDocument();
       expect(lineupLabels()).toEqual(initialLineup);
     },
@@ -2545,6 +2547,152 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Game clock, running")).toBeInTheDocument();
     expect(screen.queryByText("Game timeline")).not.toBeInTheDocument();
+  });
+
+  it("restores an unclosed summary and reopens it from home and setup without losing attendance edits", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u12;
+    state.activeGame = createGame(
+      team,
+      team.defaultFormationId,
+      team.roster.map((p) => p.id),
+      60,
+      1000,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    let mounted = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", { name: "End this game?" }),
+      ).getByRole("button", { name: "End game" }),
+    );
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+    expect(saved.activeGame).toBeNull();
+    expect(saved.lastCompletedGames?.u12?.game.id).toBe(state.activeGame.id);
+    mounted.unmount();
+    saved.teams.u12.roster[0].name = "Renamed later";
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    mounted = render(<App />);
+    expect(
+      screen.getByRole("heading", { name: "Game summary" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("main", { name: "Game summary" }),
+    ).toHaveTextContent("Jackson");
+    expect(
+      screen.getByRole("main", { name: "Game summary" }),
+    ).not.toHaveTextContent("Renamed later");
+    fireEvent.click(screen.getByRole("button", { name: "Return to teams" }));
+    mounted.unmount();
+    render(<App />);
+    expect(
+      screen.getByRole("heading", { name: "Which team is playing?" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /View last game for Fireballers/ }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Game summary" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Return to teams" }));
+    fireEvent.click(screen.getByText("Fireballers"));
+    fireEvent.click(screen.getByRole("button", { name: "Lazar Present" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /View last game for Fireballers/ }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Prep for next game" }));
+    expect(
+      screen.getByRole("button", { name: "Lazar Absent" }),
+    ).toBeInTheDocument();
+  });
+
+  it("views another team's last game without touching the current match, including after reload", () => {
+    const initial = structuredClone(INITIAL_STATE);
+    const team = initial.teams.u12;
+    const completed = createGame(
+      team,
+      team.defaultFormationId,
+      team.roster.map((p) => p.id),
+      60,
+      1000,
+    );
+    const state = closeCompletedSummary(
+      saveCompletedGame(initial, completed, 2000),
+    );
+    const u8 = state.teams.u8;
+    state.activeGame = createGame(
+      u8,
+      u8.defaultFormationId,
+      u8.roster.map((p) => p.id),
+      40,
+      3000,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(COACH_ID_STORAGE_KEY, "chris");
+    let mounted = render(<App />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /View last game for Fireballers/ }),
+    );
+    const read = () =>
+      JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
+    expect(read().activeGame).toEqual(state.activeGame);
+    mounted.unmount();
+    mounted = render(<App />);
+    expect(
+      screen.getByRole("heading", { name: "Game summary" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Return to teams" }));
+    expect(read().activeGame).toEqual(state.activeGame);
+    expect(
+      screen.getByText(/Golden Dragons has a game in progress/),
+    ).toBeInTheDocument();
+    mounted.unmount();
+    localStorage.setItem(COACH_ID_STORAGE_KEY, "lindsey");
+    saveState({ ...state, activeGame: null, openSummaryTeamId: "u12" });
+    render(<App />);
+    expect(
+      screen.getByRole("heading", { name: "Prepare game" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /View last game for Fireballers/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the game open and reports a failed summary save", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u8;
+    state.activeGame = createGame(
+      team,
+      team.defaultFormationId,
+      team.roster.map((p) => p.id),
+      40,
+      1000,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "End game" }));
+    const setItem = vi.spyOn(localStorage, "setItem").mockImplementation(() => {
+      throw new DOMException("Full", "QuotaExceededError");
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    fireEvent.click(
+      within(
+        screen.getByRole("alertdialog", { name: "End this game?" }),
+      ).getByRole("button", { name: "End game" }),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The game summary could not be saved",
+    );
+    expect(
+      screen.queryByRole("heading", { name: "Game summary" }),
+    ).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeGame.id).toBe(
+      state.activeGame.id,
+    );
+    expect(log).toHaveBeenCalled();
+    setItem.mockRestore();
+    log.mockRestore();
   });
 
   it("shows each player's position time before closing an ended game", () => {
@@ -4765,6 +4913,37 @@ describe("Sideline app", () => {
       );
     },
   );
+
+  it("distinguishes central and wide midfield in the U12 substitution picker", () => {
+    const state = structuredClone(INITIAL_STATE);
+    const team = state.teams.u12;
+    team.roster[9].preferredRoles = ["central-midfield", "wide-midfield"];
+    state.activeGame = createGame(
+      team,
+      "9-3-1-3-1",
+      team.roster.slice(0, 10).map((p) => p.id),
+      60,
+      1000,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan John in" }));
+    const picker = screen.getByRole("dialog", { name: "John #90 Plan in" });
+    expect(picker).toHaveTextContent("Central midfield · Wide midfield");
+    for (const position of ["Holding Mid", "Center Mid"]) {
+      expect(
+        within(picker).getByRole("button", { name: new RegExp(position) }),
+      ).toHaveTextContent("1st preference");
+    }
+    for (const position of ["Left Mid", "Right Mid"]) {
+      expect(
+        within(picker).getByRole("button", { name: new RegExp(position) }),
+      ).toHaveTextContent("2nd preference");
+    }
+    expect(
+      within(picker).getByRole("button", { name: /Center Back/ }),
+    ).toHaveTextContent("Outside preferences");
+  });
 
   it("queues and edits one substitution directly from a bench player", () => {
     render(<App />);

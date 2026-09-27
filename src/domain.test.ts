@@ -730,7 +730,7 @@ describe("team rosters", () => {
       numbers.every((number) => number && number >= 1 && number <= 99),
     ).toBe(true);
     expect(new Set(numbers).size).toBe(numbers.length);
-    expect(players.every((player) => player.preferredRoles.length >= 2)).toBe(
+    expect(players.every((player) => player.preferredRoles.length >= 1)).toBe(
       true,
     );
     expect(
@@ -742,7 +742,7 @@ describe("team rosters", () => {
       preferredRoles: ["defender", "midfielder", "forward"],
       active: true,
     });
-    expect(players.every((player) => player.preferredRoles.length <= 4)).toBe(
+    expect(players.every((player) => player.preferredRoles.length <= 6)).toBe(
       true,
     );
     expect(
@@ -754,11 +754,11 @@ describe("team rosters", () => {
       INITIAL_TEAMS.u12.roster
         .filter((player) => player.preferredRoles.includes("goalkeeper"))
         .map((player) => player.name),
-    ).toEqual(["Jackson", "Obasi"]);
+    ).toEqual(["Jackson", "Obasi", "Matt"]);
     expect(
       INITIAL_TEAMS.u12.roster.find((player) => player.name === "Jack")
         ?.preferredRoles,
-    ).toEqual(["defender", "midfielder"]);
+    ).toEqual(["outside-back", "central-midfield"]);
     expect(u8Numbers).toMatchObject({
       Simon: 10,
       Ollie: 23,

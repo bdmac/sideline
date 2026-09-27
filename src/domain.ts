@@ -12,6 +12,7 @@ import type {
   Team,
   TeamId,
 } from "./types";
+import { getPositionPreferenceIndex } from "./positionPreferences";
 
 const position = (
   id: string,
@@ -23,7 +24,7 @@ const position = (
   role: Formation["positions"][number]["role"],
 ) => ({ id, label, shortLabel, mediumLabel, x, y, role });
 
-export const FORMATIONS: Formation[] = [
+const formationDefinitions: Formation[] = [
   {
     id: "5-2-2",
     name: "2-2",
@@ -214,6 +215,28 @@ export const FORMATIONS: Formation[] = [
   },
 ];
 
+export const FORMATIONS: Formation[] = formationDefinitions.map(
+  (formation): Formation =>
+    formation.sideSize === 9
+      ? {
+          ...formation,
+          positions: formation.positions.map((item) => ({
+            ...item,
+            preferenceGroup:
+              item.role === "defender"
+                ? item.id === "dc"
+                  ? "center-back"
+                  : "outside-back"
+                : item.role === "midfielder"
+                  ? formation.id === "9-3-2-3" || ["mc", "dm"].includes(item.id)
+                    ? "central-midfield"
+                    : "wide-midfield"
+                  : item.role,
+          })),
+        }
+      : formation,
+);
+
 const sampleNames = {
   u8: [
     "Simon",
@@ -251,7 +274,7 @@ const rosterNumbers: Record<TeamId, number[]> = {
   u12: [82, 15, 17, 8, 19, 78, 6, 11, 18, 90, 13, 21, 22, 5, 30],
 };
 
-const rosterPreferences: Record<TeamId, PositionRole[][]> = {
+const rosterPreferences: Record<TeamId, Player["preferredRoles"][]> = {
   u8: [
     ["forward", "midfielder", "defender"],
     ["defender", "midfielder", "forward"],
@@ -265,21 +288,21 @@ const rosterPreferences: Record<TeamId, PositionRole[][]> = {
     ["defender", "midfielder", "forward"],
   ],
   u12: [
-    ["goalkeeper", "defender", "midfielder"],
-    ["defender", "midfielder", "forward"],
-    ["forward", "midfielder", "defender"],
-    ["defender", "midfielder"],
+    ["goalkeeper", "wide-midfield"],
+    ["outside-back"],
+    ["wide-midfield", "center-back"],
+    ["central-midfield", "outside-back"],
+    ["forward", "outside-back"],
+    ["forward", "outside-back"],
+    ["center-back", "goalkeeper"],
+    ["central-midfield", "forward", "outside-back"],
+    ["wide-midfield", "forward", "goalkeeper"],
+    ["central-midfield"],
+    ["wide-midfield", "center-back"],
     ["midfielder", "defender", "forward"],
-    ["midfielder", "defender"],
-    ["defender", "midfielder", "goalkeeper"],
-    ["midfielder", "forward"],
-    ["forward", "midfielder"],
-    ["forward", "midfielder", "defender"],
-    ["defender", "midfielder", "forward"],
-    ["midfielder", "defender", "forward"],
-    ["defender", "forward", "midfielder"],
-    ["defender", "midfielder"],
-    ["defender", "midfielder", "forward"],
+    ["center-back", "wide-midfield"],
+    ["outside-back", "central-midfield"],
+    ["center-back", "central-midfield"],
   ],
 };
 
@@ -317,7 +340,7 @@ export const INITIAL_TEAMS: Record<TeamId, Team> = {
 };
 
 export const INITIAL_STATE: AppState = {
-  version: 28,
+  version: 29,
   teams: INITIAL_TEAMS,
   activeGame: null,
 };
@@ -977,9 +1000,14 @@ export const assignPlayerToPosition = (
   return next;
 };
 
-const preferenceScore = (player: Player, role: PositionRole) => {
-  const preferenceIndex = player.preferredRoles.indexOf(role);
-  return preferenceIndex === -1 ? 0 : (4 - preferenceIndex) * 1_000;
+const preferenceScore = (
+  player: Player,
+  position: Parameters<typeof getPositionPreferenceIndex>[1],
+) => {
+  const preferenceIndex = getPositionPreferenceIndex(player, position);
+  const ranks =
+    typeof position !== "string" && position.preferenceGroup ? 6 : 4;
+  return preferenceIndex === -1 ? 0 : (ranks - preferenceIndex) * 1_000;
 };
 
 export type SubstitutionDestinationSortKey = {
@@ -1093,7 +1121,7 @@ export const assignPlayersByPreference = (
       const rest = solve(positionIndex + 1, usedMask | playerBit);
       const candidate = {
         score:
-          preferenceScore(player, positions[positionIndex].role) +
+          preferenceScore(player, positions[positionIndex]) +
           (selectionBonuses[player.id] ?? 0) +
           (positions[positionIndex].role === "goalkeeper"
             ? 0
@@ -1352,7 +1380,12 @@ const getGoalkeeperBudget = (game: ActiveGame, team: Team) => {
       );
       return {
         goalkeeperPreferenceScore: player
-          ? preferenceScore(player, "goalkeeper")
+          ? preferenceScore(
+              player,
+              getFormation(game.formationId).positions.find(
+                (position) => position.role === "goalkeeper",
+              )!,
+            )
           : 0,
         primaryGoalkeeper: player?.preferredRoles[0] === "goalkeeper",
         playedSeconds,
@@ -1929,13 +1962,19 @@ export const suggestSubstitutions = (
       if (totalDifference) return totalDifference;
       const fitA = Math.max(
         ...incomingPlayers.map((player) =>
-          preferenceScore(player, roleByPosition.get(positionA)!),
+          preferenceScore(
+            player,
+            formation.positions.find((item) => item.id === positionA)!,
+          ),
         ),
         0,
       );
       const fitB = Math.max(
         ...incomingPlayers.map((player) =>
-          preferenceScore(player, roleByPosition.get(positionB)!),
+          preferenceScore(
+            player,
+            formation.positions.find((item) => item.id === positionB)!,
+          ),
         ),
         0,
       );
@@ -2049,7 +2088,7 @@ export const suggestSubstitutions = (
             const player = playerById.get(assignments[positionItem.id]);
             return (
               penalty +
-              (player?.preferredRoles.includes(positionItem.role)
+              (player && getPositionPreferenceIndex(player, positionItem) >= 0
                 ? 0
                 : timeBandSeconds)
             );
@@ -2066,9 +2105,7 @@ export const suggestSubstitutions = (
         adjustmentScore: -linePenalty,
         preference: selectedPositions.reduce((total, positionItem) => {
           const player = playerById.get(assignments[positionItem.id]);
-          return (
-            total + (player ? preferenceScore(player, positionItem.role) : 0)
-          );
+          return total + (player ? preferenceScore(player, positionItem) : 0);
         }, 0),
         exactTotalScore: entries.reduce(
           (total, [, playerId]) =>

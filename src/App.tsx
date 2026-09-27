@@ -149,11 +149,18 @@ import {
   compareStarterPlayersByPreference,
   getStarterLineupAdvice,
 } from "./starterLineupModel";
-import { formatPlayerLabel, preferredRoleLabel } from "./playerLabels";
+import {
+  formatPlayerLabel,
+  preferredRoleLabel,
+  preferredRoleAbbreviation,
+} from "./playerLabels";
+import { getPositionPreferenceIndex } from "./positionPreferences";
+import { closeCompletedSummary, saveCompletedGame } from "./completedGames";
 import { PlayerIdentity } from "./PlayerIdentity";
 import type {
   ActiveGame,
   AppState,
+  CompletedGame,
   GameEvent,
   Player,
   Position,
@@ -167,7 +174,13 @@ type Screen =
   | { name: "home" }
   | { name: "setup"; teamId: TeamId }
   | { name: "live" }
-  | { name: "summary"; game: ActiveGame; teamId: TeamId };
+  | {
+      name: "summary";
+      game: ActiveGame;
+      teamId: TeamId;
+      team?: Team;
+      returnTo?: { name: "home" } | { name: "setup"; teamId: TeamId };
+    };
 
 type SummaryReturnLabel =
   "Prep for next game" | "Return to teams" | "Return to coaches";
@@ -186,6 +199,22 @@ const getCoachLandingScreen = (coach: Coach, state: AppState): Screen => {
     return { name: "setup", teamId: coach.assignments[0].teamId };
   }
   return { name: "home" };
+};
+
+const getInitialScreen = (coach: Coach | null, state: AppState): Screen => {
+  const completed = state.openSummaryTeamId
+    ? state.lastCompletedGames?.[state.openSummaryTeamId]
+    : undefined;
+  if (completed && (!coach || coachHasTeam(coach, completed.team.id))) {
+    return {
+      name: "summary",
+      game: completed.game,
+      teamId: completed.team.id,
+      team: completed.team,
+      returnTo: state.activeGame && coach ? { name: "home" } : undefined,
+    };
+  }
+  return coach ? getCoachLandingScreen(coach, state) : { name: "coach" };
 };
 
 interface BeforeInstallPromptEvent extends Event {
@@ -230,15 +259,6 @@ const formatPlayerDuration = (seconds: number, zeroLabel = "0:00") => {
   if (safe < 60) return formatDuration(safe);
   return `${Math.round(safe / 60)} min`;
 };
-
-const preferredRoleAbbreviation = (role: Player["preferredRoles"][number]) =>
-  role === "goalkeeper"
-    ? "GK"
-    : role === "defender"
-      ? "DEF"
-      : role === "midfielder"
-        ? "MID"
-        : "FWD";
 
 const compactPreferredRolesLabel = (roles: Player["preferredRoles"]) =>
   roles.length > 1
@@ -729,9 +749,7 @@ function App() {
   const stateRef = useRef(state);
   const hasActiveGame = Boolean(state.activeGame);
   const [screen, setScreen] = useState<Screen>(() =>
-    selectedCoach
-      ? getCoachLandingScreen(selectedCoach, state)
-      : { name: "coach" },
+    getInitialScreen(selectedCoach, state),
   );
   const screenKey =
     screen.name === "setup" ? `${screen.name}:${screen.teamId}` : screen.name;
@@ -739,11 +757,12 @@ function App() {
     useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(isStandalone);
   const [installHelpOpen, setInstallHelpOpen] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const commitState = (update: (current: AppState) => AppState) => {
     const next = update(stateRef.current);
-    stateRef.current = next;
     saveState(next);
+    stateRef.current = next;
     setState(next);
   };
 
@@ -908,6 +927,7 @@ function App() {
     }
   };
   const goToCoachLanding = () => {
+    if (screen.name === "summary") commitState(closeCompletedSummary);
     setScreen(
       selectedCoach
         ? getCoachLandingScreen(selectedCoach, stateRef.current)
@@ -919,13 +939,52 @@ function App() {
     if (!coach) return;
     saveCoachId(coachId);
     setSelectedCoachId(coachId);
-    setScreen(getCoachLandingScreen(coach, stateRef.current));
+    setScreen(getInitialScreen(coach, stateRef.current));
   };
   const signOut = () => {
+    if (screen.name === "summary") commitState(closeCompletedSummary);
     saveCoachId(null);
     setSelectedCoachId(null);
     setScreen({ name: "coach" });
   };
+  const endGame = (game: ActiveGame) => {
+    const endedAt = Date.now();
+    try {
+      commitState((current) => saveCompletedGame(current, game, endedAt));
+    } catch (error) {
+      console.error("Sideline could not save the completed game.", error);
+      setSaveError(
+        "The game summary could not be saved. The game is still open. Free up browser storage, then try End game again.",
+      );
+      return;
+    }
+    setSaveError(null);
+    const completed = stateRef.current.lastCompletedGames![game.teamId]!;
+    setScreen({
+      name: "summary",
+      game: completed.game,
+      teamId: game.teamId,
+      team: completed.team,
+    });
+  };
+  const viewLastGame = (teamId: TeamId) => {
+    const completed = state.lastCompletedGames?.[teamId];
+    if (!completed) return;
+    commitState((current) => ({ ...current, openSummaryTeamId: teamId }));
+    setScreen({
+      name: "summary",
+      game: completed.game,
+      teamId,
+      team: completed.team,
+      returnTo: screen.name === "setup" ? screen : { name: "home" },
+    });
+  };
+  const setupScreen =
+    screen.name === "setup"
+      ? screen
+      : screen.name === "summary" && screen.returnTo?.name === "setup"
+        ? screen.returnTo
+        : null;
 
   return (
     <ThemeProvider
@@ -999,10 +1058,7 @@ function App() {
             <CoachScreen
               state={state}
               onChooseCoach={selectCoach}
-              onEndActiveGame={(game) => {
-                commitState((current) => ({ ...current, activeGame: null }));
-                setScreen({ name: "summary", game, teamId: game.teamId });
-              }}
+              onEndActiveGame={endGame}
               showInstall={!installed}
               onInstall={installApp}
             />
@@ -1013,21 +1069,28 @@ function App() {
               teamIds={selectedCoach ? coachTeamIds(selectedCoach) : []}
               onChooseTeam={chooseTeam}
               onResume={() => setScreen({ name: "live" })}
+              onViewLastGame={viewLastGame}
             />
           )}
-          {screen.name === "setup" && (
-            <SetupScreen
-              team={state.teams[screen.teamId]}
-              onBack={
-                selectedCoach && selectedCoach.assignments.length > 1
-                  ? () => setScreen({ name: "home" })
-                  : undefined
-              }
-              onStart={(game) => {
-                commitState((current) => updateActiveGame(current, game));
-                setScreen({ name: "live" });
-              }}
-            />
+          {setupScreen && (
+            <div hidden={screen.name !== "setup"}>
+              <SetupScreen
+                team={state.teams[setupScreen.teamId]}
+                lastGame={state.lastCompletedGames?.[setupScreen.teamId]}
+                onViewLastGame={() => viewLastGame(setupScreen.teamId)}
+                onBack={
+                  selectedCoach && selectedCoach.assignments.length > 1
+                    ? () => setScreen({ name: "home" })
+                    : undefined
+                }
+                onStart={(game) => {
+                  commitState((current) =>
+                    updateActiveGame(closeCompletedSummary(current), game),
+                  );
+                  setScreen({ name: "live" });
+                }}
+              />
+            </div>
           )}
           {screen.name === "live" && state.activeGame && activeTeam && (
             <LiveGameScreen
@@ -1043,25 +1106,37 @@ function App() {
               onChange={(game) =>
                 commitState((current) => updateActiveGame(current, game))
               }
-              onEnd={(game) => {
-                commitState((current) => ({ ...current, activeGame: null }));
-                setScreen({ name: "summary", game, teamId: game.teamId });
-              }}
+              onEnd={endGame}
             />
+          )}
+          {saveError && (
+            <p className="notice danger" role="alert">
+              {saveError}
+            </p>
           )}
           {screen.name === "summary" && (
             <GameSummary
               game={screen.game}
-              team={teamWithGameGuests(state.teams[screen.teamId], screen.game)}
+              team={teamWithGameGuests(
+                screen.team ?? state.teams[screen.teamId],
+                screen.game,
+              )}
               returnLabel={
-                !selectedCoach
-                  ? "Return to coaches"
-                  : selectedCoach.assignments.length === 1
-                    ? "Prep for next game"
-                    : "Return to teams"
+                screen.returnTo?.name === "setup"
+                  ? "Prep for next game"
+                  : screen.returnTo?.name === "home"
+                    ? "Return to teams"
+                    : !selectedCoach
+                      ? "Return to coaches"
+                      : selectedCoach.assignments.length === 1
+                        ? "Prep for next game"
+                        : "Return to teams"
               }
               onClose={() => {
-                if (!selectedCoach) {
+                commitState(closeCompletedSummary);
+                if (screen.returnTo) {
+                  setScreen(screen.returnTo);
+                } else if (!selectedCoach) {
                   setScreen({ name: "coach" });
                 } else if (selectedCoach.assignments.length === 1) {
                   setScreen({
@@ -1263,16 +1338,44 @@ function CoachScreen({
   );
 }
 
+function LastGameButton({
+  completed,
+  onClick,
+}: {
+  completed: CompletedGame;
+  onClick: () => void;
+}) {
+  const date = new Date(completed.endedAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return (
+    <Button
+      className="last-game-button"
+      variant="invisible"
+      size="large"
+      onClick={onClick}
+      aria-label={`View last game for ${completed.team.name}, ${date}`}
+      trailingVisual={ChevronRight}
+    >
+      Last game · {date}
+    </Button>
+  );
+}
+
 function HomeScreen({
   state,
   teamIds,
   onChooseTeam,
   onResume,
+  onViewLastGame,
 }: {
   state: AppState;
   teamIds: TeamId[];
   onChooseTeam: (teamId: TeamId) => void;
   onResume: () => void;
+  onViewLastGame: (teamId: TeamId) => void;
 }) {
   const activeTeam = state.activeGame
     ? state.teams[state.activeGame.teamId]
@@ -1338,26 +1441,35 @@ function HomeScreen({
           const hasOtherActiveGame =
             state.activeGame && state.activeGame.teamId !== team.id;
           return (
-            <button
-              type="button"
-              className="team-row"
-              key={team.id}
-              disabled={Boolean(hasOtherActiveGame)}
-              onClick={() => onChooseTeam(team.id)}
-            >
-              <TeamCrest teamId={team.id} />
-              <span className="team-row-main">
-                <strong>{team.name}</strong>
-                <small>
-                  {team.sideSize}v{team.sideSize} ·{" "}
-                  {team.roster.filter((player) => player.active).length} players
-                </small>
-              </span>
-              {hasOtherActiveGame && (
-                <span className="locked-note">{activeTeam?.name} active</span>
+            <div key={team.id}>
+              <button
+                type="button"
+                className="team-row"
+                key={team.id}
+                disabled={Boolean(hasOtherActiveGame)}
+                onClick={() => onChooseTeam(team.id)}
+              >
+                <TeamCrest teamId={team.id} />
+                <span className="team-row-main">
+                  <strong>{team.name}</strong>
+                  <small>
+                    {team.sideSize}v{team.sideSize} ·{" "}
+                    {team.roster.filter((player) => player.active).length}{" "}
+                    players
+                  </small>
+                </span>
+                {hasOtherActiveGame && (
+                  <span className="locked-note">{activeTeam?.name} active</span>
+                )}
+                <ChevronRight size={22} aria-hidden="true" />
+              </button>
+              {state.lastCompletedGames?.[team.id] && (
+                <LastGameButton
+                  completed={state.lastCompletedGames[team.id]!}
+                  onClick={() => onViewLastGame(team.id)}
+                />
               )}
-              <ChevronRight size={22} aria-hidden="true" />
-            </button>
+            </div>
           );
         })}
       </div>
@@ -1503,10 +1615,14 @@ function SetupScreen({
   team,
   onBack,
   onStart,
+  lastGame,
+  onViewLastGame,
 }: {
   team: Team;
   onBack?: () => void;
   onStart: (game: ActiveGame) => void;
+  lastGame?: CompletedGame;
+  onViewLastGame: () => void;
 }) {
   const [guestPlayers, setGuestPlayers] = useState<Player[]>([]);
   const [guestPlayerOpen, setGuestPlayerOpen] = useState(false);
@@ -1790,7 +1906,12 @@ function SetupScreen({
         ) : (
           <div className="setup-team-lockup">{teamIdentity}</div>
         )}
-        <p>Set the squad, shape, and starters.</p>
+        <div className="setup-heading-details">
+          <p>Set the squad, shape, and starters.</p>
+          {lastGame && (
+            <LastGameButton completed={lastGame} onClick={onViewLastGame} />
+          )}
+        </div>
       </section>
 
       <div
@@ -3692,9 +3813,10 @@ function LiveGameScreen({
                   id="replacement-keeper-notice"
                 />
                 {unavailablePosition.role !== "goalkeeper" &&
-                  !selectedReplacement.preferredRoles.includes(
-                    unavailablePosition.role,
-                  ) && (
+                  getPositionPreferenceIndex(
+                    selectedReplacement,
+                    unavailablePosition,
+                  ) < 0 && (
                     <InlineMessage variant="warning" role="status">
                       {selectedReplacement.name} at{" "}
                       {unavailablePosition.mediumLabel}: outside preferences.
@@ -4285,7 +4407,7 @@ function StarterPicker({
     .filter((player) => player.id !== currentPlayerId)
     .sort((a, b) =>
       position
-        ? compareStarterPlayersByPreference(a, b, position.role)
+        ? compareStarterPlayersByPreference(a, b, position)
         : a.name.localeCompare(b.name),
     );
 
@@ -4779,7 +4901,7 @@ function BenchSubstitutionPicker({
       const position = formation.positions.find(
         (item) => item.id === positionId,
       )!;
-      const preferenceIndex = player.preferredRoles.indexOf(position.role);
+      const preferenceIndex = getPositionPreferenceIndex(player, position);
       const plannedPair = game.queuedSubstitutions?.find(
         (pair) => pair.outPlayerId === outPlayerId,
       );
@@ -5013,7 +5135,7 @@ function BenchReplacementList({
   const choices = game.benchIds
     .map((inPlayerId) => {
       const incoming = team.roster.find((item) => item.id === inPlayerId)!;
-      const preferenceIndex = incoming.preferredRoles.indexOf(position.role);
+      const preferenceIndex = getPositionPreferenceIndex(incoming, position);
       const plannedPair = game.queuedSubstitutions?.find(
         (pair) => pair.inPlayerId === inPlayerId,
       );
@@ -6379,8 +6501,9 @@ function SubstitutionPlanner({
                   );
                   const preferenceIndex =
                     incomingPlayer && candidatePosition
-                      ? incomingPlayer.preferredRoles.indexOf(
-                          candidatePosition.role,
+                      ? getPositionPreferenceIndex(
+                          incomingPlayer,
+                          candidatePosition,
                         )
                       : -1;
                   return {

@@ -103,7 +103,7 @@ describe("retired U12 player", () => {
       const migrated = migrateStoredState(saved);
       expect(migrated).toEqual({
         ...saved,
-        version: 28,
+        version: 29,
         teams: {
           ...saved.teams,
           u12: {
@@ -129,7 +129,7 @@ describe("retired U12 player", () => {
   it("leaves U8 and unrelated U12 roster edits unchanged during migration", () => {
     const state = structuredClone(INITIAL_STATE);
     state.teams.u12.roster.find((p) => p.id === "u12-p12")!.active = true;
-    state.teams.u12.roster[0].preferredRoles = ["defender"];
+    state.teams.u12.roster[0].number = 99;
     state.teams.u12.roster.push({
       id: "custom-player",
       name: "Aaron",

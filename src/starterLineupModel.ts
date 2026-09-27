@@ -3,7 +3,11 @@ import {
   comparePlayersByNameThenNumber,
 } from "./domain";
 import { preferredRoleLabel } from "./playerLabels";
-import type { Formation, Player, PositionRole } from "./types";
+import {
+  getPositionPreferenceIndex,
+  preferenceRankLabel,
+} from "./positionPreferences";
+import type { Formation, Player } from "./types";
 
 const preferenceListFormatter = new Intl.ListFormat("en", {
   style: "long",
@@ -21,10 +25,10 @@ type StarterMoveFeedback = {
 export const compareStarterPlayersByPreference = (
   a: Player,
   b: Player,
-  role: PositionRole,
+  role: Parameters<typeof getPositionPreferenceIndex>[1],
 ) => {
-  const aIndex = a.preferredRoles.indexOf(role);
-  const bIndex = b.preferredRoles.indexOf(role);
+  const aIndex = getPositionPreferenceIndex(a, role);
+  const bIndex = getPositionPreferenceIndex(b, role);
   return (
     Number(aIndex < 0) - Number(bIndex < 0) ||
     aIndex - bIndex ||
@@ -33,12 +37,13 @@ export const compareStarterPlayersByPreference = (
   );
 };
 
-export const starterPreferenceFit = (player: Player, role: PositionRole) => {
+export const starterPreferenceFit = (
+  player: Player,
+  role: Parameters<typeof getPositionPreferenceIndex>[1],
+) => {
   if (player.preferredRoles.length === 0) return "No preferences listed";
-  const index = player.preferredRoles.indexOf(role);
-  return index < 0
-    ? "Outside preferences"
-    : `${["1st", "2nd", "3rd", "4th"][index]} preference`;
+  const index = getPositionPreferenceIndex(player, role);
+  return index < 0 ? "Outside preferences" : preferenceRankLabel(index);
 };
 
 export const getStarterLineupAdvice = (
@@ -53,7 +58,7 @@ export const getStarterLineupAdvice = (
     if (
       player &&
       player.preferredRoles.length > 0 &&
-      !player.preferredRoles.includes(position.role)
+      getPositionPreferenceIndex(player, position) < 0
     )
       issues.push(
         `${player.name} prefers ${preferenceListFormatter.format(
@@ -101,7 +106,7 @@ export const previewStarterMove = (
           },
         },
       ];
-    const fit = starterPreferenceFit(incoming, position.role);
+    const fit = starterPreferenceFit(incoming, position);
     const destination = `${position.label} · ${fit}`;
     return [
       {
