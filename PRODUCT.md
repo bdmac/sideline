@@ -12,6 +12,8 @@ Sideline is a mobile-first, installable game-day clipboard for youth recreationa
 
 ## Durable behavior
 
+- New-game attendance is a roll call: every roster player starts unchecked/not present, and initial starter assignments include only selected attendees. This default applies only when initializing fresh setup; changing setup steps, viewing the last report and returning, or recovering an existing game does not clear attendance choices. Adding a guest still explicitly marks that guest present.
+
 The editable set of upcoming pairings is a **Substitution plan**. **Create plan**, **Add to plan**, and **Update plan** edit those instructions; **In this plan** describes a player's pairing. The editor's **Save plan** action saves the draft and opens its checklist without changing the lineup or timers. **Send 'em in** executes the reviewed set. The default editor copy is **Choose your swaps, then save the plan. Send players in when you're ready.** **Next reminder** describes the timing prompt, not an automatic substitution or permission from the referee. Individual immediate substitutions retain the explicit **Sub now** action.
 
 ### Substitution planning

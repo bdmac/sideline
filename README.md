@@ -38,7 +38,7 @@ npm run build
 ## How to use
 
 1. Choose U8 or U12. Team state is deliberately isolated.
-2. Start a game and mark attendance from the fixed team roster.
+2. Start a game and take roll call from the fixed team roster. Everyone starts unchecked; tap each player who is present.
 3. Select a formation, assign starters, and confirm the bench. U8 defaults to two 25-minute halves, with four 10-minute quarters or two 20-minute halves available in setup. U12 uses two 30-minute halves.
 4. Start or pause the clock from the sticky game controls.
 5. Open **Create plan**, choose the number of swaps, review or override the fair suggestions, and confirm the OUT/IN checklist.

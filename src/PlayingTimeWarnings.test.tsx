@@ -225,6 +225,9 @@ describe("playing-time safeguards", () => {
   it("selects two 25-minute halves by default and keeps alternative U8 formats available", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    screen
+      .getAllByRole("button", { name: / Absent$/ })
+      .forEach((button) => fireEvent.click(button));
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     expect(screen.getByLabelText("Game format")).toHaveValue("halves-25");
     expect(

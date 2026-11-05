@@ -1636,9 +1636,7 @@ function SetupScreen({
     [setupTeam.roster],
   );
   const formations = getFormationsForTeam(team);
-  const [presentIds, setPresentIds] = useState(
-    activePlayers.map((player) => player.id),
-  );
+  const [presentIds, setPresentIds] = useState<string[]>([]);
   const [formationId, setFormationId] = useState(
     formations.some((formation) => formation.id === team.defaultFormationId)
       ? team.defaultFormationId
@@ -1662,7 +1660,7 @@ function SetupScreen({
   const [assignments, setAssignments] = useState<Record<string, string>>(() =>
     assignStartingPlayersByPreference(
       formation,
-      activePlayers.map((player) => player.id),
+      presentIds,
       team.roster,
       team.lastStartingLineup,
     ),

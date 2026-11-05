@@ -39,7 +39,14 @@ import {
   u8RepeatKeeperRotation,
 } from "./test/rotationFixtures";
 
-const startGame = () => {
+const markRosterPresent = () => {
+  screen.queryAllByRole("button", { name: / Absent$/ }).forEach((button) => {
+    fireEvent.click(button);
+  });
+};
+
+const startGame = (selectRoster = true) => {
+  if (selectRoster) markRosterPresent();
   fireEvent.click(screen.getByRole("button", { name: "Formation" }));
   const oneTwoOne = screen.queryByRole("button", { name: /1-2-1/ });
   if (oneTwoOne) fireEvent.click(oneTwoOne);
@@ -1477,17 +1484,108 @@ describe("Sideline app", () => {
     expect(gameClock).toHaveTextContent("0:02");
   });
 
+  it.each(["u8", "u12"] as const)(
+    "starts fresh $teamId attendance unchecked with no hidden starters",
+    (teamId) => {
+      const team = INITIAL_STATE.teams[teamId];
+      render(<App />);
+      fireEvent.click(screen.getByText(team.name));
+      const attendance = screen.getAllByRole("button", { name: / Absent$/ });
+      expect(attendance).toHaveLength(
+        team.roster.filter((p) => p.active).length,
+      );
+      attendance.forEach((button) =>
+        expect(button).toHaveAttribute("aria-pressed", "false"),
+      );
+      expect(
+        screen.queryByRole("button", { name: / Present$/ }),
+      ).not.toBeInTheDocument();
+      expect(document.querySelector(".attendance-count")).toHaveTextContent(
+        "0 present",
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+      fireEvent.click(screen.getByRole("button", { name: "Starters" }));
+      expect(
+        screen.getAllByRole("button", { name: /^Assign player at / }),
+      ).toHaveLength(team.sideSize);
+      expect(
+        screen.getByRole("button", { name: "Start short-sided" }),
+      ).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: "Formation" }));
+      fireEvent.click(screen.getByRole("button", { name: "Attendance" }));
+      const present = team.roster
+        .filter((p) => p.active)
+        .slice(0, team.sideSize);
+      present.forEach((player) =>
+        fireEvent.click(
+          screen.getByRole("button", { name: `${player.name} Absent` }),
+        ),
+      );
+      startGame(false);
+      const game = (JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState)
+        .activeGame!;
+      expect(game.presentIds).toEqual(present.map((p) => p.id));
+      expect(Object.values(game.assignments).sort()).toEqual(
+        present.map((p) => p.id).sort(),
+      );
+      expect(game.benchIds).toEqual([]);
+    },
+  );
+
+  it.each(["u8", "u12"] as const)(
+    "preserves selected $teamId attendance and lineup when recovering before kickoff",
+    (teamId) => {
+      const team = INITIAL_STATE.teams[teamId];
+      let app = render(<App />);
+      fireEvent.click(screen.getByText(team.name));
+      const present = team.roster
+        .filter((p) => p.active)
+        .slice(0, team.sideSize + 1);
+      present.forEach((player) =>
+        fireEvent.click(
+          screen.getByRole("button", { name: `${player.name} Absent` }),
+        ),
+      );
+      startGame(false);
+      const readGame = () =>
+        (JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState)
+          .activeGame!;
+      const game = readGame();
+      expect(game.clock.running).toBe(false);
+      expect(game.clock.elapsedSeconds).toBe(0);
+      expect(game.presentIds).toEqual(present.map((p) => p.id));
+      app.unmount();
+      app = render(<App />);
+      expect(
+        screen.queryByRole("heading", { name: "Prepare game" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Start game" }),
+      ).toBeInTheDocument();
+      expect(readGame()).toEqual(game);
+      fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+      expect(readGame().presentIds).toEqual(game.presentIds);
+      expect(readGame().assignments).toEqual(game.assignments);
+      expect(readGame().benchIds).toEqual(game.benchIds);
+      app.unmount();
+    },
+  );
+
   it("keeps the roster fixed while allowing attendance selection", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     expect(
       screen.queryByRole("button", { name: /edit roster/i }),
     ).not.toBeInTheDocument();
-    const simon = screen.getByRole("button", { name: /Simon Present/i });
+    const simon = screen.getByRole("button", { name: /Simon Absent/i });
     expect(simon.querySelector(".player-identity-number")).toHaveTextContent(
       "#10",
     );
-    expect(simon).toHaveAttribute("aria-pressed", "true");
+    expect(simon).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(simon);
+    expect(
+      screen.getByRole("button", { name: /Simon Present/i }),
+    ).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(simon);
     const absentSimon = screen.getByRole("button", { name: /Simon Absent/i });
     expect(absentSimon).toBeInTheDocument();
@@ -1511,7 +1609,7 @@ describe("Sideline app", () => {
       screen.queryByRole("heading", { name: "Choose the formation" }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Evan Present/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Evan Absent/i }));
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     expect(
       screen.getByRole("heading", { name: "Choose the formation" }),
@@ -1536,13 +1634,14 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Attendance" }));
     expect(
-      screen.getByRole("button", { name: /Evan Absent/i }),
+      screen.getByRole("button", { name: /Evan Present/i }),
     ).toBeInTheDocument();
   });
 
   it("starts a Golden Dragons game with two 25-minute halves", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
 
     const gameFormat = screen.getByLabelText("Game format");
@@ -1613,6 +1712,7 @@ describe("Sideline app", () => {
           (element) => element.textContent,
         );
       expect(names()).toEqual(expected);
+      markRosterPresent();
       fireEvent.click(
         screen.getByRole("button", {
           name: `${expected[0]} Present`,
@@ -1672,6 +1772,7 @@ describe("Sideline app", () => {
   it("warns when attendance drops below the required side size", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     expect(
       screen.getByRole("button", { name: "Add guest player" }),
     ).toBeInTheDocument();
@@ -1718,7 +1819,7 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
     const attendance = screen.getByRole("button", {
-      name: "Collier Present",
+      name: "Collier Absent",
     });
     expect(
       attendance.querySelector(".player-identity-number"),
@@ -1739,6 +1840,7 @@ describe("Sideline app", () => {
   it("adds a guest player for one game without changing the team roster", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
 
     fireEvent.click(screen.getByRole("button", { name: "Add guest player" }));
     const guestDialog = screen.getByRole("dialog", {
@@ -1798,8 +1900,8 @@ describe("Sideline app", () => {
   it("allows a confirmed short-sided start with every available player assigned", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    ["Simon", "Noah", "Maddox", "Ollie", "Malik", "Collier"].forEach((name) => {
-      fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
+    ["Dylan", "Henry", "Haru", "Evan"].forEach((name) => {
+      fireEvent.click(screen.getByRole("button", { name: `${name} Absent` }));
     });
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     fireEvent.click(screen.getByRole("button", { name: /1-2-1/ }));
@@ -1851,8 +1953,8 @@ describe("Sideline app", () => {
   it("calls out the no-bench case when exactly enough players attend", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
-    ["Simon", "Noah", "Maddox", "Ollie", "Collier"].forEach((name) => {
-      fireEvent.click(screen.getByRole("button", { name: `${name} Present` }));
+    ["Malik", "Dylan", "Henry", "Haru", "Evan"].forEach((name) => {
+      fireEvent.click(screen.getByRole("button", { name: `${name} Absent` }));
     });
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
@@ -1891,6 +1993,7 @@ describe("Sideline app", () => {
   it("replaces a starter from the bench, undoes it, and starts with the edited lineup", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     fireEvent.click(screen.getByRole("button", { name: /1-2-1/ }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
@@ -1963,6 +2066,7 @@ describe("Sideline app", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
     fireEvent.click(
@@ -2016,6 +2120,7 @@ describe("Sideline app", () => {
   it("reveals a starter's concerns only in their picker and clears the icon when fixed", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
     fireEvent.click(
@@ -2063,6 +2168,7 @@ describe("Sideline app", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     fireEvent.click(screen.getByRole("button", { name: /1-2-1/ }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
@@ -2116,6 +2222,7 @@ describe("Sideline app", () => {
   it("does not undo a starter edit across an attendance change", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
@@ -2218,6 +2325,7 @@ describe("Sideline app", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Return to teams" }));
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
     const team = read().teams.u8;
@@ -2292,6 +2400,7 @@ describe("Sideline app", () => {
     (first, second, third) => {
       render(<App />);
       fireEvent.click(screen.getByText("Fireballers"));
+      markRosterPresent();
       for (const name of [first, second, third]) {
         fireEvent.click(
           screen.getByRole("button", { name: `${name} Present` }),
@@ -2325,6 +2434,7 @@ describe("Sideline app", () => {
   it("assigns starters from the tactics board and swaps occupied positions", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     fireEvent.click(screen.getByRole("button", { name: "Formation" }));
     fireEvent.click(screen.getByRole("button", { name: /1-2-1/ }));
     fireEvent.click(screen.getByRole("button", { name: "Starters" }));
@@ -2435,8 +2545,9 @@ describe("Sideline app", () => {
   it("lets an absent player become available after the game starts", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     fireEvent.click(screen.getByRole("button", { name: /Evan Present/i }));
-    startGame();
+    startGame(false);
 
     const outOfGame = screen.getByText("Out of game").closest("details");
     expect(outOfGame).not.toHaveAttribute("open");
@@ -2519,7 +2630,7 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Attendance" }));
     expect(
-      screen.getByRole("button", { name: /Jackson Present/i }),
+      screen.getByRole("button", { name: /Jackson Absent/i }),
     ).toBeInTheDocument();
   });
 
@@ -2597,13 +2708,13 @@ describe("Sideline app", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Return to teams" }));
     fireEvent.click(screen.getByText("Fireballers"));
-    fireEvent.click(screen.getByRole("button", { name: "Lazar Present" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lazar Absent" }));
     fireEvent.click(
       screen.getByRole("button", { name: /View last game for Fireballers/ }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Prep for next game" }));
     expect(
-      screen.getByRole("button", { name: "Lazar Absent" }),
+      screen.getByRole("button", { name: "Lazar Present" }),
     ).toBeInTheDocument();
   });
 
@@ -7013,12 +7124,13 @@ describe("Sideline app", () => {
   it("shows the assigned position when an available player fills an open slot", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Golden Dragons"));
+    markRosterPresent();
     ["Dylan", "Henry", "Haru", "Evan", "Collier"].forEach((name) => {
       fireEvent.click(
         screen.getByRole("button", { name: new RegExp(`${name} Present`) }),
       );
     });
-    startGame();
+    startGame(false);
     fireEvent.click(screen.getByRole("tab", { name: /On field/ }));
     fireEvent.click(
       screen.getByRole("button", { name: "Take Simon out of game" }),
